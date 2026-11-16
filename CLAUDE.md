@@ -58,7 +58,7 @@ WebRTC (keputusan pemilik, 2026-11-14): HP dan layar utama di Wi-Fi yang sama te
 | Tes | Vitest (unit), Playwright (e2e: layar utama Chromium, iPhone WebKit, Android Chromium) |
 | Lint/format | Biome |
 | Deploy lokal | Docker Compose: `server` (Node) + `web` (nginx: file statis + proxy `/ws` dan `/api`). Aturan nginx sama persis dengan VM: `deploy/nginx/hoorah-server.conf` (keputusan pemilik 2026-11-16: nginx, bukan Caddy) |
-| Deploy VM | `git push` (GitHub Actions hanya cek: lint, typecheck, tes unit) → di VM `/home/fajarrizky04febriano/hoorah/deploy/vm/update.sh`: `git pull` + **build image di VM** (keputusan pemilik 2026-11-16, seperti Suwwara; butuh RAM + swap ±1,5 GB, swap milik Suwwara dipakai bersama) + pasang + rollback otomatis. nginx VM (milik Suwwara) ditambah situs `hoorah.fajarrizky.my.id`, DNS Cloudflare awan abu-abu. Repo GitHub `jarki0402-alt/hoorah` **publik** |
+| Deploy VM | `git push` (GitHub Actions hanya cek: lint, typecheck, tes unit) → di VM `/home/fajarrizky04febriano/hoorah/deploy/vm/update.sh`: `git pull` + **build image di VM** (keputusan pemilik 2026-11-16, seperti Suwwara; butuh RAM tersedia + swap kosong ±1 GB, swap milik Suwwara dipakai bersama) + pasang + rollback otomatis. nginx VM (milik Suwwara) ditambah situs `hoorah.fajarrizky.my.id`, DNS Cloudflare awan abu-abu. Repo GitHub `jarki0402-alt/hoorah` **publik** |
 
 ```
 apps/server/        server WebSocket (rooms.ts = logika murni, index.ts = lapisan uWS, db.ts + passes.ts = SQLite, admin/ = API + CLI admin)
@@ -127,7 +127,7 @@ Perubahan yang hanya mengedit dokumen (PRD, CLAUDE.md) juga dicatat, cukup singk
 
 - (Berlaku saat deploy ke VM. Docker lokal dijalankan tanpa batas CPU/RAM.)
 - RAM 1 GB, CPU shared (sekitar 0,25 vCPU berkelanjutan), disk 30 GB standard. Proses server Hoorah ditargetkan memakai < 300 MB RAM.
-- **Build di VM** (keputusan pemilik 2026-11-16, menggantikan aturan lama "jangan build di VM"): hanya lewat `deploy/vm/update.sh`, yang menolak build kalau RAM tersedia + swap kosong < 1,5 GB (build web memakai ±1,5 GB sesaat; diuji: 700 MB tanpa swap = mati kehabisan memori). Jangan menjalankan build lain di VM di luar skrip itu.
+- **Build di VM** (keputusan pemilik 2026-11-16, menggantikan aturan lama "jangan build di VM"): hanya lewat `deploy/vm/update.sh`, yang menolak build kalau RAM tersedia + swap kosong < 1000 MB (diukur: `npm ci` puncak ±245 MB, build web ±716 MB, berurutan; 700 MB tanpa swap = mati kehabisan memori). Jangan menjalankan build lain di VM di luar skrip itu.
 - Data keluar gratis: 200 GiB/bulan di network tier Standard, dibagi dengan Suwwara. Keputusan pemilik 2026-11-16: halaman web dan aset game dilayani nginx di VM (file sudah dikompres saat build, `scripts/precompress.mjs`) dan dipantau di admin (Data keluar VM). Pindah ke CDN kalau pemakaian melewati ±50% jatah. DNS wajib awan abu-abu: lewat proxy Cloudflare, data keluar ditagih dan koneksi dari Indonesia lebih lambat.
 - Satu proses, state Room di memori. Jangan menambah Redis/PostgreSQL di VM ini tanpa persetujuan.
 - Oregon jauh dari Indonesia (perkiraan RTT 170–220 ms dari Jakarta). Jangan membuat game yang butuh presisi waktu tinggi bergantung pada relay ini. Ukur latensi sungguhan sebelum menyimpulkan.

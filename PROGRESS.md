@@ -25,6 +25,17 @@ Catatan pengerjaan proyek. Entri terbaru di paling atas. Setiap perubahan kode, 
 
 ## Log
 
+### 2026-11-16 · Batas memori build di VM dilonggarkan (diukur), update.sh menjalankan versi barunya sendiri
+
+**Masalah (laporan pemilik):** `update.sh` menolak build di VM: RAM tersedia 331 MB + swap kosong 1154 MB = 1485 MB, kurang 15 MB dari batas 1500 MB. Batas itu sebelumnya perkiraan, bukan hasil ukur. Swap VM: `/swapfile` 1 GB + zram ±480 MB (dari Suwwara).
+**Apa yang diubah:**
+- Diukur di container Linux (node:22-trixie-slim, sama dengan Dockerfile): `npm ci` puncak 245 MB (49 dtk), build web puncak 716 MB (3 dtk di Mac; jauh lebih lama di e2-micro). Batas `update.sh` diturunkan ke **1000 MB** (puncak + ±200 MB). `HOORAH_FORCE_BUILD=1` didokumentasikan sebagai jalan paksa.
+- `update.sh`: kalau `git pull` mengubah `update.sh`, versi baru langsung dijalankan (`exec`). Sebelumnya bash tetap membaca salinan lama sampai selesai, jadi perbaikan baru berlaku di run berikutnya.
+- DEPLOY.md dan CLAUDE.md: angka 1,5 GB diganti hasil ukur.
+**File:** `deploy/vm/update.sh`, `DEPLOY.md`, `CLAUDE.md`, `PROGRESS.md`.
+**Verifikasi:** `bash -n` lulus. `update.sh` diuji di Linux (repo di `/home/fajarrizky04febriano/hoorah`): build 6e9ab21, pasang, sehat, exit 0. Image `hoorah-server:latest` milik Docker Mac tidak tersentuh.
+**Selanjutnya:** pemilik push, lalu di VM `git pull` sekali dan jalankan `update.sh`. Catatan VM: `.env` saat ini ditulis satu baris dengan koma, sehingga admin tidak terbuat. Harus tiga baris terpisah.
+
 ### 2026-11-16 · Deploy: build langsung di VM seperti Suwwara, path VM, langkah firewall rinci
 
 **Keputusan pemilik:** build di server (VM) saja, "yang pakem", seperti Suwwara. Folder di VM `/home/fajarrizky04febriano/hoorah`. Swap sudah dipasang lewat Suwwara. Minta langkah firewall GCP yang jelas.

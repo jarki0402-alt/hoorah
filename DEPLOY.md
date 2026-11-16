@@ -6,7 +6,7 @@ Panduan langkah demi langkah. **Mac** = perintah di laptop, di folder proyek. **
 
 - Folder Hoorah di VM: `/home/fajarrizky04febriano/hoorah`. File web untuk nginx: `/srv/hoorah` (di luar folder home, karena nginx tidak boleh membaca isi `/home`).
 - nginx di VM (milik Suwwara) hanya **ditambah** satu situs `hoorah.fajarrizky.my.id`. File Suwwara tidak diubah, dan nginx cukup di-*reload*, jadi Suwwara tidak putus.
-- Build butuh ±1,5 GB memori sesaat (diuji: dengan 700 MB tanpa swap, build mati kehabisan memori; dengan swap, lulus). VM sudah punya swap dari Suwwara (langkah 2b, cukup dicek). `update.sh` menolak build kalau RAM + swap kurang, supaya Suwwara tidak ikut tumbang.
+- Build butuh ±1 GB memori sesaat (diukur di Linux: `npm ci` puncak ±245 MB, build web puncak ±716 MB, berurutan; dengan 700 MB tanpa swap build mati kehabisan memori). VM sudah punya swap dari Suwwara (langkah 2b, cukup dicek). `update.sh` menolak build kalau RAM tersedia + swap kosong di bawah 1000 MB, supaya Suwwara tidak ikut tumbang.
 - Server Hoorah dibatasi 320 MB RAM saat berjalan (`deploy/vm/compose.yaml`).
 
 ```
@@ -70,12 +70,12 @@ nginx -v
 ```
 
 ### 2b. Swap (sudah dipasang saat menyiapkan Suwwara)
-Build butuh RAM tersedia + swap kosong minimal ±1,5 GB. Swap dari Suwwara dipakai bersama, **jangan buat `/swapfile` baru** (bisa menimpa milik Suwwara).
+Build butuh RAM tersedia + swap kosong minimal 1000 MB. Swap dari Suwwara dipakai bersama, **jangan buat `/swapfile` baru** (bisa menimpa milik Suwwara).
 
 **VM**
 ```bash
 swapon --show                   # harus ada baris swap (mis. /swapfile)
-free -h                         # kolom "available" (Mem) + "free" (Swap) idealnya ≥ 1,5 GB
+free -h                         # kolom "available" (Mem) + "free" (Swap) minimal ±1 GB
 grep -c swap /etc/fstab         # ≥ 1: swap tetap aktif setelah VM restart
 ```
 `update.sh` memeriksa angka ini sendiri sebelum build dan berhenti dengan pesan jelas kalau kurang. Hanya kalau itu terjadi, tambah swap **kedua** dengan nama sendiri (tidak menyentuh milik Suwwara):
@@ -278,7 +278,7 @@ Cloudflare → DNS → record `hoorah` jadi awan **oranye**, lalu Security → *
 ## Masalah umum
 | Gejala | Penyebab / tindakan |
 | --- | --- |
-| `update.sh`: "Memori kurang untuk build" | Swap Suwwara sedang terpakai banyak atau terlalu kecil: tunggu Suwwara sepi lalu ulangi, atau tambah swap kedua (langkah 2b) |
+| `update.sh`: "Memori kurang untuk build" | Swap Suwwara sedang terpakai banyak: tunggu Suwwara sepi lalu ulangi, atau tambah swap kedua (langkah 2b). Paksa (risiko kehabisan memori): `HOORAH_FORCE_BUILD=1 /home/fajarrizky04febriano/hoorah/deploy/vm/update.sh` |
 | Build berhenti dengan `killed`, `exit code 137`, atau `signal: killed` | Kehabisan memori: cek `free -h` (swap aktif?), tutup yang tidak perlu, jalankan lagi |
 | `update.sh`: "Folder /srv/hoorah belum ada" | `sudo mkdir -p /srv/hoorah && sudo chown fajarrizky04febriano /srv/hoorah` |
 | `update.sh`: `git pull` gagal ("not possible to fast-forward") | Ada perubahan lokal di VM: `cd /home/fajarrizky04febriano/hoorah && git status`, kembalikan dengan `git checkout -- <file>` (file `.env` aman, tidak dilacak git) |

@@ -5,16 +5,18 @@
 #
 #   ./deploy/vm/update.sh        pull the newest code from GitHub, build, switch
 #
-# The build needs ~1.5 GB of memory at its peak (RAM + swap). The VM has 1 GB shared with Suwwara, so a swap file
-# is required (DEPLOY.md section 2b); the check below refuses to build without enough room rather than let the
-# kernel kill processes (Suwwara's included) mid-build.
+# Measured in Linux (2026-11-16): `npm ci` peaks at ~245 MB and the web build at ~716 MB, one after the other, plus
+# Docker's own share. The VM has 1 GB shared with Suwwara, so the build leans on swap (DEPLOY.md section 2b). The
+# check below wants RAM available + free swap of at least 1000 MB (the peak plus ~200 MB of room) and refuses to
+# build otherwise, rather than let the kernel kill processes (Suwwara's included) mid-build.
+# HOORAH_FORCE_BUILD=1 skips the check.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO/deploy/vm"
 
 WEB_ROOT="${HOORAH_WEB_ROOT:-/srv/hoorah}"
-NEED_KB=$((1500 * 1024))
+NEED_KB=$((1000 * 1024))
 
 say() { printf '\n==> %s\n' "$*"; }
 
@@ -33,7 +35,14 @@ healthy() {
 
 if [ "${HOORAH_NO_PULL:-}" != "1" ]; then
   say "Mengambil kode terbaru dari GitHub"
+  self="$REPO/deploy/vm/update.sh"
+  before="$(md5sum "$self")"
   git -C "$REPO" pull --ff-only
+  # bash keeps reading the old copy of a script that git just replaced: start the new one instead.
+  if [ "$(md5sum "$self")" != "$before" ]; then
+    say "Skrip update ikut berubah, menjalankan versi barunya"
+    exec env HOORAH_NO_PULL=1 "$self" "$@"
+  fi
 fi
 REV="$(git -C "$REPO" rev-parse --short=7 HEAD)"
 IMAGE="hoorah-server:$REV"
@@ -43,7 +52,8 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   swap_kb="$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)"
   if [ "$((avail_kb + swap_kb))" -lt "$NEED_KB" ] && [ "${HOORAH_FORCE_BUILD:-}" != "1" ]; then
     echo "Memori kurang untuk build: RAM tersedia $((avail_kb / 1024)) MB + swap kosong $((swap_kb / 1024)) MB,"
-    echo "butuh minimal $((NEED_KB / 1024)) MB. Pasang swap dulu (DEPLOY.md bagian 2b), lalu jalankan lagi."
+    echo "butuh minimal $((NEED_KB / 1024)) MB. Tunggu Suwwara sepi lalu ulangi, atau tambah swap (DEPLOY.md bagian 2b)."
+    echo "Tetap build (risiko kehabisan memori): HOORAH_FORCE_BUILD=1 $0"
     exit 1
   fi
   say "Membangun versi $REV (5-15 menit di e2-micro; Suwwara bisa sedikit lebih lambat selama build)"
