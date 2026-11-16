@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>TV Hasil</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFC928}a:hover{color:#FFF7F0}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 720px; background: #111214; color: #FFFFFF; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="position: absolute; left: 0; top: 0"><dc-import name="KeyArt" game="tarik" w="{{full}}" logo="{{false}}" hint-size="1280px,720px"></dc-import></div>
+<div style="position: absolute; inset: 0; background: rgba(17,18,20,0.84)"></div>
+
+<sc-for list="{{confetti}}" as="c" hint-placeholder-count="18">
+<div style="position: absolute; left: {{c.x}}; top: {{c.y}}; width: {{c.w}}; height: {{c.h}}; border-radius: 3px; background: {{c.color}}; transform: rotate({{c.r}})"></div>
+</sc-for>
+
+<div style="position: absolute; left: 0; right: 0; top: 36px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<div style="font-size: 12px; font-weight: 800; letter-spacing: 0.12em; color: #A8ABB2">TARIK TAMBANG · SELESAI</div>
+<h1 style="margin: 0; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 64px; line-height: 0.95; color: #FFC928; -webkit-text-stroke: 8px #111214; paint-order: stroke fill; text-shadow: 0 5px 0 #111214">Tim Merah juara!</h1>
+<div style="font-size: 17px; color: #DADCE0">Rina menang 2–1 atas Budi. Pertarungan yang ketat!</div>
+</div>
+
+<div style="position: absolute; left: 120px; top: 196px; width: 460px; height: 300px; display: flex; align-items: flex-end; justify-content: center; gap: 18px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 0">
+<svg width="44" height="34" viewBox="0 0 24 18" role="img" aria-label="Juara"><path d="M2 16 L4 4 L9 9 L12 1 L15 9 L20 4 L22 16 Z" fill="#FFC928" stroke="#111214" stroke-width="1.5" stroke-linejoin="round"></path></svg>
+<dc-import name="Avatar" fruit="semangka" size="{{winAv}}" ring="#F2453D" hint-size="132px,132px"></dc-import>
+<div style="margin-top: -6px; width: 190px; height: 120px; border-radius: 14px 14px 0 0; background: #FF5A1F; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #111214">
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 46px; line-height: 1">1</div>
+<div style="font-size: 17px; font-weight: 800">Rina</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center">
+<dc-import name="Avatar" fruit="alpukat" size="{{runAv}}" ring="#2F8CFF" hint-size="96px,96px"></dc-import>
+<div style="margin-top: -6px; width: 170px; height: 84px; border-radius: 14px 14px 0 0; background: #5AA9FF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #111214">
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 36px; line-height: 1">2</div>
+<div style="font-size: 16px; font-weight: 800">Budi</div>
+</div>
+</div>
+</div>
+
+<div style="position: absolute; left: 640px; top: 196px; width: 520px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 15px; font-weight: 800">Penghargaan malam ini</div>
+<sc-for list="{{awards}}" as="a" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 14px; background: #1E1F23; border-radius: 16px; padding: 12px 14px">
+<div style="width: 46px; height: 46px; flex: none; border-radius: 14px; background: {{a.tint}}; display: flex; align-items: center; justify-content: center">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111214" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{a.icon}}"></path></svg>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 16px; font-weight: 800">{{a.title}}</div>
+<div style="font-size: 13px; color: #A8ABB2">{{a.desc}}</div>
+</div>
+<dc-import name="Avatar" fruit="{{a.fruit}}" size="{{awAv}}" ring="{{a.ring}}" hint-size="40px,40px"></dc-import>
+</div>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 0; right: 0; bottom: 40px; display: flex; flex-direction: column; align-items: center; gap: 12px">
+<div style="display: flex; gap: 12px">
+<button type="button" style="font-family: inherit; font-size: 17px; font-weight: 800; color: #111214; background: #FF5A1F; border: none; border-radius: 14px; padding: 10px 20px 10px 12px; box-shadow: 0 0 0 3px #111214, 0 0 0 6px #FFFFFF; display: flex; align-items: center; gap: 10px">
+<div style="position: relative; width: 30px; height: 30px">
+<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12" fill="none" stroke="rgba(17,18,20,0.25)" stroke-width="4"></circle><path d="M15 3 A12 12 0 1 1 4.6 21" fill="none" stroke="#111214" stroke-width="4" stroke-linecap="round"></path></svg>
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800">8</div>
+</div>
+Main lagi
+</button>
+<button type="button" style="font-family: inherit; font-size: 16px; font-weight: 700; color: #FFFFFF; background: #2A2B30; border: none; border-radius: 14px; padding: 10px 18px">Ganti game</button>
+<button type="button" style="font-family: inherit; font-size: 16px; font-weight: 700; color: #FFFFFF; background: #2A2B30; border: none; border-radius: 14px; padding: 10px 18px">Selesai</button>
+</div>
+<div style="font-size: 13px; color: #A8ABB2">Lanjut otomatis dalam 8 detik · Rina (Host) bisa membatalkan dari HP</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const cols = ['#FF5A1F', '#FFC928', '#2F8CFF', '#22B35E', '#FF5C9A', '#F2453D', '#FFFFFF'];
+    const spots = [[90, 60], [210, 120], [330, 40], [440, 150], [130, 330], [70, 540], [220, 640], [400, 560], [880, 46], [1000, 120], [1120, 60], [1200, 200], [1180, 470], [1080, 640], [960, 560], [560, 150], [740, 130], [600, 650]];
+    const zap = 'M13 2 L4 14 H11 L10 22 L20 9 H13 Z';
+    const fire = 'M12 22 c4 0 7 -3 7 -7 c0 -4 -3 -6 -4 -10 c-2 2 -3 4 -3 6 c-1 -1 -2 -2 -2 -4 c-3 2 -5 5 -5 8 c0 4 3 7 7 7Z';
+    const heart = 'M12 21 C5 15.5 2 12 2 8.2 C2 5.3 4.3 3 7.1 3 C9 3 10.9 4.1 12 5.8 C13.1 4.1 15 3 16.9 3 C19.7 3 22 5.3 22 8.2 C22 12 19 15.5 12 21 Z';
+    return {
+      full: 1280, winAv: 132, runAv: 96, awAv: 40,
+      confetti: spots.map((s, i) => ({ x: s[0] + 'px', y: s[1] + 'px', w: (i % 3 ? 10 : 14) + 'px', h: (i % 2 ? 18 : 10) + 'px', color: cols[i % cols.length], r: ((i * 41) % 120 - 60) + 'deg' })),
+      awards: [
+        { title: 'Jari Kilat', desc: 'Ketukan tercepat: 7,9 per detik', fruit: 'semangka', ring: '#F2453D', icon: zap, tint: '#FFC928' },
+        { title: 'Raja Kombo', desc: 'Super tarik 6 kali beruntun', fruit: 'semangka', ring: '#F2453D', icon: fire, tint: '#FF8A3D' },
+        { title: 'Pantang Menyerah', desc: 'Merebut ronde 2 dari posisi tertinggal', fruit: 'alpukat', ring: '#2F8CFF', icon: heart, tint: '#5AA9FF' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

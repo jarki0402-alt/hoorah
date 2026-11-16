@@ -1,0 +1,18 @@
+/* Phone theme tokens for Catur (html[data-game='catur']): the main screen's dark warm room. */
+html[data-game="catur"] {
+  --t-bg: #1c1b1a;
+  --surface: #26272b;
+  --surface-2: #303237;
+  --surface-3: #141516;
+  --line: #44464d;
+  --text-2: #e6e3de;
+  --text-3: #b3b0aa;
+  --t-panel: #26272b;
+  --t-panel-edge: #34363b;
+  --t-eyebrow: #ffc928;
+  --t-track: #34363b;
+  --t-strip-bg: #26272b;
+  --t-strip-text: #e6e3de;
+  --t-strip-btn: #34363b;
+  --t-strip-edge-h: 0px;
+}

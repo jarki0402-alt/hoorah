@@ -1,0 +1,244 @@
+/* ---------------------------------------------------------------- word view (letter keyboard)
+   Theme tokens only, so each game's phone theme applies. The keyboard sits at the bottom, in the
+   thumb zone; the typed word is large enough to read at arm's length. */
+
+.word-view {
+  gap: clamp(6px, calc(var(--vh) * 1.6), 12px);
+}
+
+.word-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+}
+
+.word-eyebrow {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t-eyebrow, var(--text-2));
+  background: var(--t-eyebrow-bg, var(--surface-2));
+  padding: var(--t-eyebrow-pad, 4px 10px);
+  border-radius: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.word-lives {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+
+.word-lives > span {
+  color: var(--text-3);
+  opacity: 0.3;
+  display: flex;
+}
+
+.word-lives > span.on {
+  color: #ff5a4f;
+  opacity: 1;
+}
+
+.word-top .timer {
+  flex: none;
+}
+
+.word-lives + .timer {
+  margin-left: 4px;
+}
+
+.word-top > .timer:only-of-type {
+  margin-left: auto;
+}
+
+.word-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(20px, calc(var(--vh) * 3.4), 28px);
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.word-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: clamp(58px, calc(var(--vh) * 9.5), 78px);
+  padding: 0 16px;
+  border-radius: 20px;
+  background: var(--t-panel, var(--surface));
+  box-shadow: inset 0 0 0 2px var(--t-panel-edge, var(--line));
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(28px, calc(var(--vh) * 5.4), 42px);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.word-input.has-error {
+  box-shadow: inset 0 0 0 3px #ff5a4f;
+  animation: shake 0.3s ease;
+}
+
+.word-prefix {
+  color: var(--ink);
+  background: var(--yellow);
+  border-radius: 10px;
+  padding: 4px 8px 2px;
+  margin-right: 2px;
+}
+
+.word-typed {
+  color: var(--text);
+}
+
+.word-placeholder {
+  font-family: var(--font-body, inherit);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-3);
+}
+
+.word-caret {
+  width: 3px;
+  height: 0.9em;
+  margin-left: 2px;
+  border-radius: 2px;
+  background: var(--orange);
+  animation: word-blink 1s steps(1) infinite;
+}
+
+@keyframes word-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.word-note {
+  min-height: 18px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.word-note.is-error {
+  color: #ff6b61;
+}
+
+.word-keys {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.word-row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.word-key {
+  flex: 1 1 0;
+  max-width: 44px;
+  min-width: 0;
+  height: clamp(44px, calc(var(--vh) * 7.2), 56px);
+  border: none;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(18px, calc(var(--vh) * 3), 23px);
+  box-shadow: 0 4px 0 var(--surface-3);
+  touch-action: none;
+}
+
+.word-key.pressed {
+  transform: translateY(3px);
+  background: var(--orange);
+  color: var(--ink);
+  box-shadow: 0 1px 0 var(--surface-3);
+}
+
+.word-key.is-wide {
+  flex: 1.6 1 0;
+  max-width: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.word-send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: clamp(50px, calc(var(--vh) * 8), 62px);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  background: var(--orange);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  box-shadow: 0 5px 0 var(--orange-dark);
+  touch-action: none;
+}
+
+.word-send.pressed {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--orange-dark);
+}
+
+.word-view button:disabled {
+  opacity: 0.45;
+}
+
+/* Watching someone else's turn: the keyboard stays visible but quiet. */
+.word-view.is-locked .word-keys {
+  opacity: 0.55;
+}
+
+/* Phones held sideways: word and status on the left, keyboard on the right. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .word-view {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: auto auto auto auto 1fr;
+    column-gap: 18px;
+  }
+
+  .word-top,
+  .word-title,
+  .word-input,
+  .word-note {
+    grid-column: 1;
+  }
+
+  .word-keys {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    margin-top: 0;
+    justify-content: center;
+  }
+
+  .word-key {
+    height: clamp(36px, calc(var(--vh) * 14), 48px);
+  }
+}

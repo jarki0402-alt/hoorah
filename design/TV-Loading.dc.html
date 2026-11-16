@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>TV Memuat game</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFC928}a:hover{color:#FFF7F0}
+</style>
+</helmet>
+<div style="width: 1280px; height: 720px; box-sizing: border-box; padding: 48px; background: #111214; color: #FFFFFF; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; align-items: center; justify-content: center">
+<div style="width: 640px; display: flex; flex-direction: column; align-items: center; gap: 24px">
+
+<dc-import name="KeyArt" game="tarik" w="{{art}}" logo="{{true}}" round="{{r}}" hint-size="320px,180px"></dc-import>
+
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+<div style="font-size: 15px; color: #A8ABB2">Memuat</div>
+<h1 style="margin: 0; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 44px; line-height: 1">Tarik Tambang</h1>
+</div>
+
+<div style="width: 100%; display: flex; flex-direction: column; gap: 8px">
+<div role="progressbar" aria-label="Progres memuat" aria-valuenow="68" aria-valuemin="0" aria-valuemax="100" style="height: 10px; border-radius: 999px; background: #2A2B30; overflow: hidden">
+<div style="width: 68%; height: 100%; border-radius: 999px; background: #FF5A1F"></div>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 14px; color: #A8ABB2">
+<div>Aset game 4,1 / 6,0 MB</div>
+<div>68%</div>
+</div>
+</div>
+
+<div style="width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px; background: #1E1F23; border-radius: 14px; padding: 10px 14px">
+<dc-import name="Avatar" fruit="semangka" size="{{av}}" ring="#F2453D" shape="lingkaran" hint-size="40px,40px"></dc-import>
+<div style="flex: 1; font-size: 16px; font-weight: 700">Rina</div>
+<div style="display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: #22B35E"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22B35E" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 L10 18 L20 6"></path></svg>Siap</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; background: #1E1F23; border-radius: 14px; padding: 10px 14px">
+<dc-import name="Avatar" fruit="alpukat" size="{{av}}" ring="#2F8CFF" shape="segitiga" hint-size="40px,40px"></dc-import>
+<div style="flex: 1; font-size: 16px; font-weight: 700">Budi</div>
+<div style="font-size: 14px; color: #A8ABB2">Memuat kontroler…</div>
+</div>
+</div>
+
+<div style="width: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 12px; border: 1px solid #3C3E44; border-radius: 14px; padding: 12px 16px">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFC928" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M7 3 L10 6 M17 21 L14 18"></path></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #FFC928">TIPS PRO</div><div style="font-size: 15px; color: #DADCE0">Ketukan berirama lebih kuat daripada ketukan asal cepat. Game mulai saat semua siap.</div></div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { av: 40, art: 320, r: 16 };
+  }
+}
+</script>
+</body>
+</html>

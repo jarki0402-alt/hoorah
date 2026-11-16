@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>TV Gabung</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFC928}a:hover{color:#FFF7F0}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 720px; box-sizing: border-box; padding: 24px 48px 22px; background: #111214; color: #FFFFFF; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 18px; overflow: hidden">
+
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div style="display: flex; align-items: center; gap: 8px">
+<svg width="30" height="30" viewBox="0 0 120 120" role="img" aria-label="Hoorah"><rect width="120" height="120" rx="30" fill="#FF5A1F"></rect><rect x="28" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><rect x="74" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><path d="M37 56 Q60 80 83 56" fill="none" stroke="#FFF7F0" stroke-width="14" stroke-linecap="round"></path><circle cx="100" cy="20" r="7" fill="#FFC928"></circle></svg>
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 26px; letter-spacing: -0.03em">hoorah</div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="display: flex; align-items: center; gap: 7px; background: #1E1F23; border-radius: 999px; padding: 6px 12px; font-size: 13px; color: #DADCE0"><div style="width: 7px; height: 7px; border-radius: 50%; background: #22B35E"></div>Jaringan baik · 14 ms</div>
+<div style="display: flex; align-items: center; gap: 7px; background: #1E1F23; border-radius: 999px; padding: 6px 12px; font-size: 13px; color: #DADCE0">Paket gratis · 2 pemain</div>
+</div>
+</div>
+
+<div style="flex: 1; display: grid; grid-template-columns: 420px 260px 1fr; gap: 40px; align-items: center">
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 13px; font-weight: 800; letter-spacing: 0.08em; color: #FFC928">ROOM SIAP</div>
+<h1 style="margin: 0; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 52px; line-height: 0.95; letter-spacing: -0.01em">Ambil HP-mu,<br>ayo main bareng!</h1>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 12px; background: #18191C; border-radius: 14px; padding: 10px 12px">
+<div style="width: 40px; height: 40px; flex: none; border-radius: 12px; background: #2A2B30; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFC928" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{s.icon}}"></path></svg>
+</div>
+<div style="display: flex; flex-direction: column; gap: 1px">
+<div style="font-size: 16px; font-weight: 800">{{s.t}}</div>
+<div style="font-size: 13px; color: #A8ABB2">{{s.d}}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div style="position: relative; background: #FFFFFF; border-radius: 20px; padding: 14px; box-shadow: 0 0 0 6px #FF5A1F">
+<div role="img" aria-label="QR Code untuk bergabung ke room K7QM" style="display: grid; grid-template-columns: repeat(25, 8px); grid-auto-rows: 8px">
+<sc-for list="{{qr}}" as="q" hint-placeholder-count="625">
+<div style="background: {{q}}"></div>
+</sc-for>
+</div>
+<div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 10px; background: #FFFFFF; display: flex; align-items: center; justify-content: center">
+<svg width="32" height="32" viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="30" fill="#FF5A1F"></rect><rect x="28" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><rect x="74" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><path d="M37 56 Q60 80 83 56" fill="none" stroke="#FFF7F0" stroke-width="14" stroke-linecap="round"></path></svg>
+</div>
+</div>
+<div style="margin-top: 6px; font-size: 13px; color: #A8ABB2">atau buka <b style="color: #FFFFFF">hoorah.gg</b> lalu ketik</div>
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 64px; line-height: 0.9; letter-spacing: 0.1em; color: #FFC928">K7QM</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<div style="font-size: 18px; font-weight: 800">Yang sudah masuk</div>
+<div style="font-size: 14px; color: #A8ABB2"><b style="color: #FFFFFF">1</b> / 2</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; background: #1E1F23; border-radius: 16px; padding: 10px 12px; box-shadow: inset 0 0 0 2px #F2453D">
+<dc-import name="Avatar" fruit="semangka" size="{{av}}" ring="#F2453D" hint-size="52px,52px"></dc-import>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; align-items: center; gap: 6px; font-size: 18px; font-weight: 800">Rina <span style="display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 800; color: #111214; background: #FFC928; border-radius: 6px; padding: 2px 6px"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18 L5 7 L10 12 L12 5 L14 12 L19 7 L21 18 Z" fill="#111214"></path></svg>HOST</span></div>
+<div style="font-size: 13px; color: #A8ABB2">Baru saja masuk · siap main</div>
+</div>
+<div style="font-size: 12px; font-weight: 800; color: #111214; background: #FFC928; border-radius: 999px; padding: 4px 10px">Sorak!</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; border: 2px dashed #3C3E44; border-radius: 16px; padding: 10px 12px">
+<div style="width: 52px; height: 52px; flex: none; border-radius: 50%; background: #18191C; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5B5E66" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5 V19 M5 12 H19"></path></svg></div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 16px; font-weight: 700; color: #DADCE0">Kursi kosong</div>
+<div style="font-size: 13px; color: #A8ABB2">Ajak 1 teman lagi untuk mulai</div>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; background: #18191C; border-radius: 14px; padding: 9px 12px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFC928" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11 V7 a4 4 0 0 1 8 0 V11"></path></svg>
+<div style="font-size: 13px; color: #DADCE0">Kursi 3–16 terbuka dengan <b style="color: #FFC928">Hoorah Pass</b></div>
+</div>
+<button type="button" style="margin-top: 4px; font-family: inherit; font-size: 16px; font-weight: 800; color: #111214; background: #FF5A1F; border: none; border-radius: 14px; padding: 12px 18px; box-shadow: 0 0 0 3px #111214, 0 0 0 6px #FFFFFF; display: flex; align-items: center; justify-content: center; gap: 8px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111214" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9 H8 L13 5 V19 L8 15 H4 Z"></path><path d="M17 9 a4 4 0 0 1 0 6"></path></svg>
+Tekan OK: mulai &amp; nyalakan suara
+</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: baseline; gap: 10px">
+<div style="font-size: 15px; font-weight: 800">Yang bisa kalian mainkan</div>
+<div style="font-size: 13px; color: #A8ABB2">Game baru setiap bulan</div>
+</div>
+<div style="display: flex; gap: 14px">
+<sc-for list="{{games}}" as="g" hint-placeholder-count="5">
+<div style="position: relative; opacity: {{g.op}}">
+<dc-import name="KeyArt" game="{{g.key}}" w="{{cardW}}" logo="{{true}}" round="{{r}}" hint-size="223px,125px"></dc-import>
+<sc-if value="{{g.soon}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; right: 8px; top: 8px; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; color: #FFFFFF; background: #111214; border-radius: 6px; padding: 3px 6px">SEGERA</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const N = 25, cells = [];
+    const finder = (r, c) => {
+      const spots = [[0, 0], [0, N - 7], [N - 7, 0]];
+      for (const [fr, fc] of spots) {
+        const y = r - fr, x = c - fc;
+        if (y >= 0 && y < 7 && x >= 0 && x < 7) {
+          const edge = y === 0 || y === 6 || x === 0 || x === 6;
+          const core = y >= 2 && y <= 4 && x >= 2 && x <= 4;
+          return edge || core ? 1 : 0;
+        }
+        if (y >= -1 && y <= 7 && x >= -1 && x <= 7) return 0;
+      }
+      return -1;
+    };
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const f = finder(r, c);
+        let on = f;
+        if (f === -1) on = ((r * 31 + c * 17 + (r * c) % 7) % 5) < 2 ? 1 : 0;
+        cells.push(on ? '#111214' : '#FFFFFF');
+      }
+    }
+    return {
+      qr: cells, av: 52, cardW: 223, r: 12,
+      steps: [
+        { t: 'Scan QR', d: 'Pakai kamera HP, tanpa install aplikasi', icon: 'M4 8 V5 a1 1 0 0 1 1 -1 H8 M16 4 H19 a1 1 0 0 1 1 1 V8 M20 16 V19 a1 1 0 0 1 -1 1 H16 M8 20 H5 a1 1 0 0 1 -1 -1 V16 M8 12 H16' },
+        { t: 'Pilih nama & buahmu', d: 'Semangka, durian, alpukat, dan lainnya', icon: 'M12 20 a8 8 0 1 0 0 -16 a8 8 0 1 0 0 16 M9 10 V10.5 M15 10 V10.5 M9 14.5 Q12 17 15 14.5' },
+        { t: 'Lihat layar ini', d: 'HP-mu otomatis jadi stik game', icon: 'M3 5 H21 V16 H3Z M8 20 H16 M12 16 V20' }
+      ],
+      games: [
+        { key: 'tarik', op: 1, soon: false },
+        { key: 'kuis', op: 1, soon: false },
+        { key: 'rusun', op: 1, soon: false },
+        { key: 'bajaj', op: 0.6, soon: true },
+        { key: 'gambar', op: 0.6, soon: true }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

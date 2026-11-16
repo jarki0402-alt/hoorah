@@ -1,0 +1,847 @@
+/**
+ * The Phaser world of Dapur Heboh: the static kitchen backdrop (one pre-rendered texture, or two
+ * carts that slide on Heboh), every station as its own image (so Jam Sibuk can move them),
+ * fruit chefs built from tinted parts, items, throws, rings, bars, fire and smoke. It only
+ * renders; rules live in logic.ts.
+ *
+ * Coordinates: the 1280x720 world is centred on the stage; the kitchen sits at (KX, KY). Logic
+ * positions are tiles: x * 80 across, feet at 66 + y * 64 down. Depth is the screen y of an
+ * object's base so lower things cover higher ones (3/4 view).
+ *
+ * Per frame there are no allocations in the hot paths: images come from pools, three Graphics
+ * objects are cleared and redrawn.
+ */
+import type { Fruit } from '@hoorah/protocol';
+import * as Phaser from 'phaser';
+import type { Face } from '../../shared/art/fruits';
+import {
+  contentSpot,
+  feetY,
+  flameSpot,
+  fruitColor,
+  KITCHEN_H,
+  KITCHEN_W,
+  lightSpot,
+  rowTop,
+  ST_INSET,
+  ST_MARGIN,
+  TILE_W,
+} from './art';
+import { type Item, plateDish, type StainKind } from './items';
+import { CLEAN_MS, cartGap, DOUSE_MS, type Side, sideOfX, WARN_MS, WASH_MS } from './kitchens';
+import type { Chef, DapurMatch, MatchEvent, Station } from './logic';
+import { STR } from './strings';
+import {
+  BACKDROP_PAD,
+  backdropKey,
+  cartKey,
+  headKey,
+  iconKey,
+  pillCanvas,
+  RENDER_SCALE,
+  stainKey,
+  stationKey,
+  TEX,
+} from './textures';
+
+export const WORLD_W = 1280;
+export const WORLD_H = 720;
+export const KX = 80;
+export const KY = 128;
+
+const DEPTH_TOP = 9000;
+const DEPTH_TAGS = 9500;
+const HIT_BUBBLE_MS = 1_800;
+const THROW_PILL_MS = 700;
+const ARC_LIFT = 34;
+
+interface ChefSprite {
+  id: number;
+  root: Phaser.GameObjects.Container;
+  body: Phaser.GameObjects.Container;
+  legs: Phaser.GameObjects.Image;
+  shirt: Phaser.GameObjects.Image;
+  handL: Phaser.GameObjects.Image;
+  handR: Phaser.GameObjects.Image;
+  apron: Phaser.GameObjects.Image;
+  stains: Phaser.GameObjects.Image[];
+  head: Phaser.GameObjects.Image;
+  hat: Phaser.GameObjects.Image;
+  tag: Phaser.GameObjects.Image;
+  tagKey: string;
+  fruit: Fruit;
+  face: Face;
+  flip: number;
+  stainCount: number;
+}
+
+interface Pop {
+  x: number;
+  y: number;
+  t0: number;
+  color: number;
+}
+
+const hex = (c: string): number => Number.parseInt(c.replace('#', '').slice(0, 6), 16) || 0;
+
+export class DapurScene extends Phaser.Scene {
+  onFrame: (() => void) | null = null;
+  readonly ready: Promise<void>;
+  frameT = 0;
+  alpha = 1;
+  /** Highlight the station each person would use (not for computer cooks). */
+  showTargets = true;
+
+  private resolveReady!: () => void;
+  private readonly sources: Map<string, HTMLCanvasElement>;
+  private match: DapurMatch | null = null;
+  private viewW = WORLD_W;
+  private viewH = WORLD_H;
+  private bg: Phaser.GameObjects.Image | null = null;
+  private carts: [Phaser.GameObjects.Image, Phaser.GameObjects.Image] | null = null;
+  private stationImgs: Phaser.GameObjects.Image[] = [];
+  private cookerG = new Map<number, Phaser.GameObjects.Graphics>();
+  private readonly chefSprites = new Map<number, ChefSprite>();
+  private gLow!: Phaser.GameObjects.Graphics;
+  private gHigh!: Phaser.GameObjects.Graphics;
+  private readonly pool: Phaser.GameObjects.Image[] = [];
+  private poolIdx = 0;
+  private readonly throwAt = new Map<number, number>();
+  private readonly pops: Pop[] = [];
+  private moveWarnAt = Number.NEGATIVE_INFINITY;
+  private readonly scratch = { x: 0, y: 0 };
+
+  constructor(sources: Map<string, HTMLCanvasElement>) {
+    super({ key: 'dapur' });
+    this.sources = sources;
+    this.ready = new Promise((resolve) => {
+      this.resolveReady = resolve;
+    });
+  }
+
+  create(): void {
+    this.addCanvases(this.sources);
+    this.makePill('dp-pill-catch', STR.ready, { bg: '#111214', fg: '#FFC928', ring: '#FFC928', size: 13 });
+    this.makePill('dp-pill-throw', STR.throwPill, {
+      bg: '#FFC928',
+      fg: '#111214',
+      shadow: '#C99A12',
+      size: 13,
+    });
+    this.makePill('dp-pill-burn', STR.nearlyBurnt, {
+      bg: '#F2453D',
+      fg: '#FFFFFF',
+      shadow: '#B52A23',
+      size: 13,
+    });
+    this.makePill('dp-pill-hit', STR.hitBubble, {
+      bg: '#FFF7F0',
+      fg: '#1B1C20',
+      shadow: 'rgba(0,0,0,0.25)',
+      size: 13,
+      radius: 12,
+    });
+    this.makeDisc();
+    this.gLow = this.add.graphics().setDepth(1);
+    this.gHigh = this.add.graphics().setDepth(DEPTH_TOP);
+    this.setViewSize(this.viewW, this.viewH);
+    this.resolveReady();
+  }
+
+  override update(): void {
+    this.onFrame?.();
+    if (this.match) this.draw(this.frameT, this.alpha);
+  }
+
+  addCanvases(map: Map<string, HTMLCanvasElement>): void {
+    for (const [key, canvas] of map) if (!this.textures.exists(key)) this.textures.addCanvas(key, canvas);
+  }
+
+  private makePill(key: string, text: string, opts: Parameters<typeof pillCanvas>[1]): void {
+    if (this.textures.exists(key)) this.textures.remove(key);
+    this.textures.addCanvas(key, pillCanvas(text, opts));
+  }
+
+  private makeDisc(): void {
+    const s = 36 * TEX;
+    const canvas = document.createElement('canvas');
+    canvas.width = s;
+    canvas.height = s + 2 * TEX;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.arc(s / 2, s / 2 + 2 * TEX, s / 2 - TEX, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFF7F0';
+      ctx.beginPath();
+      ctx.arc(s / 2, s / 2, s / 2 - TEX, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    this.textures.addCanvas('dp-disc', canvas);
+  }
+
+  /* ------------------------------------------------------------------ setup */
+
+  setup(match: DapurMatch): void {
+    this.match = match;
+    for (const img of this.stationImgs) img.destroy();
+    this.stationImgs = [];
+    for (const g of this.cookerG.values()) g.destroy();
+    this.cookerG.clear();
+    this.bg?.destroy();
+    this.bg = null;
+    if (this.carts) for (const c of this.carts) c.destroy();
+    this.carts = null;
+    const k = match.def.id;
+    const pad = BACKDROP_PAD;
+    this.bg = this.add
+      .image(KX - pad, KY - pad, backdropKey(k))
+      .setOrigin(0, 0)
+      .setScale(1 / TEX)
+      .setDepth(0);
+    if (match.def.carts) {
+      this.carts = [
+        this.add
+          .image(KX - pad, KY - pad, cartKey(k, 0))
+          .setOrigin(0, 0)
+          .setScale(1 / TEX)
+          .setDepth(0.5),
+        this.add
+          .image(KX + 8 * TILE_W - pad, KY - pad, cartKey(k, 1))
+          .setOrigin(0, 0)
+          .setScale(1 / TEX)
+          .setDepth(0.5),
+      ];
+    }
+    for (const s of match.stations) {
+      const img = this.add
+        .image(0, 0, stationKey(s.kind, s.kind === 'basket' ? s.source : null))
+        .setOrigin(0, 0)
+        .setScale(1 / TEX);
+      this.stationImgs[s.id] = img;
+      if (flameSpot(s.kind)) this.cookerG.set(s.id, this.add.graphics());
+    }
+    for (const sp of this.chefSprites.values()) this.destroyChef(sp);
+    this.chefSprites.clear();
+  }
+
+  setViewSize(w: number, h: number): void {
+    this.viewW = w;
+    this.viewH = h;
+    const cam = this.cameras?.main;
+    if (!cam) return;
+    cam.setSize(w * RENDER_SCALE, h * RENDER_SCALE);
+    cam.setZoom(RENDER_SCALE);
+    cam.centerOn(WORLD_W / 2, WORLD_H / 2);
+  }
+
+  /** Stage px of world (0, 0): HUD elements add this to world coordinates. */
+  worldOrigin(out: { x: number; y: number }): { x: number; y: number } {
+    out.x = (this.viewW - WORLD_W) / 2;
+    out.y = (this.viewH - WORLD_H) / 2;
+    return out;
+  }
+
+  /* ------------------------------------------------------------------ mapping */
+
+  private shift(side: Side, t: number): number {
+    const m = this.match;
+    if (!m?.def.carts) return 0;
+    const g = cartGap(m.def, m.difficulty, t - m.goAt) * 40;
+    return side === 0 ? -g : g;
+  }
+
+  /** World px of a logic point (tile x, feet y). */
+  toWorld(x: number, y: number, out: { x: number; y: number }): { x: number; y: number } {
+    out.x = KX + x * TILE_W + this.shift(sideOfX(x), this.frameT);
+    out.y = KY + feetY(y);
+    return out;
+  }
+
+  private stationLeft(s: Station, t: number): number {
+    return KX + s.x * TILE_W + this.shift(sideOfX(s.x + s.w / 2), t);
+  }
+
+  private stationTop(s: Station): number {
+    return KY + rowTop(s.y);
+  }
+
+  /* ------------------------------------------------------------------ events */
+
+  onEvent(e: MatchEvent, t: number): void {
+    const m = this.match;
+    if (!m) return;
+    switch (e.type) {
+      case 'throw':
+        this.throwAt.set(e.flight.from, t);
+        return;
+      case 'catch': {
+        const c = m.chef(e.by);
+        if (c) this.pop(c.x, c.y, e.flight.color, t);
+        return;
+      }
+      case 'land':
+        this.pop(e.x, e.y, '#FFFFFF', t);
+        return;
+      case 'hit': {
+        const c = m.chef(e.to);
+        if (c) this.pop(c.x, c.y, e.broke ? '#F2453D' : '#FFC928', t);
+        return;
+      }
+      case 'chopped': {
+        const s = m.stations[e.station];
+        if (s) this.pop(s.x + 0.45, s.y + 0.1, '#8BD46E', t);
+        return;
+      }
+      case 'served': {
+        this.pop(e.x, e.y + 0.2, '#22B35E', t);
+        return;
+      }
+      case 'moveWarn':
+        this.moveWarnAt = t;
+        return;
+      default:
+        return;
+    }
+  }
+
+  private pop(x: number, y: number, color: string, t: number): void {
+    if (this.pops.length > 24) this.pops.shift();
+    this.pops.push({ x, y, t0: t, color: hex(color) });
+  }
+
+  /* ------------------------------------------------------------------ pool */
+
+  private img(key: string, x: number, y: number, size: number, depth: number): Phaser.GameObjects.Image {
+    let im = this.pool[this.poolIdx];
+    if (!im) {
+      im = this.add.image(0, 0, key);
+      this.pool.push(im);
+    }
+    this.poolIdx++;
+    if (im.texture.key !== key) im.setTexture(key);
+    im.setVisible(true)
+      .setPosition(x, y)
+      .setDisplaySize(size, size)
+      .setDepth(depth)
+      .setAngle(0)
+      .setAlpha(1)
+      .setOrigin(0.5, 0.5);
+    return im;
+  }
+
+  private pill(key: string, x: number, y: number, depth: number, alpha = 1): void {
+    const im = this.img(key, x, y, 1, depth);
+    const src = im.texture.getSourceImage() as { width: number; height: number };
+    im.setDisplaySize(src.width / TEX, src.height / TEX).setAlpha(alpha);
+  }
+
+  /** Draw an item centred at (x, y) `size` px wide. */
+  private item(it: Item, x: number, y: number, size: number, depth: number, angle = 0): void {
+    switch (it.k) {
+      case 'food':
+        this.img(iconKey(it.food), x, y, size, depth).setAngle(angle);
+        return;
+      case 'extinguisher':
+        this.img(iconKey('pemadam'), x, y, size, depth).setAngle(angle);
+        return;
+      case 'glass':
+        this.img(iconKey(it.fill >= 1 ? 'soda' : 'gelas'), x, y, size, depth).setAngle(angle);
+        if (it.fill > 0 && it.fill < 1) {
+          // Partly filled: orange up to the level.
+          const h = size * 0.6 * it.fill;
+          this.gHigh.fillStyle(0xff8a2e, 0.9);
+          this.gHigh.fillRect(x - size * 0.2, y + size * 0.4 - h, size * 0.4, h);
+        }
+        return;
+      case 'plate': {
+        const dish = plateDish(it.on);
+        if (dish === 'burger' || dish === 'salad') {
+          this.img(iconKey(dish), x, y, size, depth).setAngle(angle);
+          return;
+        }
+        this.img(iconKey('piring'), x, y, size, depth).setAngle(angle);
+        const n = it.on.length;
+        for (let i = 0; i < n; i++) {
+          const f = it.on[i]!;
+          const a = n === 1 ? 0 : (i / n) * Math.PI * 2 - Math.PI / 2;
+          const r = n === 1 ? 0 : size * 0.17;
+          const s = n === 1 ? size * 0.72 : size * 0.48;
+          this.img(iconKey(f), x + Math.cos(a) * r, y + Math.sin(a) * r * 0.8, s, depth + 0.01 * (i + 1));
+        }
+        return;
+      }
+    }
+  }
+
+  /* ------------------------------------------------------------------ frame */
+
+  private draw(t: number, alpha: number): void {
+    const m = this.match;
+    if (!m) return;
+    this.poolIdx = 0;
+    this.gLow.clear();
+    this.gHigh.clear();
+    // Slide the carts (Gerobak Kembar on Heboh).
+    if (this.carts) {
+      const pad = BACKDROP_PAD;
+      this.carts[0].x = KX - pad + this.shift(0, t);
+      this.carts[1].x = KX + 8 * TILE_W - pad + this.shift(1, t);
+    }
+    for (const s of m.stations) this.drawStation(m, s, t);
+    for (const f of m.floor) {
+      this.toWorld(f.x, f.y, this.scratch);
+      this.gLow.fillStyle(0x3c2814, 0.18);
+      this.gLow.fillEllipse(this.scratch.x, this.scratch.y + 2, 30, 9);
+      this.item(f.item, this.scratch.x, this.scratch.y - 10, 32, this.scratch.y - 1);
+    }
+    const seen = new Set<number>();
+    for (const c of m.chefs) {
+      seen.add(c.id);
+      this.drawChef(m, c, t, alpha);
+    }
+    for (const [id, sp] of this.chefSprites) {
+      if (seen.has(id)) continue;
+      this.destroyChef(sp);
+      this.chefSprites.delete(id);
+    }
+    for (const f of m.flights) this.drawFlight(m, f, t);
+    this.drawPops(t);
+    this.drawMoveWarning(m, t);
+    for (let i = this.poolIdx; i < this.pool.length; i++) {
+      const im = this.pool[i]!;
+      if (im.visible) im.setVisible(false);
+    }
+  }
+
+  private drawStation(m: DapurMatch, s: Station, t: number): void {
+    const img = this.stationImgs[s.id];
+    if (!img) return;
+    const left = this.stationLeft(s, t);
+    const top = this.stationTop(s);
+    const base = top + 80;
+    img.setPosition(left, top - ST_MARGIN).setDepth(base);
+    const spot = contentSpot(s.kind);
+    const cx = left + spot.x;
+    const cy = top + spot.y;
+    const g = this.cookerG.get(s.id);
+    if (g) this.drawCooker(m, s, g, left, top, base, t);
+    if (s.kind === 'rack') {
+      const n = Math.min(6, s.plates);
+      for (let i = 0; i < n; i++) {
+        const im = this.img(iconKey('piring'), left + 40, top + 38 - i * 6, 46, base + 0.5 + i * 0.01);
+        im.setDisplaySize(48, 17);
+      }
+    }
+    if (s.kind === 'sink' && s.dirty > 0) {
+      const n = Math.min(3, s.dirty);
+      for (let i = 0; i < n; i++) {
+        const im = this.img(iconKey('piring'), left + 40, top + 36 - i * 5, 40, base + 0.5 + i * 0.01);
+        im.setDisplaySize(40, 15).setAlpha(0.95);
+      }
+      // Grubby dots on the top plate.
+      this.gHigh.fillStyle(0x9a6232, 0.8);
+      this.gHigh.fillCircle(left + 34, top + 36 - (n - 1) * 5, 2.4);
+      this.gHigh.fillCircle(left + 46, top + 37 - (n - 1) * 5, 1.8);
+      this.badge(s.dirty, left + 76, top - 2, base + 0.6);
+    }
+    if (s.item) {
+      const size = s.kind === 'counter' && s.item.k === 'extinguisher' ? 40 : spot.size;
+      this.item(s.item, cx, cy, size, base + 0.5);
+    }
+    if (s.pot.length > 0) {
+      s.pot.forEach((f, i) => {
+        this.img(iconKey(f), cx + (i ? 8 : -8), cy + (i ? 3 : -2), 26, base + 0.5 + i * 0.01);
+      });
+    }
+    // Chop progress.
+    if (s.kind === 'board' && s.item?.k === 'food' && (s.item.chop ?? 0) > 0)
+      this.bar(left + 8, top - 18, s.item.chop ?? 0, 0x22b35e);
+    // Washing at the sink.
+    if (s.kind === 'sink') {
+      for (const c of m.chefs) {
+        if (c.target !== s.id || (c.busy !== 'wash' && c.busy !== 'clean')) continue;
+        const full = c.busy === 'wash' ? WASH_MS : CLEAN_MS;
+        this.bar(left + 8, top - 18, c.jobMs / full, 0x5aa8d8);
+      }
+    }
+    if (s.fire) this.drawFire(s, left, top, base, t);
+  }
+
+  private drawCooker(
+    m: DapurMatch,
+    s: Station,
+    g: Phaser.GameObjects.Graphics,
+    left: number,
+    top: number,
+    base: number,
+    t: number,
+  ): void {
+    g.clear();
+    g.setDepth(base + 0.3);
+    const level = m.heatLevel(s);
+    const hot = level > 0 && level < 2 && !s.fire;
+    const burn = m.tuning.burnMs;
+    const warnFrom = burn === null ? 2 : 1 + (burn - WARN_MS) / burn;
+    const warn = hot && level >= warnFrom;
+    const ring = flameSpot(s.kind);
+    const light = lightSpot(s.kind);
+    if (ring && hot) {
+      const color = warn ? 0xf2453d : 0xff7a3d;
+      const flick = 0.75 + 0.25 * Math.sin(t / 60 + s.id);
+      g.lineStyle(9, color, 0.25 * flick);
+      g.strokeCircle(left + ring.x, top + ring.y, ring.r + 3);
+      g.lineStyle(4, color, 1);
+      g.strokeCircle(left + ring.x, top + ring.y, ring.r);
+    }
+    if (light) {
+      g.fillStyle(hot ? (warn ? 0xf2453d : 0xff7a3d) : 0x4a4d55, 1);
+      g.fillCircle(left + light.x, top + light.y, 4);
+    }
+    if (level > 0 && level < 1) {
+      this.bar(left + 8, top - 28, level, 0xffc928);
+    } else if (warn) {
+      const p = (level - warnFrom) / (2 - warnFrom);
+      this.bar(left + 8, top - 28, 1 - p, 0xf2453d);
+      this.smoke(left + 50, top + 4, t, 0x5a5d66);
+      if (Math.floor(t / 400) % 2 === 0 || p < 0.5)
+        this.pill('dp-pill-burn', left + 40, top - 46, DEPTH_TOP + 1);
+    } else if (level >= 1 && level < 2) {
+      // Done: a full green bar so the team sees it is ready.
+      this.bar(left + 8, top - 28, 1, 0x22b35e);
+    }
+  }
+
+  private drawFire(s: Station, left: number, top: number, base: number, t: number): void {
+    const cx = left + 40;
+    for (let i = 0; i < 3; i++) {
+      const k = 0.85 + 0.2 * Math.sin(t / 70 + i * 2.1);
+      const im = this.img(iconKey('api'), cx - 18 + i * 18, top + 14 - (i === 1 ? 8 : 0), 34 * k, base + 0.8);
+      im.setOrigin(0.5, 0.8);
+    }
+    this.smoke(cx, top - 14, t, 0x3a3d45);
+    if (s.douseMs > 0) {
+      this.bar(left + 8, top - 28, s.douseMs / DOUSE_MS, 0x5aa9ff);
+      // Foam.
+      this.gHigh.fillStyle(0xffffff, 0.85);
+      for (let i = 0; i < 5; i++) {
+        const a = t / 90 + i * 1.3;
+        this.gHigh.fillCircle(cx + Math.cos(a) * 18, top + 18 + Math.sin(a) * 8, 6 + (i % 3));
+      }
+    }
+  }
+
+  private smoke(x: number, y: number, t: number, color: number): void {
+    for (let i = 0; i < 3; i++) {
+      const f = (t / 1100 + i / 3) % 1;
+      this.gHigh.fillStyle(color, 0.55 * (1 - f));
+      this.gHigh.fillCircle(x + Math.sin(f * 5 + i) * 6 + (i - 1) * 8, y - f * 42, 6 + f * 9);
+    }
+  }
+
+  private bar(x: number, y: number, p: number, color: number): void {
+    const g = this.gHigh;
+    g.fillStyle(0xffffff, 1);
+    g.fillRoundedRect(x - 2, y - 2, 68, 14, 7);
+    g.fillStyle(0x111214, 1);
+    g.fillRoundedRect(x, y, 64, 10, 5);
+    const w = Math.max(0, Math.min(1, p)) * 64;
+    if (w > 1) {
+      g.fillStyle(color, 1);
+      g.fillRoundedRect(x, y, Math.max(w, 6), 10, Math.min(5, w / 2));
+    }
+  }
+
+  private badge(n: number, x: number, y: number, depth: number): void {
+    const key = `dp-badge-${n}`;
+    if (!this.textures.exists(key))
+      this.textures.addCanvas(
+        key,
+        pillCanvas(String(n), { bg: '#F2453D', fg: '#FFFFFF', size: 12, padX: 6 }),
+      );
+    this.pill(key, x, y, depth);
+  }
+
+  /* ------------------------------------------------------------------ chefs */
+
+  private chefSprite(c: Chef): ChefSprite {
+    const sp = this.chefSprites.get(c.id);
+    if (sp) return sp;
+    const part = (key: string) =>
+      this.add
+        .image(-32, -80, key)
+        .setOrigin(0, 0)
+        .setScale(1 / TEX);
+    const legs = part('dp-legs');
+    const shirt = part('dp-shirt');
+    const apron = part('dp-apron');
+    const head = part(headKey(c.fruit, 'happy'));
+    const hat = part('dp-hat');
+    const hand = () => this.add.image(0, 0, 'dp-hand').setScale(1 / TEX);
+    const handL = hand();
+    const handR = hand();
+    const stains: Phaser.GameObjects.Image[] = [];
+    const body = this.add.container(0, 0, [shirt, handL, handR, apron, head, hat]);
+    const root = this.add.container(0, 0, [legs, body]);
+    const created: ChefSprite = {
+      id: c.id,
+      root,
+      body,
+      legs,
+      shirt,
+      handL,
+      handR,
+      apron,
+      stains,
+      head,
+      hat,
+      tag: this.add.image(0, 0, '__DEFAULT').setDepth(DEPTH_TAGS),
+      tagKey: '',
+      fruit: c.fruit,
+      face: 'happy',
+      flip: 1,
+      stainCount: -1,
+    };
+    this.chefSprites.set(c.id, created);
+    return created;
+  }
+
+  private destroyChef(sp: ChefSprite): void {
+    sp.root.destroy();
+    sp.tag.destroy();
+  }
+
+  private drawChef(m: DapurMatch, c: Chef, t: number, alpha: number): void {
+    const sp = this.chefSprite(c);
+    const x = c.prevX + (c.x - c.prevX) * alpha;
+    const y = c.prevY + (c.y - c.prevY) * alpha;
+    const p = this.toWorld(x, y, this.scratch);
+    const wx = p.x;
+    const wy = p.y;
+    sp.root.setPosition(wx, wy).setDepth(wy);
+    // Colours and fruit (a restyled computer cook can change them).
+    sp.shirt.setTint(hex(c.color));
+    const hand = hex(fruitColor(c.fruit));
+    sp.handL.setTint(hand);
+    sp.handR.setTint(hand);
+    const staggered = m.staggered(c);
+    const face: Face = staggered ? 'wow' : c.busy ? 'effort' : 'happy';
+    if (sp.face !== face || sp.fruit !== c.fruit) {
+      sp.face = face;
+      sp.fruit = c.fruit;
+      sp.head.setTexture(headKey(c.fruit, face));
+    }
+    if (Math.abs(c.faceX) > 0.25) sp.flip = c.faceX < 0 ? -1 : 1;
+    sp.root.scaleX = sp.flip;
+    // Walk bob, work jiggle, stagger wobble.
+    const step = c.moving ? Math.sin(c.walked * Math.PI * 2.2) : 0;
+    sp.body.y = c.moving ? -Math.abs(step) * 2.5 : 0;
+    sp.legs.scaleY = (1 / TEX) * (c.moving ? 1 - Math.abs(step) * 0.06 : 1);
+    sp.root.rotation = staggered ? Math.sin(t / 45) * 0.16 : 0;
+    const holding = !!c.held;
+    const jig = c.busy ? Math.sin(t / 38) * 3 : 0;
+    // Hands: at the sides, or both forward around the held item.
+    if (holding) {
+      sp.handL.setPosition(14, -27 + jig * 0.3);
+      sp.handR.setPosition(26, -24);
+    } else {
+      sp.handL.setPosition(-18, -22 + jig);
+      sp.handR.setPosition(18, -22 - jig);
+    }
+    this.syncStains(sp, c.stains);
+    // Name tag in the player's colour.
+    const tagKey = `dp-tag-${c.id}-${c.color}-${c.name}`;
+    if (sp.tagKey !== tagKey) {
+      if (!this.textures.exists(tagKey))
+        this.textures.addCanvas(
+          tagKey,
+          pillCanvas(c.name, { bg: c.color, fg: '#111214', size: 12, padX: 9 }),
+        );
+      sp.tag.setTexture(tagKey);
+      const src = sp.tag.texture.getSourceImage() as { width: number; height: number };
+      sp.tag.setDisplaySize(src.width / TEX, src.height / TEX);
+      sp.tagKey = tagKey;
+    }
+    sp.tag.setPosition(wx, wy - 96 + sp.body.y);
+    // Held item in front, on the side the cook faces.
+    if (c.held) {
+      const hx = wx + 22 * sp.flip;
+      const hy = wy - 30 + sp.body.y;
+      this.img('dp-disc', hx, hy, 34, wy + 0.2);
+      this.item(c.held, hx, hy, 28, wy + 0.3);
+    }
+    // Filling soda: a little bar over the head.
+    if (c.busy === 'fill' && c.held?.k === 'glass') {
+      const over = (c.held.over ?? 0) > 0;
+      this.bar(wx - 32, wy - 124, c.held.fill, over ? 0xf2453d : 0xff8a2e);
+    }
+    // Target highlight (people only): an outline in the cook's colour plus a small arrow.
+    if (this.showTargets && !c.cpu && !c.pilot && c.target !== null && m.phase === 'play') {
+      const s = m.stations[c.target];
+      if (s) this.drawTarget(s, c, t);
+    }
+    // Throw pill and hit bubble.
+    const thrown = this.throwAt.get(c.id);
+    if (thrown !== undefined && t - thrown < THROW_PILL_MS)
+      this.pill('dp-pill-throw', wx, wy - 118, DEPTH_TAGS + 1);
+    if (t - c.hitAt < HIT_BUBBLE_MS) this.pill('dp-pill-hit', wx + 34, wy - 122, DEPTH_TAGS + 2);
+  }
+
+  /**
+   * The station a person's cook will use. The arrow sits above the station, or below it when the
+   * cook stands right behind it (bottom row), so it never covers the cook.
+   */
+  private drawTarget(s: Station, c: Chef, t: number): void {
+    const left = this.stationLeft(s, t);
+    const top = this.stationTop(s);
+    const color = hex(c.color);
+    const w = s.w * TILE_W - ST_INSET * 2;
+    this.gHigh.lineStyle(3, color, 0.9);
+    this.gHigh.strokeRoundedRect(left + ST_INSET - 1.5, top - 1.5, w + 3, 59, 11);
+    const ax = left + (s.w * TILE_W) / 2;
+    const bob = Math.sin(t / 180) * 2;
+    const below = c.y < s.y && c.x >= s.x && c.x <= s.x + s.w;
+    const tall = s.kind === 'soda' ? 50 : s.kind === 'basket' ? 30 : 12;
+    const ay = below ? top + 88 + bob : top - tall - bob;
+    const dir = below ? -1 : 1;
+    this.gHigh.fillStyle(0x111214, 1);
+    this.gHigh.fillTriangle(ax - 11, ay - 9 * dir, ax + 11, ay - 9 * dir, ax, ay + 6 * dir);
+    this.gHigh.fillStyle(color, 1);
+    this.gHigh.fillTriangle(ax - 8, ay - 7 * dir, ax + 8, ay - 7 * dir, ax, ay + 3 * dir);
+  }
+
+  private syncStains(sp: ChefSprite, stains: Chef['stains']): void {
+    if (sp.stainCount === stains.length) return;
+    sp.stainCount = stains.length;
+    while (sp.stains.length < stains.length) {
+      const im = this.add.image(0, 0, stainKey('tomat')).setScale(1 / TEX);
+      sp.body.addAt(im, sp.body.getIndex(sp.apron) + 1);
+      sp.stains.push(im);
+    }
+    sp.stains.forEach((im, i) => {
+      const s = stains[i];
+      if (!s) {
+        im.setVisible(false);
+        return;
+      }
+      im.setVisible(true).setTexture(stainKey(s.kind as StainKind));
+      im.setPosition(s.u * 9, -20 + s.v * 6).setScale((1.25 / TEX) * s.s);
+    });
+  }
+
+  /* ------------------------------------------------------------------ throws */
+
+  private drawFlight(m: DapurMatch, f: DapurMatch['flights'][number], t: number): void {
+    const p = Math.max(0, Math.min(1, (t - f.t0) / f.dur));
+    const a = this.toWorld(f.sx, f.sy, { x: 0, y: 0 });
+    const b = this.toWorld(f.ex, f.ey, { x: 0, y: 0 });
+    a.y -= ARC_LIFT;
+    b.y -= ARC_LIFT;
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const h = 70 + dist * 0.18;
+    const ctrlX = (a.x + b.x) / 2;
+    const ctrlY = Math.min(a.y, b.y) - h;
+    const at = (u: number, out: { x: number; y: number }) => {
+      const v = 1 - u;
+      out.x = v * v * a.x + 2 * v * u * ctrlX + u * u * b.x;
+      out.y = v * v * a.y + 2 * v * u * ctrlY + u * u * b.y;
+      return out;
+    };
+    // Dashed path ahead of the item.
+    const dots = Math.max(6, Math.round(dist / 16));
+    this.gHigh.fillStyle(0xffffff, 0.9);
+    const q = { x: 0, y: 0 };
+    for (let i = 0; i <= dots; i++) {
+      const u = i / dots;
+      if (u < p) continue;
+      at(u, q);
+      this.gHigh.fillCircle(q.x, q.y, 2.6);
+    }
+    // Shadow on the floor, the catch ring under the receiver.
+    const sx = a.x + (b.x - a.x) * p;
+    const sy = a.y + (b.y - a.y) * p + ARC_LIFT;
+    this.gLow.fillStyle(0x3c2814, 0.22);
+    this.gLow.fillEllipse(sx, sy, 30, 10);
+    const receiver = f.toChef === null ? undefined : m.chef(f.toChef);
+    if (receiver) {
+      const rp = this.toWorld(receiver.x, receiver.y, { x: 0, y: 0 });
+      this.dashedEllipse(rp.x, rp.y, 40, 13, hex(f.color), (t / 900) % 1);
+      this.pill('dp-pill-catch', rp.x, rp.y + 22, DEPTH_TAGS + 1);
+    } else if (f.toStation !== null) {
+      const s = m.stations[f.toStation];
+      if (s) {
+        const left = this.stationLeft(s, t);
+        const top = this.stationTop(s);
+        this.gHigh.lineStyle(3, hex(f.color), 0.9);
+        this.gHigh.strokeRoundedRect(left + ST_INSET + 2, top + 2, s.w * TILE_W - ST_INSET * 2 - 4, 52, 10);
+      }
+    }
+    at(p, q);
+    this.item(f.item, q.x, q.y, 38, DEPTH_TOP + 2, p * 400);
+  }
+
+  private dashedEllipse(cx: number, cy: number, rx: number, ry: number, color: number, phase: number): void {
+    const g = this.gLow;
+    const n = 14;
+    g.lineStyle(4, color, 1);
+    for (let i = 0; i < n; i++) {
+      const a0 = ((i + phase) / n) * Math.PI * 2;
+      const a1 = a0 + (Math.PI / n) * 1.1;
+      g.beginPath();
+      for (let k = 0; k <= 4; k++) {
+        const a = a0 + ((a1 - a0) * k) / 4;
+        const x = cx + Math.cos(a) * rx;
+        const y = cy + Math.sin(a) * ry;
+        if (k === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.strokePath();
+    }
+  }
+
+  private drawPops(t: number): void {
+    for (let i = this.pops.length - 1; i >= 0; i--) {
+      const p = this.pops[i]!;
+      const f = (t - p.t0) / 420;
+      if (f >= 1 || f < 0) {
+        if (f >= 1) this.pops.splice(i, 1);
+        continue;
+      }
+      const w = this.toWorld(p.x, p.y, this.scratch);
+      this.gHigh.lineStyle(4 * (1 - f), p.color, 1 - f);
+      this.gHigh.strokeCircle(w.x, w.y - 26, 12 + f * 30);
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        this.gHigh.fillStyle(p.color, 1 - f);
+        this.gHigh.fillCircle(
+          w.x + Math.cos(a) * (14 + f * 34),
+          w.y - 26 + Math.sin(a) * (10 + f * 24),
+          3.5 * (1 - f) + 1,
+        );
+      }
+    }
+  }
+
+  private drawMoveWarning(m: DapurMatch, t: number): void {
+    const move = m.def.move;
+    if (!move || m.moved || t - this.moveWarnAt > 8_000 || t < this.moveWarnAt) return;
+    if (Math.floor(t / 250) % 2) return;
+    this.gHigh.lineStyle(4, 0xf2453d, 1);
+    for (const [a, b] of move.swaps) {
+      for (const [x, y] of [a, b]) {
+        const left = KX + x * TILE_W;
+        const top = KY + rowTop(y);
+        this.gHigh.strokeRoundedRect(left + ST_INSET + 3, top + 3, TILE_W - ST_INSET * 2 - 6, 50, 10);
+      }
+    }
+  }
+
+  /** A short flash over the whole kitchen (time up). */
+  flash(): void {
+    this.cameras.main.flash(260, 255, 255, 255, false);
+  }
+
+  /** Bounds of the kitchen in world px (for HUD floats). */
+  static readonly KITCHEN = { x: KX, y: KY, w: KITCHEN_W, h: KITCHEN_H };
+}

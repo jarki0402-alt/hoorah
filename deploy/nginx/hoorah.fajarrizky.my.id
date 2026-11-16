@@ -1,0 +1,90 @@
+# /etc/nginx/sites-available/hoorah.fajarrizky.my.id (symlinked from sites-enabled), next to Suwwara's site.
+# Steps to install it: DEPLOY.md section 5. Needs /etc/nginx/snippets/hoorah-server.conf (deploy/nginx/hoorah-server.conf)
+# and the certificate from `certbot certonly --nginx -d hoorah.fajarrizky.my.id`.
+#
+# Nothing here is shared with Suwwara: every name starts with hoorah_, and the http-level settings Suwwara already
+# makes (limit_req_status, client_header_timeout, the default_server that drops unknown names) are not repeated.
+
+# ---------------------------------------------------------------- http level (this file is included inside http {})
+
+upstream hoorah_server {
+    # The Hoorah container publishes its port on loopback only (deploy/vm/compose.yaml).
+    server 127.0.0.1:8790;
+    keepalive 16;
+}
+
+map $http_upgrade $hoorah_connection {
+    default upgrade;
+    "" "";
+}
+
+# TLS ends here, so the visitor's scheme is ours.
+map $scheme $hoorah_proto {
+    default $scheme;
+}
+
+map $arg_v $hoorah_models_cache {
+    "" "no-cache";
+    default "public, max-age=31536000, immutable";
+}
+
+# Per visitor address (the real one, see below). Opening a game fetches a few dozen files at once and a whole party
+# shares one home router, hence the generous bursts; a script hammering the VM is what these stop.
+limit_req_zone $binary_remote_addr zone=hoorah_req:10m rate=60r/s;
+limit_req_zone $binary_remote_addr zone=hoorah_api:10m rate=20r/s;
+limit_conn_zone $binary_remote_addr zone=hoorah_conn:10m;
+
+# ---------------------------------------------------------------- the site
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name hoorah.fajarrizky.my.id;
+
+    ssl_certificate /etc/letsencrypt/live/hoorah.fajarrizky.my.id/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/hoorah.fajarrizky.my.id/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Normally the DNS record is grey (DNS only) and visitors arrive directly. If it is ever switched to orange in an
+    # emergency, CF-Connecting-IP is believed only from Cloudflare's own addresses (www.cloudflare.com/ips, fetched
+    # 2026-11-11, same list as Suwwara's); from anywhere else the connection's own address is used.
+    set_real_ip_from 173.245.48.0/20;
+    set_real_ip_from 103.21.244.0/22;
+    set_real_ip_from 103.22.200.0/22;
+    set_real_ip_from 103.31.4.0/22;
+    set_real_ip_from 141.101.64.0/18;
+    set_real_ip_from 108.162.192.0/18;
+    set_real_ip_from 190.93.240.0/20;
+    set_real_ip_from 188.114.96.0/20;
+    set_real_ip_from 197.234.240.0/22;
+    set_real_ip_from 198.41.128.0/17;
+    set_real_ip_from 162.158.0.0/15;
+    set_real_ip_from 104.16.0.0/13;
+    set_real_ip_from 104.24.0.0/14;
+    set_real_ip_from 172.64.0.0/13;
+    set_real_ip_from 131.0.72.0/22;
+    set_real_ip_from 2400:cb00::/32;
+    set_real_ip_from 2606:4700::/32;
+    set_real_ip_from 2803:f800::/32;
+    set_real_ip_from 2405:b500::/32;
+    set_real_ip_from 2405:8100::/32;
+    set_real_ip_from 2a06:98c0::/29;
+    set_real_ip_from 2c0f:f248::/32;
+    real_ip_header CF-Connecting-IP;
+
+    # Built web files of the running version (deploy/vm/update.sh switches this link).
+    root /srv/hoorah/current;
+
+    include /etc/nginx/snippets/hoorah-server.conf;
+}
+
+server {
+    listen 80;
+    server_name hoorah.fajarrizky.my.id;
+    # The redirect sits in a location (not at server level) so certbot's renewal can add its exact-match
+    # /.well-known/acme-challenge/... location here and be answered before the redirect.
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}

@@ -1,0 +1,1 @@
+Execute $ARGUMENTS with strict token conservation: locate lines via `rg -n`, apply surgical production-ready edits, run single-file check quietly, and reply ONLY with modified file paths + 1-line summary.

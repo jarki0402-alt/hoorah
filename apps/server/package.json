@@ -1,0 +1,20 @@
+{
+  "name": "@hoorah/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/server.js --external:uWebSockets.js",
+    "start": "node dist/server.js",
+    "admin": "tsx src/index.ts admin"
+  },
+  "dependencies": {
+    "@hoorah/protocol": "0.1.0",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.71.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "tsx": "4.23.15"
+  }
+}

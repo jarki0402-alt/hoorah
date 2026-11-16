@@ -1,0 +1,55 @@
+name: hoorah
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: server
+    environment:
+      MAX_PLAYERS: ${MAX_PLAYERS:-2}
+      LOG_LEVEL: info
+      # Optional: creates this admin on the very first start only (see docker/.env.example).
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # 3479, not the usual 3478, so this stack runs next to `npm run dev` and the e2e server (both use 3478).
+      STUN_PORT: 3479
+    ports:
+      # Built-in STUN (WebRTC on the same Wi-Fi). The VM uses 3478: deploy/vm/compose.yaml.
+      - "3479:3479/udp"
+    volumes:
+      # Room snapshot + SQLite database (admins, Hoorah Pass codes). Survives rebuilds.
+      - rooms:/data
+    restart: unless-stopped
+    stop_grace_period: 10s
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: web
+      args:
+        PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+        STUN_PORT: 3479
+    ports:
+      - "${WEB_PORT:-1010}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  rooms:

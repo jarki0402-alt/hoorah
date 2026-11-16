@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>TV Menu jeda dan notifikasi</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFC928}a:hover{color:#FFF7F0}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 720px; background: #FF5A1F; color: #FFFFFF; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="position: absolute; left: 0; top: 0"><dc-import name="KeyArt" game="tarik" w="{{full}}" logo="{{false}}" hint-size="1280px,720px"></dc-import></div>
+<div style="position: absolute; inset: 0; background: rgba(17,18,20,0.78)"></div>
+
+<div style="position: absolute; left: 50%; top: 24px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px">
+<div style="display: flex; align-items: center; gap: 10px; background: #1E1F23; border: 1px solid #3C3E44; border-radius: 999px; padding: 8px 16px 8px 8px; font-size: 15px">
+<dc-import name="Avatar" fruit="alpukat" size="{{av}}" ring="#2F8CFF" shape="segitiga" hint-size="28px,28px"></dc-import>
+<div><b>Budi</b> menyambung ulang…</div>
+<div style="width: 8px; height: 8px; border-radius: 50%; background: #FFC928"></div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; background: #1E1F23; border: 1px solid #3C3E44; border-radius: 999px; padding: 8px 16px 8px 8px; font-size: 15px">
+<dc-import name="Avatar" fruit="nanas" size="{{av}}" ring="#22B35E" shape="kotak" hint-size="28px,28px"></dc-import>
+<div><b>Sari</b> ikut menonton · main di ronde berikutnya</div>
+</div>
+</div>
+
+<div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -46%); width: 400px; box-sizing: border-box; background: #1E1F23; border-radius: 22px; padding: 24px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h1 style="margin: 0; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 36px; line-height: 1">Jeda</h1>
+<div style="font-size: 13px; color: #A8ABB2">dibuka oleh Rina (Host)</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<sc-for list="{{menu}}" as="m" hint-placeholder-count="4">
+<button type="button" style="font-family: inherit; text-align: left; font-size: 17px; font-weight: 600; color: {{m.fg}}; background: {{m.bg}}; border: none; border-radius: 12px; padding: 12px 16px; box-shadow: {{m.ring}}">{{m.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="position: absolute; right: 32px; bottom: 32px; width: 360px; box-sizing: border-box; background: #FFF7F0; color: #111214; border-radius: 18px; padding: 18px; display: flex; gap: 14px; align-items: center">
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1">
+<div style="align-self: flex-start; font-size: 12px; font-weight: 800; background: #FFC928; border-radius: 999px; padding: 2px 10px">HOORAH PASS</div>
+<div style="font-size: 17px; font-weight: 800; line-height: 1.25">Main ber-16, semua game, tanpa iklan</div>
+<div style="font-size: 13px; color: #4A4C53">Mulai Rp15.000 / hari. Scan untuk bayar di HP.</div>
+</div>
+<div role="img" aria-label="QR pembayaran" style="width: 76px; height: 76px; flex: none; border-radius: 8px; border: 6px solid #FFFFFF; background: #111214; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; box-sizing: border-box; padding: 4px">
+<sc-for list="{{miniQr}}" as="q" hint-placeholder-count="16"><div style="background: {{q}}"></div></sc-for>
+</div>
+</div>
+
+<div style="position: absolute; left: 32px; bottom: 32px; font-size: 13px; color: #DADCE0; max-width: 420px">Toast muncul di atas tengah (maks. 2, 3 detik). Kartu Pass hanya tampil di layar TV, tidak pernah di HP pemain.</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const focus = { bg: '#FF5A1F', fg: '#111214', ring: '0 0 0 3px #1E1F23, 0 0 0 5px #FFFFFF' };
+    const rest = { bg: '#2A2B30', fg: '#FFFFFF', ring: 'none' };
+    return {
+      full: 1280, av: 28,
+      menu: [
+        { label: 'Lanjutkan', ...focus },
+        { label: 'Ulang ronde', ...rest },
+        { label: 'Keluar ke katalog', ...rest },
+        { label: 'Suara: nyala', ...rest }
+      ],
+      miniQr: ['#FFFFFF','#111214','#FFFFFF','#FFFFFF','#111214','#FFFFFF','#111214','#FFFFFF','#FFFFFF','#FFFFFF','#111214','#111214','#111214','#FFFFFF','#FFFFFF','#FFFFFF']
+    };
+  }
+}
+</script>
+</body>
+</html>

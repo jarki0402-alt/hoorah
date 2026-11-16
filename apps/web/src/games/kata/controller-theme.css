@@ -1,0 +1,86 @@
+/* ---------------------------------------------------------------- kata: school notebook
+   Dark ink on cream paper like the main screen. The keyboard is a set of letter tiles (white,
+   ink outline, hard shadow), the dealt start is a yellow marker tile, and the input is a white
+   card. Contrast checked for small text on the paper (#fbf5e9) and on white. */
+
+html[data-game="kata"] {
+  --t-bg: #fbf5e9;
+  --text: #1d2430;
+  --text-2: #3f4757;
+  --text-3: #5f6777;
+  --surface: #ffffff;
+  --surface-2: #efe6d3;
+  --surface-3: #1d2430;
+  --line: #1d2430;
+  --t-panel: #ffffff;
+  --t-panel-edge: #1d2430;
+  --t-eyebrow: #1d2430;
+  --t-eyebrow-bg: #ffd23f;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #b8400f;
+  --t-good: #13703a;
+  --t-track: #efe6d3;
+  --t-strip-bg: #1d2430;
+  --t-strip-text: #fbf5e9;
+  --t-strip-btn: #3f4757;
+  --t-strip-btn-text: #ffffff;
+  --t-crown: #ffc928;
+}
+
+html[data-game="kata"] .timer {
+  box-shadow: inset 0 0 0 2.5px #1d2430;
+}
+
+/* The word being typed sits on a white index card. */
+html[data-game="kata"] .word-input {
+  background: #ffffff;
+  box-shadow:
+    inset 0 0 0 3px #1d2430,
+    0 4px 0 #1d2430;
+}
+
+html[data-game="kata"] .word-input.has-error {
+  box-shadow:
+    inset 0 0 0 3px #e0453b,
+    0 4px 0 #9c2a22;
+}
+
+html[data-game="kata"] .word-prefix {
+  background: #ffd23f;
+  color: #1d2430;
+  box-shadow: inset 0 0 0 2px #1d2430;
+}
+
+html[data-game="kata"] .word-note.is-error {
+  color: #c02f25;
+}
+
+/* Letter keys are tiles, like the ones on the main screen. */
+html[data-game="kata"] .word-key {
+  background: #ffffff;
+  color: #1d2430;
+  box-shadow:
+    inset 0 0 0 2px #1d2430,
+    0 4px 0 #1d2430;
+}
+
+html[data-game="kata"] .word-key.pressed {
+  background: #ffd23f;
+  color: #1d2430;
+  box-shadow:
+    inset 0 0 0 2px #1d2430,
+    0 1px 0 #1d2430;
+}
+
+html[data-game="kata"] .word-key.is-delete {
+  background: #efe6d3;
+}
+
+html[data-game="kata"] .word-send {
+  border-color: #1d2430;
+  box-shadow: 0 5px 0 #1d2430;
+}
+
+html[data-game="kata"] .word-send.pressed {
+  box-shadow: 0 1px 0 #1d2430;
+}

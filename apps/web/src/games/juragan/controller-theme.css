@@ -1,0 +1,115 @@
+/* Juragan Nusantara phone: the printed board up close. Dark ink on cream board paper, white
+   panels with the board's teal edge, a teal BELI button and an ivory die for LEMPAR DADU.
+   Imported by the controller app; only active while Juragan Nusantara runs. */
+
+html[data-game="juragan"] {
+  --t-bg: #f8eeda;
+  --text: #111214;
+  --text-2: #33302a;
+  --text-3: #5c4f3b;
+  --surface: #ffffff;
+  --surface-2: #f1e3c8;
+  --surface-3: #0b2e37;
+  --line: #0b2e37;
+  --t-panel: #ffffff;
+  --t-panel-edge: #0b2e37;
+  --t-eyebrow: #fff6e3;
+  --t-eyebrow-bg: #0f5664;
+  --t-eyebrow-pad: 3px 9px 2px;
+  --t-accent-text: #a8400e;
+  --t-good: #13703a;
+  --t-track: #f1e3c8;
+  --t-strip-bg: #0b2e37;
+  --t-strip-text: #fff6e3;
+  --t-strip-btn: #1d4752;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 9px;
+  --t-crown: #e9b43c;
+}
+
+/* The tile row along the bottom is part of the scene: keep controls above it. */
+html[data-game="juragan"] .ctrl {
+  padding-bottom: max(calc(var(--pad-y) + min(58px, calc(var(--vh) * 7.5))), env(safe-area-inset-bottom));
+}
+
+html[data-game="juragan"] .timer {
+  box-shadow: inset 0 0 0 2.5px #0b2e37;
+}
+
+/* Decisions are not reactions: the note under the buttons only confuses here. */
+html[data-game="juragan"] .msg-note {
+  display: none;
+}
+
+/* BELI / BAYAR: teal like the sea in the middle of the board. */
+html[data-game="juragan"] .big-btn:not(.secondary):not(.yellow) {
+  background: #11606f;
+  color: #fff6e3;
+  box-shadow: 0 6px 0 #0a3b47;
+}
+
+html[data-game="juragan"] .big-btn:not(.secondary):not(.yellow):active {
+  box-shadow: 0 1px 0 #0a3b47;
+}
+
+html[data-game="juragan"] .big-btn.yellow {
+  font-size: 15px;
+  box-shadow:
+    inset 0 0 0 2px #1e1f24,
+    0 6px 0 #c99a12;
+}
+
+html[data-game="juragan"] .big-btn.secondary {
+  background: #ffffff;
+  color: #111214;
+  box-shadow:
+    inset 0 0 0 2px #0b2e37,
+    0 6px 0 #0b2e37;
+}
+
+html[data-game="juragan"] .big-btn.secondary:active {
+  box-shadow:
+    inset 0 0 0 2px #0b2e37,
+    0 1px 0 #0b2e37;
+}
+
+/* LEMPAR DADU: a big ivory die showing a red four, as on dice sold in Indonesia. */
+html[data-game="juragan"] .round-btn {
+  border-radius: 24%;
+  background: #fff8ec;
+  border: 5px solid #1e1f24;
+  color: #1e1f24;
+  box-shadow:
+    0 12px 0 #1e1f24,
+    0 0 0 10px rgba(15, 86, 100, 0.14);
+  gap: 8%;
+}
+
+html[data-game="juragan"] .round-btn svg {
+  display: none;
+}
+
+html[data-game="juragan"] .round-btn::before {
+  content: "";
+  width: 40%;
+  height: 40%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cg fill='%23D8322A'%3E%3Ccircle cx='8' cy='8' r='7'/%3E%3Ccircle cx='32' cy='8' r='7'/%3E%3Ccircle cx='8' cy='32' r='7'/%3E%3Ccircle cx='32' cy='32' r='7'/%3E%3C/g%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+html[data-game="juragan"] .round-btn.pressed {
+  box-shadow:
+    0 3px 0 #1e1f24,
+    0 0 0 14px rgba(15, 86, 100, 0.2);
+}
+
+html[data-game="juragan"] .round-btn:disabled {
+  background: #f1e3c8;
+  color: #5c4f3b;
+  box-shadow: 0 5px 0 #1e1f24;
+}
+
+html[data-game="juragan"] .round-btn:disabled::before {
+  opacity: 0.35;
+}

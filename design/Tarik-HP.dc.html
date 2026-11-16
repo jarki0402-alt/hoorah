@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Tarik Tambang kontroler HP</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFC928}a:hover{color:#FFF7F0}
+</style>
+</helmet>
+<div style="width: 1832px; height: 520px; box-sizing: border-box; padding: 40px 48px; background: #E9EAEC; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; display: flex; gap: 48px">
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 15px; font-weight: 700; color: #111214">1 · Hitung mundur (mendatar)</div>
+<div style="width: 844px; height: 390px; box-sizing: border-box; border: 8px solid #2A2B30; border-radius: 44px; background: repeating-linear-gradient(135deg, #E8352E 0px, #E8352E 28px, #D42E28 28px, #D42E28 56px); color: #FFFFFF; padding: 28px 56px; display: grid; grid-template-columns: 230px 1fr 230px; align-items: center; overflow: hidden">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<dc-import name="Avatar" fruit="semangka" size="{{av}}" ring="#FFFFFF" hint-size="104px,104px"></dc-import>
+<div style="font-size: 12px; font-weight: 800; letter-spacing: 0.1em">KAMU</div>
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 28px; line-height: 1">TIM MERAH</div>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 170px; line-height: 0.85; color: #FFC928; -webkit-text-stroke: 10px #111214; paint-order: stroke fill">3</div>
+<div style="font-size: 18px; font-weight: 800">Siap-siap…</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; background: rgba(17,18,20,0.35); border-radius: 18px; padding: 14px">
+<div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; color: #FFC928">LAWANMU</div>
+<div style="display: flex; align-items: center; gap: 10px"><dc-import name="Avatar" fruit="alpukat" size="{{sm}}" ring="#2F8CFF" hint-size="40px,40px"></dc-import><div style="font-size: 16px; font-weight: 800">Budi · Tim Biru</div></div>
+<div style="font-size: 13px; line-height: 1.4">Ronde 1 kamu menang. Pertahankan!</div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 15px; font-weight: 700; color: #111214">2 · Menarik + tarikan super</div>
+<div style="position: relative; width: 844px; height: 390px; box-sizing: border-box; border: 8px solid #2A2B30; border-radius: 44px; background: #111214; color: #FFFFFF; padding: 22px 56px; display: grid; grid-template-columns: 250px 1fr; gap: 20px; align-items: center; overflow: hidden; box-shadow: inset 10px 0 0 #E8352E">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div role="img" aria-label="Posisi tali: Merah unggul" style="position: relative; height: 10px; border-radius: 999px; background: #2F8CFF; overflow: hidden"><div style="width: 58%; height: 100%; background: #F2453D"></div></div>
+<div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #A8ABB2"><span>Merah unggul</span><span>0:42 · R2</span></div>
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 58px; line-height: 0.85">7,4<span style="font-size: 18px; color: #A8ABB2"> ketuk/dtk</span></div>
+<div style="display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px">
+<sc-for list="{{seg}}" as="s" hint-placeholder-count="10"><div style="height: 14px; border-radius: 3px; background: {{s}}"></div></sc-for>
+</div>
+<div style="align-self: flex-start; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: #111214; background: #FFC928; border-radius: 10px; padding: 5px 10px"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22 c4 0 7 -3 7 -7 c0 -4 -3 -6 -4 -10 c-2 2 -3 4 -3 6 c-1 -1 -2 -2 -2 -4 c-3 2 -5 5 -5 8 c0 4 3 7 7 7Z" fill="#111214"></path></svg>KOMBO x4</div>
+</div>
+<div style="position: relative; height: 100%; display: flex; align-items: center; justify-content: center">
+<div style="position: absolute; width: 330px; height: 330px; border-radius: 50%; border: 5px solid rgba(255,255,255,0.85); box-sizing: border-box"></div>
+<div style="position: absolute; width: 300px; height: 300px; border-radius: 50%; border: 9px solid #FFC928; box-sizing: border-box"></div>
+<button type="button" style="position: relative; width: 250px; height: 250px; border-radius: 50%; border: 4px solid #111214; background: #FF5A1F; color: #111214; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 50px; box-shadow: 0 12px 0 #B8410F, inset 0 -10px 0 rgba(0,0,0,0.12)">TARIK!</button>
+<div style="position: absolute; right: 18px; top: 26px; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 34px; color: #FFFFFF; -webkit-text-stroke: 5px #111214; paint-order: stroke fill; transform: rotate(10deg)">+1</div>
+<div style="position: absolute; left: 0; bottom: 6px; font-size: 13px; font-weight: 800; color: #111214; background: #FFC928; border-radius: 999px; padding: 4px 12px">Cincin kuning hampir pas, siap ketuk!</div>
+</div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1832,"height":520}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { av: 104, sm: 40, seg: Array.from({ length: 10 }, (_, i) => (i < 7 ? '#F2453D' : '#2A2B30')) };
+  }
+}
+</script>
+</body>
+</html>

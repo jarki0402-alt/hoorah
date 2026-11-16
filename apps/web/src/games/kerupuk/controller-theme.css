@@ -1,0 +1,137 @@
+/* ---------------------------------------------------------------- kerupuk: 17-an kampung yard
+   Phone theme tokens (see controller.css for what each one paints). */
+
+html[data-game="kerupuk"] {
+  --t-bg: #8ccb63;
+  --text: #111214;
+  --text-2: #2b2116;
+  --text-3: #4a3826;
+  --surface: #fff7ea;
+  --surface-2: #f6e7c8;
+  --surface-3: #8a5a2b;
+  --line: #d2a85e;
+  --t-panel: #fff7ea;
+  --t-panel-edge: #d2a85e;
+  --t-eyebrow: #ffffff;
+  --t-eyebrow-bg: #e8352e;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #b82620;
+  --t-good: #13703a;
+  --t-track: #f6e7c8;
+  --t-strip-bg: #fff4d6;
+  --t-strip-text: #111214;
+  --t-strip-btn: #111214;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 12px;
+  --t-crown: #e8352e;
+}
+
+/* Your turn to bite: a merah putih ribbon around the screen. */
+html[data-game="kerupuk"] .ctrl.turn {
+  box-shadow: none;
+}
+
+html[data-game="kerupuk"] .ctrl.turn::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  border: 6px solid transparent;
+  border-image: repeating-linear-gradient(45deg, #e8352e 0 12px, #ffffff 12px 24px) 6;
+}
+
+/* Titles and hints sit on a card so the fence and grass never run through the text. */
+html[data-game="kerupuk"] .button-view .pane > .row,
+html[data-game="kerupuk"] .press-hint {
+  background: var(--t-panel);
+  box-shadow: inset 0 0 0 2px var(--t-panel-edge);
+  border-radius: 14px;
+  padding: 8px 10px;
+}
+
+html[data-game="kerupuk"] .press-hint {
+  justify-self: center;
+  align-self: center;
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+/* The swing track is the rafia string; the moving block is the kerupuk itself, so the track
+   needs no caption here. */
+html[data-game="kerupuk"] .swing-label {
+  display: none;
+}
+
+html[data-game="kerupuk"] .swing-track .rail {
+  top: 15px;
+  height: 3px;
+  background: #e8352e;
+}
+
+html[data-game="kerupuk"] .swing-track .zone {
+  background: rgba(34, 179, 94, 0.22);
+  border: 2px dashed #13703a;
+  border-radius: 10px;
+}
+
+html[data-game="kerupuk"] .swing-track .block {
+  width: 30px;
+  height: 30px;
+  top: 2px;
+  margin-left: -15px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 36%, #f1ddaa 0 2.5px, transparent 3px),
+    radial-gradient(circle at 66% 58%, #f1ddaa 0 3px, transparent 3.5px),
+    radial-gradient(circle at 40% 72%, #f1ddaa 0 2px, transparent 2.5px), #fff4d6;
+  border: 3px solid #d2a85e;
+  box-shadow: 0 0 0 2px #111214;
+}
+
+/* GIGIT: the button is a big kerupuk on a rafia-red plate. */
+html[data-game="kerupuk"] .drop-base::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#e8352e 0 10deg, #ffffff 10deg 20deg);
+  box-shadow:
+    inset 0 0 0 2.5px #111214,
+    0 7px 0 #8e1d17;
+}
+
+html[data-game="kerupuk"] .round-btn {
+  color: #b82620;
+  background:
+    radial-gradient(circle at 30% 30%, #f1ddaa 0 4%, transparent 4.5%),
+    radial-gradient(circle at 68% 26%, #f1ddaa 0 3%, transparent 3.5%),
+    radial-gradient(circle at 74% 62%, #f1ddaa 0 5%, transparent 5.5%),
+    radial-gradient(circle at 26% 70%, #f1ddaa 0 3.5%, transparent 4%),
+    radial-gradient(circle at 50% 84%, #f1ddaa 0 3%, transparent 3.5%),
+    radial-gradient(closest-side, #fff4d6 0 78%, #f3e2b6 79% 84%, #fff4d6 85%);
+  border: 6px solid #d2a85e;
+  -webkit-text-stroke: 6px #ffffff;
+  paint-order: stroke fill;
+  box-shadow:
+    0 12px 0 #b98a45,
+    0 12px 0 4px #111214,
+    0 0 0 4px #111214;
+}
+
+html[data-game="kerupuk"] .round-btn svg {
+  display: none;
+}
+
+html[data-game="kerupuk"] .round-btn.pressed {
+  box-shadow:
+    0 3px 0 #b98a45,
+    0 3px 0 4px #111214,
+    0 0 0 4px #111214;
+}
+
+html[data-game="kerupuk"] .round-btn:disabled {
+  background: #f6e7c8;
+  color: #8a5a2b;
+  border-color: #c9b08a;
+}

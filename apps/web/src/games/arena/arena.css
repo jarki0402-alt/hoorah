@@ -1,0 +1,494 @@
+/* Ular Arena: HUD over the night-garden arena (stage px, 1280x720 core). */
+
+.ua-world,
+.ua-hud-host {
+  position: absolute;
+  inset: 0;
+}
+
+.ua-world canvas {
+  display: block;
+}
+
+.ua-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--font-ui);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------ leaderboard panel */
+
+.ua-panel {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px 14px;
+  border-radius: 22px;
+  background: rgba(8, 22, 16, 0.9);
+  box-shadow:
+    inset 0 0 0 2px #1f5139,
+    0 10px 0 rgba(0, 0, 0, 0.25);
+}
+
+.ua-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #ffc928;
+}
+
+.ua-brand-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffe6a8;
+  box-shadow: 0 0 0 4px rgba(255, 194, 77, 0.25);
+}
+
+.ua-clock {
+  margin-top: 10px;
+  padding: 8px 12px 6px;
+  border-radius: 16px;
+  background: #0e2f21;
+  box-shadow: inset 0 0 0 2px #1a4a33;
+  text-align: center;
+}
+
+.ua-clock-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #a9d8b8;
+}
+
+.ua-clock-time {
+  font-size: 54px;
+  line-height: 1;
+  color: #fff6e3;
+  font-variant-numeric: tabular-nums;
+}
+
+.ua-clock.urgent {
+  background: #4a1d12;
+  box-shadow: inset 0 0 0 2px #ff7a1a;
+}
+
+.ua-clock.urgent .ua-clock-time {
+  color: #ffc928;
+  animation: ua-throb 1s ease-in-out infinite;
+}
+
+.ua-clock.urgent .ua-clock-label {
+  color: #ffc9a3;
+}
+
+@keyframes ua-throb {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.08);
+  }
+}
+
+.ua-board-title {
+  margin: 14px 4px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #a9d8b8;
+}
+
+.ua-rows {
+  position: relative;
+  flex: none;
+}
+
+.ua-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 6px;
+  border-radius: 14px;
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.3s,
+    background-color 0.3s;
+}
+
+.ua-row.lead {
+  background: rgba(255, 201, 40, 0.12);
+  box-shadow: inset 0 0 0 2px rgba(255, 201, 40, 0.55);
+}
+
+.ua-row.out {
+  opacity: 0.5;
+}
+
+.ua-rank {
+  width: 20px;
+  flex: none;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  color: #a9d8b8;
+}
+
+.ua-row.lead .ua-rank {
+  color: #ffc928;
+}
+
+.ua-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.ua-row-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.ua-row-name span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ua-row-sub {
+  margin-top: 1px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #a9d8b8;
+}
+
+.ua-row-len {
+  flex: none;
+  min-width: 40px;
+  text-align: right;
+  font-size: 26px;
+  color: var(--c);
+  font-variant-numeric: tabular-nums;
+}
+
+.ua-feed {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 10px;
+}
+
+.ua-feed-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #dff2e5;
+  animation: ua-feed-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ua-feed-line i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+@keyframes ua-feed-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+
+/* ------------------------------------------------------------------ name tags and floaters */
+
+.ua-tags {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.ua-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: transform;
+}
+
+.ua-tag-name {
+  padding: 1px 7px 2px;
+  border-radius: 8px;
+  background: rgba(6, 16, 11, 0.62);
+  box-shadow: inset 0 -2px 0 var(--c);
+  font-size: 12.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ua-tag-crown {
+  line-height: 0;
+  margin-bottom: -1px;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6));
+}
+
+.ua-float {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  white-space: nowrap;
+  --stroke: 5px;
+}
+
+/* ------------------------------------------------------------------ overlays */
+
+.ua-overlay {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border-radius: 18px;
+}
+
+.ua-overlay.ua-top {
+  justify-content: flex-start;
+  padding-top: 36px;
+}
+
+.ua-dim {
+  background: rgba(6, 16, 11, 0.55);
+}
+
+.ua-title {
+  font-size: 96px;
+  color: #fff6e3;
+  --stroke: 9px;
+  letter-spacing: 0.01em;
+  animation: ua-pop 0.55s var(--ease-pop) both;
+}
+
+.ua-tips {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ua-tip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px 9px 14px;
+  border-radius: 999px;
+  background: rgba(8, 22, 16, 0.88);
+  box-shadow: inset 0 0 0 2px #1f5139;
+  font-size: 20px;
+  font-weight: 800;
+  animation: ua-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ua-pill {
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(8, 22, 16, 0.88);
+  box-shadow: inset 0 0 0 2px #1f5139;
+  font-size: 20px;
+  font-weight: 800;
+  animation: ua-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ua-count {
+  font-size: 200px;
+  line-height: 0.9;
+  color: #ffc928;
+  --stroke: 12px;
+  animation: ua-pop 0.5s var(--ease-pop) both;
+}
+
+.ua-go {
+  font-size: 150px;
+  color: #7be495;
+  --stroke: 12px;
+  animation: ua-pop-out 0.9s var(--ease-pop) both;
+}
+
+.ua-warn {
+  font-size: 58px;
+  color: #ff9a3d;
+  --stroke: 8px;
+  animation: ua-warn 2.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ua-final {
+  font-size: 260px;
+  line-height: 1;
+  color: rgba(255, 246, 227, 0.22);
+  animation: ua-pop 0.4s var(--ease-pop) both;
+}
+
+.ua-timeup {
+  font-size: 110px;
+  color: #ffc928;
+  --stroke: 11px;
+  animation: ua-pop 0.6s var(--ease-pop) both;
+}
+
+.ua-eyebrow {
+  padding: 4px 12px 3px;
+  border-radius: 8px;
+  background: #ffc928;
+  color: #111214;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.ua-champ {
+  font-size: 64px;
+  color: #fff6e3;
+  --stroke: 8px;
+  text-align: center;
+  max-width: 92%;
+  animation: ua-pop 0.55s var(--ease-pop) both;
+}
+
+.ua-podium-wrap {
+  justify-content: center;
+}
+
+.ua-podium {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.ua-step {
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  animation: ua-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ua-step-name {
+  max-width: 190px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.ua-step-len {
+  font-size: 14px;
+  font-weight: 700;
+  color: #a9d8b8;
+}
+
+.ua-block {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+  border-radius: 14px 14px 0 0;
+  background: var(--c);
+  box-shadow: inset 0 -10px 0 rgba(0, 0, 0, 0.18);
+}
+
+.ua-block span {
+  font-size: 54px;
+  color: #fff;
+  -webkit-text-stroke: 7px #111214;
+  paint-order: stroke fill;
+}
+
+@keyframes ua-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+@keyframes ua-pop-out {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+}
+
+@keyframes ua-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+@keyframes ua-warn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.8);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1.06);
+  }
+  20% {
+    transform: scale(1);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Everything holds still while the shell pauses the game. */
+.ua-paused .ua-float,
+.ua-paused .ua-row,
+.ua-paused .ua-overlay * {
+  animation-play-state: paused !important;
+}

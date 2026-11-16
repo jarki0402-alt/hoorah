@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Brand dan Logo Hoorah</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFC928}a:hover{color:#FFF7F0}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 48px; background: #111214; color: #FFFFFF; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: grid; grid-template-columns: 640px 1fr; gap: 32px">
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div style="background: #1E1F23; border-radius: 20px; padding: 32px; display: flex; flex-direction: column; gap: 18px">
+<div style="font-size: 13px; font-weight: 600; color: #A8ABB2; letter-spacing: 0.08em; text-transform: uppercase">Logo utama</div>
+<div style="display: flex; align-items: center; gap: 20px">
+<svg width="104" height="104" viewBox="0 0 120 120" role="img" aria-label="Simbol Hoorah: huruf H dengan senyum"><rect width="120" height="120" rx="30" fill="#FF5A1F"></rect><rect x="28" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><rect x="74" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><path d="M37 56 Q60 80 83 56" fill="none" stroke="#FFF7F0" stroke-width="14" stroke-linecap="round"></path><circle cx="100" cy="20" r="7" fill="#FFC928"></circle></svg>
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 104px; line-height: 0.9; letter-spacing: -0.03em">hoorah</div>
+</div>
+<p style="margin: 0; font-size: 16px; line-height: 1.5; color: #DADCE0">Setiap layar jadi konsol, setiap HP jadi kontroler. Simbol "H" dengan garis tengah yang tersenyum, plus satu titik kuning sebagai sorakan.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<div style="background: #FFF7F0; border-radius: 20px; padding: 24px; display: flex; align-items: center; gap: 12px">
+<svg width="52" height="52" viewBox="0 0 120 120" role="img" aria-label="Logo Hoorah di latar terang"><rect width="120" height="120" rx="30" fill="#FF5A1F"></rect><rect x="28" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><rect x="74" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><path d="M37 56 Q60 80 83 56" fill="none" stroke="#FFF7F0" stroke-width="14" stroke-linecap="round"></path><circle cx="100" cy="20" r="7" fill="#FFC928"></circle></svg>
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 52px; line-height: 0.9; color: #111214; letter-spacing: -0.03em">hoorah</div>
+</div>
+<div style="background: #FF5A1F; border-radius: 20px; padding: 24px; display: flex; align-items: center; gap: 12px">
+<svg width="52" height="52" viewBox="0 0 120 120" role="img" aria-label="Logo Hoorah monokrom"><rect x="2" y="2" width="116" height="116" rx="29" fill="none" stroke="#111214" stroke-width="5"></rect><rect x="28" y="24" width="18" height="72" rx="9" fill="#111214"></rect><rect x="74" y="24" width="18" height="72" rx="9" fill="#111214"></rect><path d="M37 56 Q60 80 83 56" fill="none" stroke="#111214" stroke-width="14" stroke-linecap="round"></path><circle cx="100" cy="20" r="7" fill="#111214"></circle></svg>
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 52px; line-height: 0.9; color: #111214; letter-spacing: -0.03em">hoorah</div>
+</div>
+</div>
+
+<div style="background: #1E1F23; border-radius: 20px; padding: 24px 32px; display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 13px; font-weight: 600; color: #A8ABB2; letter-spacing: 0.08em; text-transform: uppercase">Ikon aplikasi &amp; favicon</div>
+<div style="display: flex; align-items: flex-end; gap: 28px">
+<sc-for list="{{icons}}" as="ic" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+<svg width="{{ic.s}}" height="{{ic.s}}" viewBox="0 0 120 120" role="img" aria-label="Ikon aplikasi Hoorah"><rect width="120" height="120" rx="30" fill="#FF5A1F"></rect><rect x="28" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><rect x="74" y="24" width="18" height="72" rx="9" fill="#FFF7F0"></rect><path d="M37 56 Q60 80 83 56" fill="none" stroke="#FFF7F0" stroke-width="14" stroke-linecap="round"></path><circle cx="100" cy="20" r="7" fill="#FFC928"></circle></svg>
+<div style="font-size: 12px; color: #A8ABB2">{{ic.label}}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div style="background: #1E1F23; border-radius: 20px; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px">
+<div style="font-size: 13px; font-weight: 600; color: #A8ABB2; letter-spacing: 0.08em; text-transform: uppercase">Warna inti</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<sc-for list="{{colors}}" as="c" hint-placeholder-count="6">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="height: 56px; border-radius: 12px; background: {{c.hex}}; border: 1px solid #3C3E44"></div>
+<div style="font-size: 14px; font-weight: 700">{{c.name}}</div>
+<div style="font-size: 12px; color: #A8ABB2">{{c.hex}} · {{c.use}}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="background: #1E1F23; border-radius: 20px; padding: 24px 28px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 13px; font-weight: 600; color: #A8ABB2; letter-spacing: 0.08em; text-transform: uppercase">Judul &amp; kode</div>
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 60px; line-height: 1; letter-spacing: 0.06em; color: #FFC928">K7QM</div>
+<div style="font-size: 13px; color: #DADCE0">Baloo 2 ExtraBold</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 13px; font-weight: 600; color: #A8ABB2; letter-spacing: 0.08em; text-transform: uppercase">Teks antarmuka</div>
+<div style="font-size: 26px; font-weight: 700; line-height: 1.2">Ayo main bareng!</div>
+<div style="font-size: 16px; line-height: 1.4; color: #DADCE0">Plus Jakarta Sans · teks TV min. 22 px</div>
+</div>
+</div>
+
+<div style="background: #1E1F23; border-radius: 20px; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px">
+<div style="font-size: 13px; font-weight: 600; color: #A8ABB2; letter-spacing: 0.08em; text-transform: uppercase">Avatar pemain: buah Nusantara + cincin warna pemain</div>
+<div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{players}}" as="p" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+<dc-import name="Avatar" fruit="{{p.fruit}}" size="{{p.size}}" ring="{{p.hex}}" shape="{{p.shapeKey}}" hint-size="60px,60px"></dc-import>
+<div style="font-size: 12px; font-weight: 600; color: #FFFFFF">{{p.fruitLabel}}</div>
+<div style="font-size: 11px; color: #A8ABB2">{{p.name}}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      icons: [
+        { s: 112, label: 'App · 180' },
+        { s: 72, label: 'PWA · 96' },
+        { s: 48, label: 'Tab · 48' },
+        { s: 32, label: 'Favicon · 32' }
+      ],
+      colors: [
+        { name: 'Hoorah Orange', hex: '#FF5A1F', use: 'aksi utama, fokus' },
+        { name: 'Sorak Kuning', hex: '#FFC928', use: 'kode, skor, Host, Pass' },
+        { name: 'Arang', hex: '#111214', use: 'latar TV' },
+        { name: 'Permukaan', hex: '#1E1F23', use: 'kartu, panel' },
+        { name: 'Abu teks', hex: '#A8ABB2', use: 'teks sekunder' },
+        { name: 'Krem', hex: '#FFF7F0', use: 'teks di oranye' }
+      ],
+      players: [
+        { name: 'Merah', fruit: 'semangka', fruitLabel: 'Semangka', size: 60, hex: '#F2453D', shapeKey: 'lingkaran' },
+        { name: 'Biru', fruit: 'alpukat', fruitLabel: 'Alpukat', size: 60, hex: '#2F8CFF', shapeKey: 'segitiga' },
+        { name: 'Hijau', fruit: 'durian', fruitLabel: 'Durian', size: 60, hex: '#22B35E', shapeKey: 'kotak' },
+        { name: 'Kuning', fruit: 'nanas', fruitLabel: 'Nanas', size: 60, hex: '#FFC928', shapeKey: 'wajik' },
+        { name: 'Oranye', fruit: 'jeruk', fruitLabel: 'Jeruk', size: 60, hex: '#FF8A3D', shapeKey: 'bintang' },
+        { name: 'Pink', fruit: 'stroberi', fruitLabel: 'Stroberi', size: 60, hex: '#FF5C9A', shapeKey: 'hati' },
+        { name: 'Toska', fruit: 'mangga', fruitLabel: 'Mangga', size: 60, hex: '#14B8A6', shapeKey: 'segienam' },
+        { name: 'Abu', fruit: 'rambutan', fruitLabel: 'Rambutan', size: 60, hex: '#C4C7CC', shapeKey: 'plus' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Hoorah on the Google Cloud VM (shared with Suwwara). Only the Node server runs in Docker: the VM's own nginx
+# serves the web files and proxies /ws and /api to it (deploy/nginx/). Started by ./update.sh, see DEPLOY.md.
+#
+# Settings come from deploy/vm/.env (not in git): ADMIN_USERNAME, ADMIN_PASSWORD (first start only), MAX_PLAYERS.
+name: hoorah
+
+services:
+  server:
+    # Tagged by update.sh from ghcr.io/jarki0402-alt/hoorah (built by GitHub Actions, never on the VM).
+    image: hoorah-server:current
+    environment:
+      MAX_PLAYERS: ${MAX_PLAYERS:-2}
+      LOG_LEVEL: info
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # The admin's "Data keluar VM" reads the VM's network card counters from the host's /sys (mounted below).
+      HOST_SYS_PATH: /host/sys
+      # Keeps the JavaScript heap well under the container limit, so it collects garbage before the kernel steps in.
+      NODE_OPTIONS: --max-old-space-size=200
+    ports:
+      # Only nginx on this VM talks to the server.
+      - "127.0.0.1:8790:8790"
+      # Built-in STUN for the direct phone-to-screen link: opened in the GCP firewall (DEPLOY.md section 3).
+      - "3478:3478/udp"
+    volumes:
+      # Room snapshot + SQLite database (admins, Hoorah Pass codes, admin statistics). Survives updates.
+      - data:/data
+      - /sys:/host/sys:ro
+    # The VM has 1 GB shared with Suwwara: Hoorah never takes more than this.
+    mem_limit: 320m
+    restart: unless-stopped
+    stop_grace_period: 10s
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  data:

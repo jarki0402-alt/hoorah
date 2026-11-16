@@ -1,0 +1,59 @@
+/* ---------------------------------------------------------------- kompak: angkringan at night
+   Navy night sky under a striped tarp, warm bulbs, wooden counter. The question sits on the
+   same chalkboard as on the main screen. Contrast checked for small text on the sky (#16202c),
+   the panels (#0e151d) and the chalkboard (#22362c). */
+
+html[data-game="kompak"] {
+  --t-bg: #16202c;
+  --surface: #0e151d;
+  --surface-2: #26313d;
+  --surface-3: #0a1016;
+  --line: #3a4654;
+  --text-2: #e3e8ec;
+  --text-3: #b4bfca;
+  --t-panel: #0e151d;
+  --t-panel-edge: #3a4654;
+  --t-eyebrow: #ffc928;
+  --t-accent-text: #ffc928;
+  --t-good: #5be08f;
+  --t-track: #26313d;
+  --t-strip-bg: #e8692e;
+  --t-strip-text: #111214;
+  --t-strip-btn: #111214;
+  --t-strip-btn-text: #ffffff;
+  --t-crown: #ffc928;
+}
+
+/* The menu pill hangs from the tarp like a little flag. */
+html[data-game="kompak"] .menu-pill {
+  box-shadow:
+    inset 0 0 0 2px #b8481a,
+    0 3px 0 #8a3412;
+}
+
+/* The question is chalk on the angkringan's menu board. */
+html[data-game="kompak"] .prompt {
+  margin: 2px 2px 4px;
+  padding: clamp(8px, calc(var(--vh) * 1.6), 12px) 14px;
+  border: 5px solid #8a5a2b;
+  border-radius: 12px;
+  background: #22362c;
+  box-shadow: 0 4px 0 #4e3018;
+  color: #f4f1e6;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(16px, calc(var(--vh) * 2.8), 21px);
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* Answer buttons: ink-outlined like the cards on the main screen. */
+html[data-game="kompak"] .answer .label {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+/* Waiting row and locked card sit on the counter's dark panel. */
+html[data-game="kompak"] .wait-row {
+  box-shadow: inset 0 0 0 2px #3a4654;
+}

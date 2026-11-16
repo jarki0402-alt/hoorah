@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Kuis Nusantara panggung</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFC928}a:hover{color:#FFF7F0}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 720px; background: #12343B; color: #FFFFFF; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; overflow: hidden">
+
+<svg style="position: absolute; left: 0; top: 0" width="1280" height="720" viewBox="0 0 1280 720" aria-hidden="true">
+<defs><pattern id="kawungStage" width="28" height="28" patternUnits="userSpaceOnUse"><g fill="#1D4C55"><ellipse cx="14" cy="5.5" rx="4" ry="7"></ellipse><ellipse cx="14" cy="22.5" rx="4" ry="7"></ellipse><ellipse cx="5.5" cy="14" rx="7" ry="4"></ellipse><ellipse cx="22.5" cy="14" rx="7" ry="4"></ellipse></g></pattern></defs>
+<rect width="1280" height="560" fill="url(#kawungStage)" opacity="0.6"></rect>
+<g fill="#FFF2C2" opacity="0.1"><path d="M330 0 H400 L560 560 H200Z"></path><path d="M880 0 H950 L1080 560 H720Z"></path><path d="M610 0 H670 L760 560 H520Z"></path></g>
+<rect x="0" y="556" width="1280" height="164" fill="#1C2A2E"></rect>
+<rect x="0" y="552" width="1280" height="6" fill="#FFC928"></rect>
+<g fill="#FFF2C2" opacity="0.1"><ellipse cx="470" cy="610" rx="150" ry="22"></ellipse><ellipse cx="810" cy="610" rx="150" ry="22"></ellipse></g>
+<path d="M0 0 H150 C130 240 170 480 120 720 H0Z" fill="#B3261E"></path>
+<path d="M1280 0 H1130 C1150 240 1110 480 1160 720 H1280Z" fill="#B3261E"></path>
+<path d="M36 0 C24 240 50 480 30 720 M84 0 C72 240 98 480 78 720 M1244 0 C1256 240 1230 480 1250 720 M1196 0 C1208 240 1182 480 1202 720" fill="none" stroke="#8E1D17" stroke-width="10"></path>
+<path d="{{valance}}" fill="#8E1D17"></path>
+</svg>
+
+<div style="position: absolute; left: 172px; top: 40px; display: flex; align-items: center; gap: 12px">
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 26px; line-height: 1; color: #FFFFFF; -webkit-text-stroke: 5px #111214; paint-order: stroke fill">KUIS NUSANTARA</div>
+<div style="font-size: 12px; font-weight: 800; color: #111214; background: #FFC928; border-radius: 6px; padding: 3px 8px">SOAL 3 / 10</div>
+<div style="display: flex; gap: 3px" aria-label="Kemajuan soal">
+<sc-for list="{{pips}}" as="p" hint-placeholder-count="10"><div style="width: 14px; height: 6px; border-radius: 3px; background: {{p}}"></div></sc-for>
+</div>
+</div>
+
+<div style="position: absolute; right: 172px; top: 22px; width: 76px; height: 76px">
+<svg width="76" height="76" viewBox="0 0 64 64" role="img" aria-label="{{timerLabel}}"><circle cx="32" cy="32" r="28" fill="#111214"></circle><circle cx="32" cy="32" r="24" fill="none" stroke="#2A2B30" stroke-width="6"></circle><path d="{{timerArc}}" fill="none" stroke="{{timerColor}}" stroke-width="6" stroke-linecap="round"></path></svg>
+<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 28px; color: #FFFFFF">{{timerText}}</div>
+</div>
+
+<div style="position: absolute; left: 190px; right: 190px; top: 108px; height: 186px; box-sizing: border-box; background: #0B1F24; border: 7px dotted #FFE38A; border-radius: 22px; box-shadow: 0 0 0 6px #3A2A12; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 0 56px">
+<div style="font-size: 12px; font-weight: 800; letter-spacing: 0.1em; color: #FFC928">BUDAYA · JAWA BARAT</div>
+<h1 style="margin: 0; font-size: 29px; font-weight: 800; line-height: 1.3; text-align: center">Alat musik bambu yang dimainkan dengan cara digoyangkan, berasal dari Jawa Barat, adalah…</h1>
+</div>
+
+<div style="position: absolute; left: 190px; right: 190px; top: 318px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px">
+<sc-for list="{{answers}}" as="a" hint-placeholder-count="4">
+<div style="position: relative; height: 80px; border-radius: 18px; background: {{a.bg}}; color: #111214; display: flex; align-items: center; gap: 14px; padding: 0 16px; box-shadow: {{a.shadow}}; opacity: {{a.op}}">
+<div style="width: 44px; height: 44px; flex: none; border-radius: 50%; background: #111214; color: {{a.bg}}; display: flex; align-items: center; justify-content: center; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 24px">{{a.key}}</div>
+<div style="flex: 1; font-size: 26px; font-weight: 800">{{a.text}}</div>
+<sc-if value="{{a.hasPick}}" hint-placeholder-val="{{false}}">
+<dc-import name="Avatar" fruit="{{a.pickFruit}}" size="{{pickSize}}" ring="{{a.pickRing}}" hint-size="44px,44px"></dc-import>
+</sc-if>
+<sc-if value="{{a.correct}}" hint-placeholder-val="{{false}}">
+<div style="width: 44px; height: 44px; border-radius: 50%; background: #22B35E; border: 3px solid #111214; display: flex; align-items: center; justify-content: center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111214" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Jawaban benar"><path d="M4 12 L10 18 L20 6"></path></svg></div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+
+<div style="position: absolute; left: 172px; bottom: 30px; width: 192px; box-sizing: border-box; background: rgba(17,18,20,0.88); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #FFC928">{{tipTitle}}</div>
+<div style="font-size: 14px; line-height: 1.45; color: #DADCE0">{{tipText}}</div>
+</div>
+
+<div style="position: absolute; left: 380px; top: 512px; display: flex; gap: 160px">
+<sc-for list="{{podiums}}" as="p" hint-placeholder-count="2">
+<div style="position: relative; width: 180px; display: flex; flex-direction: column; align-items: center">
+<sc-if value="{{p.hasBurst}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; top: -26px; right: -6px; z-index: 2; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 30px; line-height: 1; color: {{p.burstColor}}; -webkit-text-stroke: 5px #111214; paint-order: stroke fill; transform: rotate(8deg)">{{p.burst}}</div>
+</sc-if>
+<dc-import name="Avatar" fruit="{{p.fruit}}" size="{{podAv}}" ring="{{p.ring}}" hint-size="76px,76px"></dc-import>
+<div style="margin-top: -8px; width: 180px; height: 120px; box-sizing: border-box; clip-path: polygon(6% 0, 94% 0, 100% 100%, 0 100%); background: {{p.color}}; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 14px">
+<div style="font-size: 16px; font-weight: 800; color: #111214">{{p.name}}</div>
+<div style="width: 120px; height: 32px; border-radius: 6px; background: #111214; display: flex; align-items: center; justify-content: center; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 22px; color: #FFC928">{{p.score}}</div>
+<div style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; color: #111214"><div style="width: 9px; height: 9px; border-radius: 50%; background: {{p.lamp}}; border: 1.5px solid #111214"></div>{{p.status}}</div>
+</div>
+</div>
+</sc-for>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"reveal":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const reveal = this.props.reveal === true;
+    let v = 'M0 0 H1280 V30 ';
+    for (let x = 1280; x > 0; x -= 64) v += `Q${x - 32} 58 ${x - 64} 30 `;
+    const arc = (frac) => {
+      const a = -Math.PI / 2 + frac * 2 * Math.PI, r = 24;
+      const x = 32 + r * Math.cos(a), y = 32 + r * Math.sin(a);
+      return `M32 8 A24 24 0 ${frac > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}`;
+    };
+    const base = [
+      { key: 'A', text: 'Angklung', bg: '#FF8A3D', dark: '#C9601E' },
+      { key: 'B', text: 'Sasando', bg: '#5AA9FF', dark: '#2F7FD6' },
+      { key: 'C', text: 'Kolintang', bg: '#FFC928', dark: '#C99A12' },
+      { key: 'D', text: 'Gamelan', bg: '#2DD4BF', dark: '#15A08F' }
+    ];
+    const answers = base.map((a, i) => {
+      const correct = reveal && i === 0;
+      const pickFruit = i === 0 ? 'semangka' : 'alpukat';
+      const pickRing = i === 0 ? '#F2453D' : '#2F8CFF';
+      return {
+        ...a,
+        correct,
+        hasPick: reveal && i < 2,
+        pickFruit, pickRing,
+        op: reveal && !correct ? 0.4 : 1,
+        shadow: correct
+          ? `0 6px 0 ${a.dark}, 0 0 0 4px #111214, 0 0 0 8px #FFC928`
+          : `0 6px 0 ${a.dark}`
+      };
+    });
+    const podiums = reveal
+      ? [
+          { name: 'Rina', fruit: 'semangka', ring: '#F2453D', color: '#FF5A1F', score: '1.850', status: 'BENAR · 3,2 dtk', lamp: '#22B35E', hasBurst: true, burst: '+850', burstColor: '#FFC928' },
+          { name: 'Budi', fruit: 'alpukat', ring: '#2F8CFF', color: '#5AA9FF', score: '900', status: 'Hampir! Soal berikut', lamp: '#FF8A3D', hasBurst: false, burst: '', burstColor: '#FFFFFF' }
+        ]
+      : [
+          { name: 'Rina', fruit: 'semangka', ring: '#F2453D', color: '#FF5A1F', score: '1.000', status: 'SUDAH JAWAB', lamp: '#22B35E', hasBurst: false, burst: '', burstColor: '#FFFFFF' },
+          { name: 'Budi', fruit: 'alpukat', ring: '#2F8CFF', color: '#5AA9FF', score: '900', status: 'BERPIKIR…', lamp: '#5B5E66', hasBurst: false, burst: '', burstColor: '#FFFFFF' }
+        ];
+    return {
+      valance: v + 'Z',
+      pips: Array.from({ length: 10 }, (_, i) => (i < 2 ? '#22B35E' : i === 2 ? '#FFC928' : '#2A2B30')),
+      timerArc: reveal ? arc(0.999) : arc(0.6),
+      timerColor: reveal ? '#22B35E' : '#FFC928',
+      timerText: reveal ? '5' : '12',
+      timerLabel: reveal ? 'Soal berikutnya dalam 5 detik' : 'Sisa waktu 12 detik',
+      tipTitle: reveal ? 'TAHUKAH KAMU?' : 'CARA MAIN',
+      tipText: reveal ? 'Angklung ditetapkan UNESCO sebagai Warisan Budaya Takbenda pada 2010.' : 'Jawab di HP. Makin cepat benar, makin besar poinnya.',
+      answers, podiums, pickSize: 44, podAv: 76
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,436 @@
+/* Rebut Wilayah: Phaser world + DOM HUD on the 1280x720 stage. */
+
+/* The ground canvas (courtyard, floor, territories) sits under the transparent Phaser canvas. */
+.wl-ground {
+  position: absolute;
+  inset: 0;
+  background: #16171a;
+}
+
+.wl-world {
+  position: absolute;
+  inset: 0;
+}
+
+.wl-world canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.wl-hud {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1280px;
+  height: 720px;
+  pointer-events: none;
+  color: #fff;
+  font-family: var(--font-ui);
+}
+
+.wl-paused *,
+.wl-paused *::before,
+.wl-paused *::after {
+  animation-play-state: paused !important;
+}
+
+.wl-off {
+  opacity: 0 !important;
+}
+
+/* ------------------------------------------------------------ round clock */
+
+.wl-clock {
+  position: absolute;
+  top: 16px;
+  transform: translateX(-50%);
+  height: 50px;
+  min-width: 150px;
+  padding: 0 22px 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(17, 18, 20, 0.92);
+  box-shadow:
+    inset 0 0 0 2px #3c3e44,
+    0 4px 0 rgba(0, 0, 0, 0.35);
+  border-radius: 25px;
+  color: #fff;
+  transition: opacity 0.3s var(--ease-out);
+}
+
+.wl-clock svg {
+  color: var(--yellow);
+}
+
+.wl-clock span {
+  font-size: 38px;
+  line-height: 1;
+  padding-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-clock.urgent {
+  background: #c8231c;
+  box-shadow:
+    inset 0 0 0 2px #ff8a80,
+    0 4px 0 rgba(0, 0, 0, 0.35);
+  animation: wl-throb 1s var(--ease-out) infinite;
+}
+
+.wl-clock.urgent svg {
+  color: #fff;
+}
+
+@keyframes wl-throb {
+  0% {
+    transform: translateX(-50%) scale(1.1);
+  }
+  40%,
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* ------------------------------------------------------------ leaderboard */
+
+.wl-board {
+  position: absolute;
+  padding: 10px 10px 8px;
+  background: rgba(17, 18, 20, 0.92);
+  box-shadow:
+    inset 0 0 0 2px #3c3e44,
+    0 6px 0 rgba(0, 0, 0, 0.35);
+  border-radius: 18px;
+  transition: opacity 0.3s var(--ease-out);
+}
+
+.wl-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  padding: 0 6px 6px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--yellow);
+}
+
+.wl-rows {
+  position: relative;
+}
+
+.wl-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 4px;
+  border-radius: 12px;
+  transition:
+    transform 0.45s var(--ease-out),
+    background-color 0.3s;
+}
+
+.wl-row.lead {
+  background: rgba(255, 201, 40, 0.13);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 201, 40, 0.5);
+}
+
+.wl-row.out {
+  opacity: 0.55;
+}
+
+.wl-rank {
+  width: 16px;
+  flex: none;
+  text-align: center;
+  font-size: 22px;
+  color: var(--text-3);
+  padding-top: 3px;
+}
+
+.wl-row.lead .wl-rank {
+  color: var(--yellow);
+}
+
+.wl-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wl-row-name {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wl-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+}
+
+.wl-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #2a2b30;
+  overflow: hidden;
+}
+
+.wl-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--c);
+  transition: width 0.45s var(--ease-out);
+}
+
+.wl-pct {
+  flex: none;
+  min-width: 46px;
+  text-align: right;
+  font-size: 21px;
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wl-pct small {
+  font-size: 13px;
+  margin-left: 1px;
+  color: var(--text-2);
+}
+
+.wl-respawn {
+  flex: none;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ feed */
+
+.wl-feed {
+  position: absolute;
+  transform: translateY(-100%);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  transition: opacity 0.3s;
+}
+
+.wl-feed-line {
+  padding: 5px 10px 5px 12px;
+  border-radius: 10px;
+  background: rgba(17, 18, 20, 0.92);
+  box-shadow: inset 3px 0 0 var(--c);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-2);
+  animation: wl-feed-in 0.35s var(--ease-pop) both;
+}
+
+@keyframes wl-feed-in {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------ hint */
+
+.wl-hint {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 9px 18px;
+  border-radius: 999px;
+  background: rgba(17, 18, 20, 0.88);
+  box-shadow: inset 0 0 0 1.5px #3c3e44;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #fff;
+  transition: opacity 0.4s var(--ease-out);
+}
+
+/* ------------------------------------------------------------ pop-ups */
+
+.wl-floats {
+  position: absolute;
+  inset: 0;
+}
+
+.wl-float {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  white-space: nowrap;
+  --stroke: 6px;
+  will-change: transform, opacity;
+}
+
+/* ------------------------------------------------------------ overlays */
+
+.wl-center {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.wl-count {
+  font-size: 170px;
+  color: var(--yellow);
+  --stroke: 12px;
+  animation: wl-pop 0.9s var(--ease-pop) both;
+}
+
+.wl-count-label {
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: rgba(17, 18, 20, 0.88);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.wl-go {
+  font-size: 140px;
+  color: #fff;
+  --stroke: 12px;
+  animation: wl-go 0.95s var(--ease-out) both;
+}
+
+.wl-warn {
+  font-size: 72px;
+  color: #ff6b5e;
+  --stroke: 10px;
+  white-space: nowrap;
+  animation: wl-go 1.6s var(--ease-out) both;
+}
+
+@keyframes wl-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.2;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes wl-go {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-4deg);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1.1) rotate(-2deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1) rotate(-2deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2) rotate(-2deg);
+  }
+}
+
+.wl-timeup {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 18, 20, 0.62);
+  animation: wl-fade 0.4s var(--ease-out) both;
+}
+
+.wl-timeup-card {
+  min-width: 460px;
+  max-width: 760px;
+  padding: 26px 40px 30px;
+  border-radius: 24px;
+  background: #1e1f23;
+  box-shadow:
+    inset 0 0 0 2px #3c3e44,
+    0 10px 0 rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  animation: wl-pop-in 0.55s var(--ease-pop) both;
+}
+
+.wl-timeup-eyebrow {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--yellow);
+}
+
+.wl-winners {
+  display: flex;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.wl-timeup-title {
+  font-size: 50px;
+  line-height: 1;
+}
+
+.wl-timeup-sub {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+@keyframes wl-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes wl-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}

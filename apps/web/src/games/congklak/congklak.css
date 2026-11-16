@@ -1,0 +1,567 @@
+/* Congklak main screen. Stage px: 1280x720 on 16:9, taller on 16:10 and 4:3 (the column stays
+   centred and the tikar mat fills the rest), wider on ultrawide screens. */
+
+.ck-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: #d7b377;
+  background-size: 48px 48px;
+  color: #fff7ea;
+  font-family: var(--font-ui);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ck-root.is-paused *,
+.ck-root.is-paused *::before,
+.ck-root.is-paused *::after {
+  animation-play-state: paused !important;
+}
+
+.ck-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ck-chip {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: #fff4df;
+  background: #5a3016;
+  border-radius: 999px;
+  padding: 8px 18px 6px;
+}
+
+/* ---------------------------------------------------------------- side panels */
+
+.ck-panel {
+  --side: #e8352e;
+  position: relative;
+  width: 1120px;
+  height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 18px;
+  background: #3b2210;
+  border-radius: 22px;
+  box-shadow:
+    inset 0 0 0 3px #5a3418,
+    0 6px 0 #24130a;
+  transition: box-shadow 0.25s ease;
+}
+
+.ck-panel.side-1 {
+  flex-direction: row-reverse;
+}
+
+.ck-panel.is-active {
+  box-shadow:
+    inset 0 0 0 4px var(--side),
+    0 6px 0 #24130a;
+}
+
+.ck-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ck-panel.side-1 .ck-who {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.ck-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.ck-av {
+  display: flex;
+  transition: transform 0.25s var(--ease-out);
+}
+
+.ck-avatars.is-team .ck-av + .ck-av {
+  margin-left: -12px;
+}
+
+.ck-av.is-mover {
+  position: relative;
+  z-index: 1;
+}
+
+.ck-names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ck-label {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1.05;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 560px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ck-panel.side-1 .ck-label {
+  flex-direction: row-reverse;
+}
+
+.ck-tag {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: var(--side);
+  border-radius: 999px;
+  padding: 4px 10px 3px;
+}
+
+.ck-status {
+  font-size: 17px;
+  font-weight: 700;
+  color: #e7cfae;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 600px;
+}
+
+.ck-secs {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 34px;
+  color: #ffc928;
+  min-width: 40px;
+  text-align: center;
+}
+
+.ck-score {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: none;
+}
+
+.ck-panel.side-1 .ck-score {
+  flex-direction: row-reverse;
+}
+
+.ck-score-label {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #c9a77f;
+}
+
+.ck-score b {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 54px;
+  line-height: 1;
+  color: #fff4df;
+  min-width: 64px;
+  text-align: center;
+}
+
+.ck-score.is-lead b {
+  color: #ffc928;
+}
+
+.ck-score small {
+  font-size: 15px;
+  font-weight: 700;
+  color: #e7cfae;
+}
+
+.ck-timer {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 7px;
+  height: 5px;
+  border-radius: 3px;
+  background: #ffc928;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.ck-panel.side-1 .ck-timer {
+  transform-origin: right center;
+}
+
+.ck-timer.is-low {
+  background: #ff5a1f;
+}
+
+.ck-bubbles {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+
+.ck-panel.side-1 .ck-bubbles {
+  top: auto;
+  bottom: 0;
+  transform: translate(-50%, 100%);
+}
+
+.ck-bubble {
+  font-size: 18px;
+  font-weight: 700;
+  color: #2a1a10;
+  background: #fff4df;
+  border: 3px solid #7a4521;
+  border-radius: 999px;
+  padding: 4px 14px;
+  white-space: nowrap;
+  animation: ck-bubble 2.6s ease forwards;
+}
+
+.ck-bubble.is-cheer {
+  background: #ffc928;
+}
+
+@keyframes ck-bubble {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- board */
+
+.ck-board-wrap {
+  position: relative;
+}
+
+.ck-board {
+  position: relative;
+  width: 1180px;
+  height: 400px;
+}
+
+.ck-board-art,
+.ck-board-seeds {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  overflow: visible;
+}
+
+.ck-band {
+  fill: rgba(255, 244, 223, 0.12);
+  stroke-width: 5;
+  animation: ck-band 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes ck-band {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ck-flash {
+  fill: none;
+  stroke: #ffc928;
+  stroke-width: 7;
+  animation: ck-flash 0.5s ease-in-out 4 alternate;
+}
+
+@keyframes ck-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.25;
+  }
+}
+
+.ck-count {
+  position: absolute;
+  min-width: 46px;
+  height: 36px;
+  padding: 0 8px;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #fff4df;
+  color: #3b2210;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1;
+  padding-top: 3px;
+  box-shadow: 0 3px 0 #6e3d1b;
+}
+
+.ck-count.is-empty {
+  background: #d9b98e;
+  color: #8a5a30;
+}
+
+.ck-count.is-active {
+  box-shadow:
+    0 0 0 3px #3b2210,
+    0 3px 0 5px #3b2210;
+}
+
+.ck-store-badge {
+  position: absolute;
+  min-width: 70px;
+  height: 52px;
+  padding: 4px 10px 0;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 38px;
+  line-height: 1;
+  box-shadow:
+    0 0 0 4px #fff4df,
+    0 6px 0 4px #3b2210;
+}
+
+.ck-hand {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 84px;
+  height: 72px;
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.3, 0.7, 0.4, 1);
+  filter: drop-shadow(0 8px 0 rgba(43, 22, 8, 0.35));
+  z-index: 2;
+}
+
+.ck-hand svg {
+  display: block;
+}
+
+.ck-hand-n {
+  position: absolute;
+  right: -16px;
+  top: -14px;
+  min-width: 36px;
+  height: 36px;
+  padding: 3px 6px 0;
+  border-radius: 999px;
+  background: #ffc928;
+  color: #2a1a10;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid #3b2210;
+}
+
+.ck-toast {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 1;
+  white-space: nowrap;
+  padding: 12px 22px 8px;
+  border-radius: 18px;
+  color: #2a1a10;
+  background: #ffc928;
+  border: 4px solid #3b2210;
+  box-shadow: 0 6px 0 #3b2210;
+  z-index: 3;
+  animation: ck-toast 1.7s var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+.ck-toast.is-capture {
+  background: #ff5a1f;
+  color: #fff;
+}
+
+.ck-toast.is-info {
+  font-size: 26px;
+  background: #fff4df;
+}
+
+@keyframes ck-toast {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -30%) scale(0.6);
+  }
+  14% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.06);
+  }
+  24% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -62%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -70%) scale(1);
+  }
+}
+
+/* ---------------------------------------------------------------- banners */
+
+.ck-banner-wrap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+
+.ck-banner {
+  min-width: 620px;
+  max-width: 900px;
+  padding: 26px 40px 24px;
+  border-radius: 28px;
+  background: #fff4df;
+  color: #2a1a10;
+  text-align: center;
+  box-shadow:
+    0 0 0 6px #7a4521,
+    0 14px 0 6px #3b2210;
+  animation: ck-pop 0.45s var(--ease-pop) both;
+}
+
+.ck-banner-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 64px;
+  line-height: 1;
+  padding-top: 6px;
+}
+
+.ck-banner-sub {
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.ck-banner-hint {
+  margin-top: 10px;
+  font-size: 19px;
+  font-weight: 600;
+  color: #6b4a2e;
+}
+
+.ck-banner-score {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+
+.ck-banner-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  border-radius: 16px;
+  background: #f1dfc0;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.ck-banner-side.is-win {
+  background: #ffc928;
+}
+
+.ck-banner-side .ck-banner-n {
+  font-family: var(--font-display);
+  font-size: 40px;
+  line-height: 1;
+  padding-top: 4px;
+}
+
+.ck-banner-name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ck-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: none;
+}
+
+@keyframes ck-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ck-noshell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: #fff;
+}

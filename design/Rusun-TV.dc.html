@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Rusun permainan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#FFC928}a:hover{color:#FFF7F0}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 720px; background: #8FD3FF; color: #FFFFFF; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; overflow: hidden">
+
+<div style="position: absolute; left: 0; top: 0"><dc-import name="RusunScene" w="{{full}}" roboh="{{roboh}}" hint-size="1280px,720px"></dc-import></div>
+
+<svg style="position: absolute; left: 0; top: 0" width="1280" height="720" viewBox="0 0 1280 720" aria-hidden="true">
+<path d="M60 680 V60" stroke="rgba(17,18,20,0.35)" stroke-width="3"></path>
+<path d="{{ticks}}" stroke="rgba(17,18,20,0.45)" stroke-width="2"></path>
+<path d="M60 80 H520" stroke="#FF5A1F" stroke-width="2.5" stroke-dasharray="10 8"></path>
+</svg>
+<div style="position: absolute; left: 70px; top: 64px; font-size: 12px; font-weight: 800; color: #111214; background: #FFFFFF; border: 2px solid #FF5A1F; border-radius: 999px; padding: 2px 10px">Rekor kalian: 12 lantai</div>
+
+<sc-if value="{{playing}}" hint-placeholder-val="{{true}}">
+<div style="position: absolute; left: 641px; top: 164px; width: 22px; height: 12px; border-left: 3px solid #FFC928; border-right: 3px solid #FFC928"></div>
+<div style="position: absolute; left: 420px; top: 126px; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 34px; line-height: 1; color: #FFC928; -webkit-text-stroke: 6px #111214; paint-order: stroke fill; transform: rotate(-6deg)">PAS! +2</div>
+
+<div style="position: absolute; left: 92px; top: 100px; width: 300px; box-sizing: border-box; background: rgba(17,18,20,0.9); border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 30px; line-height: 1; color: #FF5A1F; -webkit-text-stroke: 5px #111214; paint-order: stroke fill">RUSUN</div>
+<div style="font-size: 12px; font-weight: 800; color: #111214; background: #FFC928; border-radius: 6px; padding: 3px 8px">LANTAI 11</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<dc-import name="Avatar" fruit="semangka" size="{{turnAv}}" ring="#F2453D" hint-size="56px,56px"></dc-import>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; color: #A8ABB2">GILIRAN</div>
+<div style="font-size: 22px; font-weight: 800; line-height: 1">Rina</div>
+</div>
+<div style="width: 46px; height: 46px; border-radius: 50%; border: 5px solid #FFC928; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 20px">4</div>
+</div>
+<div style="font-size: 13px; color: #DADCE0">Tekan <b style="color: #FFFFFF">JATUHKAN</b> di HP saat lantai pas di atas menara. 1 lantai lagi menyamai rekor!</div>
+</div>
+</sc-if>
+
+<sc-if value="{{roboh}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: 0; right: 0; top: 96px; display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div style="font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 120px; line-height: 0.85; color: #FF5A1F; -webkit-text-stroke: 12px #111214; paint-order: stroke fill; text-shadow: 0 8px 0 #111214; transform: rotate(-4deg)">ROBOH!</div>
+<div style="display: flex; align-items: center; gap: 12px; background: rgba(17,18,20,0.92); border-radius: 18px; padding: 10px 16px">
+<dc-import name="Avatar" fruit="alpukat" size="{{smAv}}" ring="#2F8CFF" hint-size="40px,40px"></dc-import>
+<div style="font-size: 16px; line-height: 1.4"><b>Budi</b> merobohkan Rusun di lantai 11.<br><span style="color: #FFC928; font-weight: 800">Rina menang!</span> Rusun kalian sempat setinggi 10 lantai.</div>
+<dc-import name="Avatar" fruit="semangka" size="{{smAv}}" ring="#F2453D" hint-size="40px,40px"></dc-import>
+</div>
+</div>
+</sc-if>
+
+<div style="position: absolute; right: 24px; top: 70px; width: 210px; box-sizing: border-box; background: rgba(17,18,20,0.9); border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 2px">
+<svg width="120" height="68" viewBox="0 0 120 68" role="img" aria-label="{{gaugeLabel}}">
+<path d="M12 60 A48 48 0 0 1 36 18.4" fill="none" stroke="#22B35E" stroke-width="10"></path>
+<path d="M36 18.4 A48 48 0 0 1 84 18.4" fill="none" stroke="#FFC928" stroke-width="10"></path>
+<path d="M84 18.4 A48 48 0 0 1 108 60" fill="none" stroke="#F2453D" stroke-width="10"></path>
+<path d="{{needle}}" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"></path>
+<circle cx="60" cy="60" r="6" fill="#FFFFFF"></circle>
+</svg>
+<div style="font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: #A8ABB2">GOYANGAN</div>
+</div>
+<div style="height: 1px; background: #2A2B30"></div>
+<sc-for list="{{players}}" as="p" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 10px; opacity: {{p.op}}">
+<dc-import name="Avatar" fruit="{{p.fruit}}" size="{{smAv}}" ring="{{p.ring}}" hint-size="40px,40px"></dc-import>
+<div style="flex: 1; display: flex; flex-direction: column"><div style="font-size: 15px; font-weight: 800">{{p.name}}</div><div style="font-size: 12px; color: #A8ABB2">{{p.stat}}</div></div>
+</div>
+</sc-for>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #DADCE0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 8 H15 a3 3 0 1 0 -3 -3 M3 12 H19 a3 3 0 1 1 -3 3 M3 16 H10"></path></svg>Angin pelan ke kanan</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"roboh":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const roboh = this.props.roboh === true;
+    let ticks = '';
+    for (let i = 0; i <= 12; i++) ticks += `M52 ${680 - i * 50} H68 `;
+    return {
+      full: 1280, roboh, playing: !roboh, ticks, turnAv: 56, smAv: 40,
+      needle: roboh ? 'M60 60 L100 60' : 'M60 60 L74.7 22.8',
+      gaugeLabel: roboh ? 'Goyangan maksimum' : 'Goyangan sedang, mendekati merah',
+      players: roboh
+        ? [{ name: 'Rina', fruit: 'semangka', ring: '#F2453D', stat: 'Menang · 5 lantai, 3 PAS', op: 1 }, { name: 'Budi', fruit: 'alpukat', ring: '#2F8CFF', stat: 'Merobohkan di lantai 11', op: 0.6 }]
+        : [{ name: 'Rina', fruit: 'semangka', ring: '#F2453D', stat: '5 lantai · 3 PAS', op: 1 }, { name: 'Budi', fruit: 'alpukat', ring: '#2F8CFF', stat: '5 lantai · 1 PAS', op: 0.75 }]
+    };
+  }
+}
+</script>
+</body>
+</html>

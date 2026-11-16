@@ -1,0 +1,315 @@
+/* ---------------------------------------------------------------- chess view (chess.tsx)
+   Portrait: status row, opponent bar, board, own bar, hint, in that order (the panes vanish,
+   `order` places the board between the bars). Landscape: info pane left, board right. */
+
+.ctrl.chess-view {
+  --gap: clamp(6px, calc(var(--vh) * 1.3), 10px);
+  padding-left: max(10px, env(safe-area-inset-left));
+  padding-right: max(10px, env(safe-area-inset-right));
+  max-width: 600px;
+}
+
+.chess-top {
+  order: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.chess-eyebrow {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chess-view.is-turn .chess-eyebrow {
+  flex: 0 1 auto;
+  color: var(--ink);
+  background: var(--yellow);
+  border-radius: 8px;
+  padding: 6px 10px 5px;
+  margin-right: auto;
+}
+
+.chess-top .timer {
+  font-size: 20px;
+  padding: 5px 9px;
+  min-width: 40px;
+}
+
+.chess-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.chess-act {
+  border: none;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-2);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 2px var(--line);
+  touch-action: manipulation;
+}
+
+.chess-act.is-armed {
+  color: #fff;
+  background: var(--red);
+  box-shadow: none;
+}
+
+.chess-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 5px 0 6px;
+  border-radius: 12px;
+  background: var(--t-panel);
+  box-shadow: inset 0 0 0 2px var(--t-panel-edge);
+}
+
+.chess-bar.is-opp {
+  order: 2;
+}
+
+.chess-bar.is-me {
+  order: 4;
+}
+
+.chess-king {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.chess-faces {
+  display: flex;
+  flex: none;
+}
+
+.chess-faces > * + * {
+  margin-left: -8px;
+}
+
+.chess-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chess-plus {
+  flex: none;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-3);
+}
+
+.chess-clock {
+  flex: none;
+  min-width: 66px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  padding: 8px 8px 5px;
+  border-radius: 8px;
+  color: var(--text-3);
+  background: var(--surface-3);
+}
+
+.chess-clock.is-run {
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.chess-clock.is-low {
+  color: #fff;
+  background: var(--red);
+}
+
+.chess-hint {
+  order: 5;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-3);
+  text-align: center;
+  min-height: 1.35em;
+}
+
+.pane.zone.chess-zone {
+  order: 3;
+  container-type: size;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  /* Room for the board's frame and drop shadow. */
+  padding: 4px 4px 10px;
+}
+
+.chess-board-box {
+  position: relative;
+  width: min(100%, calc(var(--vh) * 52));
+  aspect-ratio: 1;
+}
+
+@supports (width: 1cqw) {
+  .chess-board-box {
+    width: min(100cqw, 100cqh);
+  }
+}
+
+.chess-board {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 4px #4a3324,
+    0 6px 0 4px #2e1f15;
+  touch-action: none;
+}
+
+.chess-view.is-turn .chess-board {
+  box-shadow:
+    0 0 0 4px var(--yellow),
+    0 6px 0 4px #c99a12;
+}
+
+.chess-coord text {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 19px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.chess-promo {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 18, 20, 0.55);
+  border-radius: 8px;
+  touch-action: none;
+}
+
+.chess-promo-card {
+  width: 92%;
+  background: #fff7f0;
+  color: var(--ink);
+  border-radius: 16px;
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 6px 0 3px var(--ink);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: pop-in 0.2s ease both;
+}
+
+.chess-promo-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.chess-promo-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.chess-promo-btn {
+  border: none;
+  border-radius: 12px;
+  background: #efddba;
+  box-shadow: inset 0 0 0 2px #b9875b;
+  padding: 6px 2px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+  touch-action: none;
+}
+
+.chess-promo-btn:active {
+  background: var(--yellow);
+}
+
+.chess-promo-btn svg {
+  width: 100%;
+  max-width: 54px;
+  aspect-ratio: 1;
+}
+
+.chess-promo-cancel {
+  border: none;
+  min-height: 40px;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+@media (max-height: 600px) {
+  .chess-hint {
+    font-size: 12px;
+  }
+
+  .chess-bar {
+    height: 38px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .chess-view .pane.chess-info {
+    justify-content: center;
+    flex: 0 1 320px;
+  }
+}
+
+/* Portrait: the board is limited by the phone's width; keep the bars hugging it and centre the
+   group in the spare height instead of leaving gaps between bars and board. */
+@media (orientation: portrait) {
+  .pane.zone.chess-zone {
+    max-height: min(calc(100vw - 20px), 580px);
+  }
+
+  .chess-bar.is-opp {
+    margin-top: auto;
+  }
+
+  .chess-hint {
+    margin-bottom: auto;
+  }
+}

@@ -1,0 +1,70 @@
+/* Rebut Wilayah: phone theme tokens (html[data-game="wilayah"]). The dark tegel courtyard of
+   the main screen; panels are darker tiles with a grout edge and the joystick is a cement plate
+   with a knob of the player's paint. */
+
+html[data-game="wilayah"] {
+  --t-bg: #1a1b1f;
+  --surface: #26272c;
+  --surface-2: #34363c;
+  --surface-3: #101114;
+  --line: #3a3c43;
+  --t-panel: rgba(20, 21, 24, 0.94);
+  --t-panel-edge: #34363c;
+  --t-eyebrow: #ffc928;
+  --t-eyebrow-bg: transparent;
+  --t-eyebrow-pad: 0;
+  --t-accent-text: #ffc928;
+  --t-good: #5be08f;
+  --t-track: #2c2e33;
+  --t-strip-bg: rgba(20, 21, 24, 0.95);
+  --t-strip-text: #c7cad0;
+  --t-strip-btn: #34363c;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 8px;
+  --t-crown: #ffc928;
+}
+
+/* Joystick: a round cement plate cut from the courtyard tegel, its grout lines crossing under a
+   knob that is a raised dab of the player's paint (lip below, light rim on top, brush strokes). */
+html[data-game="wilayah"] .pad-stick {
+  background-color: #2b2d32;
+  background-image:
+    linear-gradient(
+      90deg,
+      transparent calc(50% - 1px),
+      #1f2024 calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    linear-gradient(
+      0deg,
+      transparent calc(50% - 1px),
+      #1f2024 calc(50% - 1px) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    );
+  box-shadow:
+    inset 0 0 0 3px #3a3c43,
+    inset 0 3px 0 rgba(255, 255, 255, 0.07),
+    inset 0 12px 26px rgba(0, 0, 0, 0.3),
+    0 7px 0 #0e0f11;
+}
+
+html[data-game="wilayah"] .pad-stick-tick {
+  color: #ffc928;
+  opacity: 0.5;
+}
+
+html[data-game="wilayah"] .pad-stick-knob {
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0 5px, transparent 5px 12px);
+  box-shadow:
+    inset 0 -7px 0 rgba(17, 18, 20, 0.32),
+    inset 0 4px 0 rgba(255, 255, 255, 0.32),
+    0 6px 0 #0e0f11;
+}
+
+html[data-game="wilayah"] .pad-stick.on .pad-stick-knob {
+  box-shadow:
+    inset 0 -5px 0 rgba(17, 18, 20, 0.32),
+    inset 0 4px 0 rgba(255, 255, 255, 0.32),
+    0 0 0 5px rgba(255, 255, 255, 0.16),
+    0 3px 0 #0e0f11;
+}

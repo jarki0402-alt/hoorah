@@ -1,0 +1,911 @@
+body {
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+.tv-stage {
+  position: fixed;
+  /* Anchored top-left and scaled from there; the width is fitted to the screen exactly. */
+  left: 0;
+  top: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+  background: var(--ink);
+  transform-origin: 0 0;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  animation: fade-in 0.35s var(--ease-out);
+}
+
+/* ------------------------------------------------------------ chips & buttons */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.chip.glass {
+  background: rgba(30, 31, 35, 0.9);
+}
+
+/* "+ Tambah pemain" in the home top bar: the one yellow chip, so newcomers find the QR. */
+.chip.invite-chip {
+  border: none;
+  background: var(--yellow);
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 800;
+  padding: 7px 14px 7px 10px;
+  cursor: pointer;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  flex: none;
+}
+
+.dot.warn {
+  background: var(--yellow);
+}
+
+.dot.bad {
+  background: var(--red);
+}
+
+.tag {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border-radius: 6px;
+  padding: 3px 8px;
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.btn {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 700;
+  background: var(--surface-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition:
+    transform 0.18s var(--ease-pop),
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.btn.primary {
+  background: var(--orange);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.btn.glass {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn.light {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.focusable.focused {
+  --ring-bg: var(--ink);
+  transform: scale(1.04);
+  box-shadow:
+    0 0 0 3px var(--ring-bg),
+    0 0 0 6px #fff;
+  z-index: 2;
+}
+
+/* Game cards: only the artwork grows and gets the ring, never the caption below it. */
+.card.focusable.focused {
+  transform: none;
+  box-shadow: none;
+}
+
+.on-surface .focusable.focused {
+  --ring-bg: var(--surface);
+}
+
+/* ------------------------------------------------------------ top bar */
+
+.topbar {
+  position: absolute;
+  left: 48px;
+  right: 48px;
+  top: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 5;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-stack {
+  display: flex;
+}
+
+.avatar-stack > * + * {
+  margin-left: -8px;
+}
+
+/* ------------------------------------------------------------ join */
+
+.join {
+  padding: 24px 48px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.join-main {
+  flex: 1;
+  display: grid;
+  /* The middle column grows with the room code so the code never breaks onto two lines. */
+  grid-template-columns: 410px minmax(270px, max-content) 1fr;
+  gap: 40px;
+  align-items: center;
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--yellow);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-3);
+  border-radius: 14px;
+  padding: 10px 12px;
+  animation: rise-in 0.5s var(--ease-out) both;
+}
+
+.step-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.qr-card {
+  position: relative;
+  background: #fff;
+  border-radius: 20px;
+  padding: 12px;
+  box-shadow: 0 0 0 6px var(--orange);
+  animation: pop-in 0.5s var(--ease-pop) both;
+}
+
+.qr-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border-radius: 10px;
+  padding: 4px;
+  display: flex;
+}
+
+.room-code {
+  font-size: 66px;
+  letter-spacing: 0.06em;
+  color: var(--yellow);
+  white-space: nowrap;
+  line-height: 1.1;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 10px 12px;
+  animation: pop-in 0.45s var(--ease-pop) both;
+}
+
+.player-row.empty {
+  background: none;
+  border: 2px dashed var(--line);
+  animation: none;
+}
+
+.player-row.locked {
+  background: var(--surface-3);
+  padding: 9px 12px;
+  animation: none;
+}
+
+.slot-plus {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.showcase {
+  display: flex;
+  gap: 14px;
+}
+
+.showcase > div {
+  animation: rise-in 0.6s var(--ease-out) both;
+}
+
+/* ------------------------------------------------------------ home */
+
+.hero-art {
+  position: absolute;
+  left: 300px;
+  right: 0;
+  top: 0;
+  /* Fill the hero on any shape: wider stages reach the right edge, taller ones grow downwards
+     (619px is the art's height on the 1280×720 stage). */
+  height: calc(619px + (100% - 720px));
+  transition: opacity 0.6s ease;
+}
+
+/* KeyArt sizes itself inline; here it must cover the whole hero instead. */
+.hero-art > div,
+.hero-art img {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.hero-art img {
+  object-fit: cover;
+  object-position: 50% 45%;
+}
+
+.scrim-left {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--ink) 0%,
+    var(--ink) 30%,
+    rgba(17, 18, 20, 0.55) 52%,
+    rgba(17, 18, 20, 0) 70%
+  );
+}
+
+.scrim-bottom {
+  position: absolute;
+  inset: 0;
+  /* Fixed from the bottom (the card row sits a fixed distance from the bottom), so taller
+     screens show more of the art instead of a bigger dark band. Same as 34%/58% on 720px. */
+  background: linear-gradient(0deg, var(--ink) 0, var(--ink) 245px, rgba(17, 18, 20, 0) 418px);
+}
+
+.hero-copy {
+  position: absolute;
+  left: 48px;
+  /* Taller screens (16:10, 4:3): move down by half the extra height. */
+  top: calc(92px + (100% - 720px) / 2);
+  width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: rise-in 0.5s var(--ease-out) both;
+}
+
+.hero-title {
+  margin: 0;
+  font-size: 68px;
+  line-height: 0.88;
+  color: var(--yellow);
+  --stroke: 8px;
+  text-shadow: 0 5px 0 var(--ink);
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 5px 11px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.meta-chip.good {
+  background: rgba(34, 179, 94, 0.18);
+  color: var(--green-text);
+}
+
+/* Game mood (shown instead of a length): a tinted pill, or the tint on a hero meta chip. */
+.mood-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.mood-heboh {
+  background: rgba(255, 90, 31, 0.2);
+  color: #ff8a5c;
+}
+
+.mood-santai {
+  background: rgba(34, 179, 94, 0.2);
+  color: var(--green-text);
+}
+
+.mood-otak {
+  background: rgba(47, 140, 255, 0.22);
+  color: #8cc2ff;
+}
+
+.mood-ramai {
+  background: rgba(255, 201, 40, 0.18);
+  color: var(--yellow);
+}
+
+.dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #5b5e66;
+  transition: width 0.3s var(--ease-out);
+}
+
+.dots span.on {
+  width: 26px;
+  background: #fff;
+}
+
+.row-section {
+  position: absolute;
+  left: 48px;
+  right: 0;
+  /* Pinned to the bottom edge with the same 48px margin as the sides; taller screens add the extra height. */
+  top: calc(450px + (100% - 720px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The row can be wider than the screen; it slides to keep the focused card in view. It bleeds to
+   both screen edges (the section starts at 48px), so cards slide off the left edge like the right
+   instead of being clipped at the page margin. */
+.cards-viewport {
+  overflow: hidden;
+  margin: -10px 0 -10px -48px;
+  padding: 10px 0 10px 48px;
+}
+
+.cards {
+  display: flex;
+  gap: 16px;
+  padding-top: 6px;
+  transition: transform 0.35s var(--ease-out);
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+}
+
+.card.focused .card-title {
+  color: #fff;
+}
+
+.card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.card-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.card {
+  width: 224px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+}
+
+.card-art {
+  position: relative;
+  border-radius: 12px;
+  transition:
+    transform 0.22s var(--ease-pop),
+    box-shadow 0.22s ease;
+}
+
+.card.focused .card-art {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 6px #fff,
+    0 18px 30px rgba(0, 0, 0, 0.5);
+}
+
+.card.soon {
+  opacity: 0.55;
+}
+
+.card.soon.focused {
+  opacity: 0.85;
+}
+
+.card-badge {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 1;
+}
+
+/* ------------------------------------------------------------ detail */
+
+.detail-copy {
+  position: absolute;
+  left: 48px;
+  top: calc(236px + (100% - 720px) / 2);
+  width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: rise-in 0.5s var(--ease-out) both;
+}
+
+.fact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 9px 14px;
+}
+
+.howto {
+  background: var(--surface-3);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.howto-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--orange);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.side-panel {
+  position: absolute;
+  right: 48px;
+  top: calc(236px + (100% - 720px) / 2);
+  width: 360px;
+  background: var(--surface);
+  border-radius: 22px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: rise-in 0.5s 0.08s var(--ease-out) both;
+}
+
+/* ------------------------------------------------------------ game */
+
+.game-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--ink);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.loading-box {
+  width: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+}
+
+.progress {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.progress > div {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--orange);
+  transition: width 0.4s var(--ease-out);
+}
+
+.menu-item {
+  text-align: left;
+  font-size: 17px;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: none;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.menu-item.focused {
+  background: var(--orange);
+  color: var(--ink);
+  transform: none;
+}
+
+.pause-screen {
+  background: rgba(17, 18, 20, 0.88);
+}
+
+.pause-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  animation: pop-in 0.35s var(--ease-pop);
+}
+
+.pause-title {
+  margin: 6px 0 0;
+  font-size: 88px;
+}
+
+.pause-game {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--yellow);
+}
+
+.pause-hint {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px 8px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 17px;
+  color: var(--text-2);
+}
+
+.pause-hint b {
+  color: #fff;
+}
+
+.invite-panel {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  max-width: 980px;
+  padding: 40px 48px;
+  border-radius: 28px;
+  background: var(--surface);
+  animation: pop-in 0.3s var(--ease-pop);
+}
+
+.invite-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 460px;
+}
+
+.invite-hint {
+  font-size: 16px;
+  color: var(--text-3);
+}
+
+.invite-hint b {
+  color: #fff;
+}
+
+.invite-code {
+  font-size: 84px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--yellow);
+  line-height: 1;
+}
+
+.invite-seats {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.invite-seats.is-full b {
+  color: var(--yellow);
+}
+
+/* ------------------------------------------------------------ results */
+
+.results-title {
+  margin: 0;
+  font-size: 62px;
+  color: var(--yellow);
+  --stroke: 8px;
+  text-shadow: 0 5px 0 var(--ink);
+  animation: pop-in 0.6s var(--ease-pop) both;
+  text-align: center;
+}
+
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+}
+
+.podium-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: rise-in 0.6s var(--ease-pop) both;
+}
+
+.podium-block {
+  margin-top: -6px;
+  border-radius: 14px 14px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--ink);
+}
+
+.award {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 11px 14px;
+  animation: rise-in 0.5s var(--ease-out) both;
+}
+
+.award-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crown {
+  animation: pop-in 0.6s 0.4s var(--ease-pop) both;
+}
+
+/* ------------------------------------------------------------ overlays */
+
+.toasts {
+  position: absolute;
+  left: 50%;
+  top: 72px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 16px 6px 6px;
+  font-size: 15px;
+  animation: pop-in 0.35s var(--ease-pop);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+.toast.plain {
+  padding: 9px 16px;
+}
+
+.reactions {
+  position: absolute;
+  left: 40px;
+  bottom: 70px;
+  width: 300px;
+  height: 260px;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.reaction {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--yellow);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 4px 12px 4px 4px;
+  font-weight: 800;
+  font-size: 15px;
+  animation: float-up 2.6s var(--ease-out) forwards;
+}
+
+.reaction.boo {
+  background: var(--surface-2);
+  color: #fff;
+}
+
+.net-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: var(--yellow);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid rgba(17, 18, 20, 0.25);
+  border-top-color: var(--ink);
+  animation: spin 0.8s linear infinite;
+}
+
+/* ------------------------------------------------------------ home tabs
+   Same tabs as the Host's phone picker; whichever side switches, both follow. */
+
+.home-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.home-tab {
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.home-tab.on {
+  background: #fff;
+  color: var(--ink);
+}
+
+.cards-empty {
+  padding: 40px 0;
+  font-size: 15px;
+  color: var(--text-3);
+}
+
+/* Hoorah Pass on the join page: a quiet yellow tag next to the seat count. */
+.pass-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #111214;
+  background: var(--yellow);
+  white-space: nowrap;
+}

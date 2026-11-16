@@ -1,0 +1,98 @@
+/* Ludo phone: the board up close. Dark text on cream paper, white panels with the board's dark
+   frame, and the roll button is a big die. Imported by the controller app; only active while
+   Ludo runs. */
+
+html[data-game="ludo"] {
+  --t-bg: #fff6e3;
+  --text: #111214;
+  --text-2: #3b3326;
+  --text-3: #5e5241;
+  --surface: #ffffff;
+  --surface-2: #f3e7cf;
+  --surface-3: #1e1f24;
+  --line: #1e1f24;
+  --t-panel: #ffffff;
+  --t-panel-edge: #1e1f24;
+  --t-eyebrow: #111214;
+  --t-eyebrow-bg: #ffc928;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #a8400e;
+  --t-good: #13703a;
+  --t-track: #f3e7cf;
+  --t-strip-bg: #1e1f24;
+  --t-strip-text: #fff6e3;
+  --t-strip-btn: #3a3b40;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 9px;
+  --t-crown: #ffc928;
+}
+
+html[data-game="ludo"] .timer {
+  box-shadow: inset 0 0 0 2.5px #1e1f24;
+}
+
+/* The coloured squares along the bottom are part of the scene: keep controls above them. */
+html[data-game="ludo"] .ctrl {
+  padding-bottom: max(calc(var(--pad-y) + min(40px, calc(var(--vh) * 5.5))), env(safe-area-inset-bottom));
+}
+
+/* LEMPAR: a big white die with six pips over the label. */
+html[data-game="ludo"] .round-btn {
+  border-radius: 24%;
+  background: #ffffff;
+  border: 5px solid #1e1f24;
+  color: #1e1f24;
+  box-shadow:
+    0 12px 0 #1e1f24,
+    0 0 0 10px rgba(30, 31, 36, 0.1);
+  gap: 8%;
+}
+
+html[data-game="ludo"] .round-btn svg {
+  display: none;
+}
+
+html[data-game="ludo"] .round-btn::before {
+  content: "";
+  width: 46%;
+  height: 40%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 40'%3E%3Cg fill='%231E1F24'%3E%3Ccircle cx='8' cy='7' r='6'/%3E%3Ccircle cx='38' cy='7' r='6'/%3E%3Ccircle cx='8' cy='20' r='6'/%3E%3Ccircle cx='38' cy='20' r='6'/%3E%3Ccircle cx='8' cy='33' r='6'/%3E%3Ccircle cx='38' cy='33' r='6'/%3E%3C/g%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+html[data-game="ludo"] .round-btn.pressed {
+  box-shadow:
+    0 3px 0 #1e1f24,
+    0 0 0 14px rgba(30, 31, 36, 0.16);
+}
+
+html[data-game="ludo"] .round-btn:disabled {
+  background: #f3e7cf;
+  color: #5e5241;
+  box-shadow: 0 5px 0 #1e1f24;
+}
+
+html[data-game="ludo"] .round-btn:disabled::before {
+  opacity: 0.35;
+}
+
+/* Pawn buttons: the pawn's number in a white disc, the move in bold. */
+html[data-game="ludo"] .answer {
+  border: 3px solid #1e1f24;
+  max-height: 96px;
+}
+
+html[data-game="ludo"] .answer .letter {
+  background: #ffffff;
+  color: #1e1f24 !important;
+  box-shadow: inset 0 0 0 3px #1e1f24;
+}
+
+html[data-game="ludo"] .prompt {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(20px, calc(var(--vh) * 3.6), 26px);
+  text-align: center;
+  padding: 8px 12px;
+}

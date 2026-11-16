@@ -1,0 +1,65 @@
+/* ---------------------------------------------------------------- karung: afternoon sack race */
+
+html[data-game="karung"] {
+  --t-bg: #9bc25a;
+  --text: #111214;
+  --text-2: #2b2116;
+  --text-3: #4a3826;
+  --surface: #fff6e3;
+  --surface-2: #f1dcb4;
+  --surface-3: #6b4423;
+  --line: #a97543;
+  --t-panel: #fff6e3;
+  --t-panel-edge: #a97543;
+  --t-eyebrow: #fff6e3;
+  --t-eyebrow-bg: #6b4423;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #a8400e;
+  --t-good: #13703a;
+  --t-track: #f1dcb4;
+  --t-strip-bg: #ffe3a6;
+  --t-strip-text: #111214;
+  --t-strip-btn: #111214;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 8px;
+  --t-crown: #a8400e;
+}
+
+/* The race card is a cream signboard so the fence and lanes never cross the numbers. */
+html[data-game="karung"] .tap-info {
+  background: var(--t-panel);
+  box-shadow:
+    inset 0 0 0 2px var(--t-panel-edge),
+    0 4px 0 var(--surface-3);
+  border-radius: 18px;
+  padding: 12px 14px 14px;
+}
+
+/* The pad is your landing spot: a worn, darker patch of grass under the rings. */
+html[data-game="karung"] .tap-pad {
+  background-image: radial-gradient(closest-side, #8db24d 0 99%, transparent 100%);
+  background-size: min(96%, 340px) min(90%, 340px);
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* LOMPAT! is a burlap sack seen from above: woven cloth, a rolled rope rim. */
+html[data-game="karung"] .tap-pad .round-btn {
+  color: #fff;
+  -webkit-text-stroke: 7px var(--ink);
+  paint-order: stroke fill;
+  background-color: #c9965a;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(107, 68, 35, 0.22) 0 2px, transparent 2px 7px),
+    repeating-linear-gradient(90deg, rgba(107, 68, 35, 0.18) 0 2px, transparent 2px 8px);
+  border: 6px solid #6b4423;
+  box-shadow:
+    inset 0 0 0 5px #a97543,
+    0 12px 0 rgba(17, 18, 20, 0.45);
+}
+
+html[data-game="karung"] .tap-pad .round-btn.pressed {
+  box-shadow:
+    inset 0 0 0 5px #a97543,
+    0 3px 0 rgba(17, 18, 20, 0.45);
+}

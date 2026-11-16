@@ -1,0 +1,96 @@
+/* Lari Terus phone: rooftops at golden hour. Dark text on a warm sky, cream panels with the
+   brown of the parapets, and the swipe pad is a patch of roof tiles. Imported by the controller
+   app; only active while Lari Terus runs. */
+
+html[data-game="lari"] {
+  --t-bg: #ffe2b8;
+  --text: #111214;
+  --text-2: #3b2a1e;
+  --text-3: #6e5442;
+  --surface: #fff6e3;
+  --surface-2: #ffe7c4;
+  --surface-3: #8a5236;
+  --line: #8a5236;
+  --t-panel: #fff6e3;
+  --t-panel-edge: #8a5236;
+  --t-eyebrow: #fff6e3;
+  --t-eyebrow-bg: #8a5236;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #a8400e;
+  --t-good: #13703a;
+  --t-track: #ffe7c4;
+  --t-strip-bg: #8a5236;
+  --t-strip-text: #fff6e3;
+  --t-strip-btn: #6b3d27;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 12px;
+  --t-crown: #a8400e;
+}
+
+/* The city along the bottom edge is part of the scene: keep the controls above it. */
+html[data-game="lari"] .ctrl {
+  padding-bottom: max(calc(var(--pad-y) + min(26px, calc(var(--vh) * 3.2))), env(safe-area-inset-bottom));
+}
+
+/* Swipe pad: a patch of terracotta-grouted roof tiles on cream. */
+html[data-game="lari"] .pad-swipe-zone {
+  background-color: #fff6e3;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(138, 82, 54, 0.1) 0 2px, transparent 2px 44px),
+    repeating-linear-gradient(90deg, rgba(138, 82, 54, 0.1) 0 2px, transparent 2px 44px);
+  box-shadow:
+    inset 0 0 0 3px #8a5236,
+    0 6px 0 #8a5236;
+}
+
+html[data-game="lari"] .pad-swipe-zone.is-flash {
+  box-shadow:
+    inset 0 0 0 5px var(--pad-color),
+    0 6px 0 #8a5236;
+}
+
+html[data-game="lari"] .pad-swipe-arrow {
+  color: #b9774f;
+  opacity: 0.75;
+}
+
+html[data-game="lari"] .pad-swipe-arrow.on {
+  color: #fff;
+  opacity: 1;
+}
+
+html[data-game="lari"] .pad-swipe-dot {
+  background: #e8b88f;
+  opacity: 1;
+}
+
+html[data-game="lari"] .pad-swipe-hint {
+  color: #6e5442;
+}
+
+html[data-game="lari"] .pad-key {
+  background: #ffe7c4;
+  color: #3b2a1e;
+  box-shadow:
+    inset 0 0 0 2.5px #8a5236,
+    0 5px 0 #8a5236;
+}
+
+html[data-game="lari"] .pad-key.pressed {
+  color: #fff;
+  background: var(--pad-color);
+  box-shadow:
+    inset 0 0 0 2.5px #8a5236,
+    0 1px 0 #8a5236;
+}
+
+/* The hint sits over the skyline: give it a cream pill so it stays readable. */
+html[data-game="lari"] .pad-hint {
+  align-self: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 246, 227, 0.94);
+  box-shadow: inset 0 0 0 2px #8a5236;
+  color: #3b2a1e;
+  font-weight: 600;
+}

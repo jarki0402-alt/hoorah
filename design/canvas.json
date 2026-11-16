@@ -1,0 +1,49 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-11-12T15:30:00Z"},
+  "title": "Hoorah — Desain UI & Game MVP",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 1440, "h": 900, "title": "Brand & Logo"},
+    "Avatar.dc.html": {"x": 2160, "y": 0, "w": 120, "h": 120, "title": "Komponen avatar"},
+    "KeyArt.dc.html": {"x": 2360, "y": 0, "w": 640, "h": 360, "title": "Komponen key art game"},
+    "TV-Join.dc.html": {"x": 0, "y": 1200, "w": 1280, "h": 720, "title": "TV · S-02 Gabung (QR + kode)"},
+    "TV-Home.dc.html": {"x": 1360, "y": 1200, "w": 1280, "h": 720, "title": "TV · S-03/04 Beranda & katalog"},
+    "TV-Detail.dc.html": {"x": 2720, "y": 1200, "w": 1280, "h": 720, "title": "TV · S-05 Detail game"},
+    "TV-Loading.dc.html": {"x": 0, "y": 2040, "w": 1280, "h": 720, "title": "TV · S-06 Memuat game"},
+    "TV-Results.dc.html": {"x": 1360, "y": 2040, "w": 1280, "h": 720, "title": "TV · S-08 Hasil"},
+    "TV-Overlays.dc.html": {"x": 2720, "y": 2040, "w": 1280, "h": 720, "title": "TV · S-07/S-11 Menu jeda, toast, upsell"},
+    "HP-Gabung.dc.html": {"x": 0, "y": 3100, "w": 1308, "h": 980, "title": "HP · C-01 s/d C-03 Alur gabung"},
+    "HP-Status.dc.html": {"x": 1388, "y": 3100, "w": 1308, "h": 980, "title": "HP · C-04 Host, C-10 putus, C-12 penuh"},
+    "Kuis-TV.dc.html": {"x": 0, "y": 4420, "w": 1280, "h": 720, "title": "Kuis Nusantara · TV soal"},
+    "Kuis-Reveal.dc.html": {"x": 1360, "y": 4420, "w": 1280, "h": 720, "title": "Kuis Nusantara · TV jawaban"},
+    "Kuis-HP.dc.html": {"x": 2720, "y": 4420, "w": 1308, "h": 980, "title": "Kuis Nusantara · Kontroler HP"},
+    "Tarik-TV.dc.html": {"x": 0, "y": 5740, "w": 1280, "h": 720, "title": "Tarik Tambang · TV permainan"},
+    "Tarik-HP.dc.html": {"x": 1360, "y": 5740, "w": 1832, "h": 520, "title": "Tarik Tambang · Kontroler HP"},
+    "RusunScene.dc.html": {"x": 3780, "y": 0, "w": 1280, "h": 720, "title": "Komponen adegan Rusun"},
+    "Rusun-TV.dc.html": {"x": 0, "y": 6800, "w": 1280, "h": 720, "title": "Rusun · TV permainan"},
+    "Rusun-Roboh.dc.html": {"x": 1360, "y": 6800, "w": 1280, "h": 720, "title": "Rusun · TV momen roboh"},
+    "Rusun-HP.dc.html": {"x": 2720, "y": 6800, "w": 1308, "h": 980, "title": "Rusun · Kontroler HP"}
+  },
+  "order": [
+    "Main.dc.html", "Avatar.dc.html", "KeyArt.dc.html", "RusunScene.dc.html",
+    "TV-Join.dc.html", "TV-Home.dc.html", "TV-Detail.dc.html",
+    "TV-Loading.dc.html", "TV-Results.dc.html", "TV-Overlays.dc.html",
+    "HP-Gabung.dc.html", "HP-Status.dc.html",
+    "Kuis-TV.dc.html", "Kuis-Reveal.dc.html", "Kuis-HP.dc.html",
+    "Tarik-TV.dc.html", "Tarik-HP.dc.html",
+    "Rusun-TV.dc.html", "Rusun-Roboh.dc.html", "Rusun-HP.dc.html"
+  ],
+  "notes": {
+    "brand": {"x": 0, "y": -300, "text": "Brand & Logo Hoorah", "kind": "title1", "maxW": 1440},
+    "tv": {"x": 0, "y": 950, "text": "Layar TV — beranda simpel ala TV", "kind": "title1", "maxW": 4000},
+    "hp": {"x": 0, "y": 2850, "text": "Kontroler HP — alur gabung & status", "kind": "title1", "maxW": 2696},
+    "kuis": {"x": 0, "y": 4170, "text": "Game 1 · Kuis Nusantara", "kind": "title1", "maxW": 4028},
+    "tarik": {"x": 0, "y": 5490, "text": "Game 2 · Tarik Tambang", "kind": "title1", "maxW": 3192},
+    "rusun": {"x": 0, "y": 6550, "text": "Game 3 · Rusun", "kind": "title1", "maxW": 4028},
+    "ux": {"x": 3080, "y": 0, "w": 620, "size": "m", "fill": "green", "text": "Prinsip UX & psikologi yang dipakai:\n• Satu fokus per layar (efek Von Restorff): hanya 1 tombol oranye.\n• Pilihan dikurasi (Hick's law): baris 'Pas untuk 2 pemain', bukan katalog panjang.\n• Kehadiran teman selalu terlihat: avatar di bilah atas, status siap.\n• Kemajuan terasa (goal gradient): pip soal, ronde, beruntun, kombo.\n• Akhir yang manis (peak-end): semua pemain dapat penghargaan, bukan cuma juara.\n• Tanpa gesekan: 'Main lagi' terfokus dengan hitung mundur, Host bisa membatalkan.\n• Umpan balik instan: angka melayang, cincin super, getar.\n• Etis: tanpa pop-up paksa, upsell hanya di TV, tidak menyela permainan.\n• Sistem: grid 8 px, sudut 8/14/22, ikon garis 2 px membulat."},
+    "asumsi": {"x": 1520, "y": 0, "w": 560, "size": "m", "fill": "orange", "text": "Asumsi desain:\n• 2 game MVP = Kuis Nusantara + Tarik Tambang.\n• Paket gratis 2 pemain, slot 3+ terkunci Hoorah Pass.\n• Room Code 4 huruf (K7QM).\n• Tanpa violet; latar abu netral, aksen oranye + kuning.\n• Avatar = buah Nusantara berwajah + cincin warna pemain.\n• Ikon khusus buta warna ditunda (keputusan pemilik).\n• Layar TV digambar di 1280×720 (skala 1,5× untuk 1080p).\n• Domain hoorah.gg masih placeholder."}
+  },
+  "designSystems": []
+}

@@ -1,0 +1,70 @@
+/* Congklak phone: walnut table, light-on-dark text, hole buttons in light wood with a carved hole
+   for the number. Imported by the controller app; only active while Congklak runs. */
+
+html[data-game="congklak"] {
+  --t-bg: #5a3218;
+  --text: #fff7ea;
+  --text-2: #f2dcc0;
+  --text-3: #dcc09c;
+  --surface: #3b2210;
+  --surface-2: #4d2c15;
+  --surface-3: #24130a;
+  --line: #8a5a30;
+  --t-panel: #3b2210;
+  --t-panel-edge: #8a5a30;
+  --t-eyebrow: #2a1a10;
+  --t-eyebrow-bg: #ffc928;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #ffc928;
+  --t-good: #7ee0a0;
+  --t-track: #6b4022;
+  --t-strip-bg: #3a200e;
+  --t-strip-text: #f2dcc0;
+  --t-strip-btn: #6b3f1f;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 10px;
+  --t-crown: #ffc928;
+}
+
+html[data-game="congklak"] .timer {
+  box-shadow: inset 0 0 0 2.5px #ffc928;
+}
+
+/* The board's bottom rim is drawn in the scene: keep controls above it. */
+html[data-game="congklak"] .ctrl {
+  padding-bottom: max(calc(var(--pad-y) + min(46px, calc(var(--vh) * 6))), env(safe-area-inset-bottom));
+}
+
+/* Seven hole buttons must fit one screen: compact rows instead of the tall quiz answers. */
+html[data-game="congklak"] .choice-view .answers {
+  gap: clamp(5px, calc(var(--vh) * 1.1), 9px);
+  padding-bottom: 2px;
+}
+
+html[data-game="congklak"] .answer {
+  min-height: 0;
+  max-height: 76px;
+  border-radius: 18px;
+  gap: 14px;
+  padding: 0 14px 0 8px;
+}
+
+html[data-game="congklak"] .answer .letter {
+  width: clamp(34px, calc(var(--vh) * 6.4), 50px);
+  height: clamp(34px, calc(var(--vh) * 6.4), 50px);
+  background: #4a260f;
+  color: #fff4df !important;
+  box-shadow:
+    inset 0 4px 0 #2b1608,
+    0 0 0 3px #8e5226;
+}
+
+html[data-game="congklak"] .answer .label {
+  font-family: var(--font-display);
+  font-size: clamp(18px, calc(var(--vh) * 3.4), 24px);
+  color: #3b2210;
+}
+
+html[data-game="congklak"] .prompt {
+  text-align: center;
+}

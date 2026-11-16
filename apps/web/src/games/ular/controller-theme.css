@@ -1,0 +1,114 @@
+/* Phone theme for Ular Tangga: woven mat, cream panels with wooden edges, a big die to roll. */
+
+html[data-game="ular"] {
+  --t-bg: #ebcb90;
+  --text: #2b1a0b;
+  --text-2: #4a2f14;
+  --text-3: #6b4423;
+  --surface: #fff7ea;
+  --surface-2: #f3dbb6;
+  --surface-3: #8a5a2b;
+  --line: #b07a47;
+  --t-panel: #fff7ea;
+  --t-panel-edge: #6b4423;
+  --t-eyebrow: #2b1a0b;
+  --t-eyebrow-bg: #ffd23f;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #a8400e;
+  --t-good: #13703a;
+  --t-track: #e9d6b4;
+  --t-strip-bg: #8a5a2b;
+  --t-strip-text: #fff7ea;
+  --t-strip-btn: #fff7ea;
+  --t-strip-btn-text: #2b1a0b;
+  --t-strip-edge-h: 10px;
+  --t-crown: #a8400e;
+}
+
+html[data-game="ular"] .timer {
+  box-shadow: inset 0 0 0 2.5px #3a2410;
+}
+
+/* Your turn: a frame of board squares around the screen. */
+html[data-game="ular"] .ctrl.turn {
+  box-shadow: none;
+}
+
+html[data-game="ular"] .ctrl.turn::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  border: 7px solid transparent;
+  border-image: repeating-linear-gradient(45deg, #ffd23f 0 12px, #3e9e4a 12px 24px) 7;
+}
+
+/* LEMPAR: a big die on a wooden tray. */
+html[data-game="ular"] .drop-base::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+  border-radius: 34%;
+  background: #8a5a2b;
+  box-shadow:
+    inset 0 0 0 3px #3a2410,
+    inset 0 0 0 9px #b07a47,
+    0 7px 0 #5a3b1a;
+}
+
+html[data-game="ular"] .round-btn {
+  border-radius: 24%;
+  background: #fff7ea var(--t-die) center 22% / 44% no-repeat;
+  border: 5px solid #3a2410;
+  color: #2b1a0b;
+  justify-content: flex-end;
+  padding-bottom: 12%;
+  box-shadow:
+    0 12px 0 #c9a16a,
+    0 12px 0 5px #3a2410;
+}
+
+html[data-game="ular"] .drop-base .round-btn svg {
+  display: none;
+}
+
+html[data-game="ular"] .round-btn.pressed {
+  box-shadow:
+    0 3px 0 #c9a16a,
+    0 3px 0 5px #3a2410;
+}
+
+html[data-game="ular"] .round-btn:disabled {
+  background-color: #f3dbb6;
+  color: #6b4423;
+}
+
+/* Duel: the tap pad is a big round seal in your colour. */
+html[data-game="ular"] .tap-pad .round-btn {
+  border-radius: 50%;
+  background: var(--team, #ff8a3d);
+  color: #fff;
+  justify-content: center;
+  padding-bottom: 0;
+  -webkit-text-stroke: 7px #3a2410;
+  paint-order: stroke fill;
+  box-shadow:
+    0 12px 0 rgba(58, 36, 16, 0.6),
+    0 0 0 8px #fff7ea;
+}
+
+html[data-game="ular"] .tap-pad .round-btn.pressed {
+  box-shadow:
+    0 3px 0 rgba(58, 36, 16, 0.6),
+    0 0 0 12px #fff7ea;
+}
+
+html[data-game="ular"] .tap-info {
+  background: var(--t-panel);
+  box-shadow:
+    inset 0 0 0 2px var(--t-panel-edge),
+    0 4px 0 var(--surface-3);
+  border-radius: 18px;
+  padding: 12px 14px 14px;
+}
