@@ -30,6 +30,10 @@ import './kuis.css';
 const DEFAULT_ROUNDS = 10;
 /** Key for the solo records (PRD 6.4); the variant is the number of questions. */
 const GAME_ID = 'kuis';
+/** Questions asked on this screen lately, oldest first, so the next sessions draw fresh ones. */
+const RECENT_KEY = 'hoorah:kuis:recent';
+/** About 30 games of 10: well under the bank size, so a session always finds fresh questions. */
+const RECENT_MAX = 300;
 /** Logic keeps ticking even if rAF is throttled (e.g. the TV tab loses focus). */
 const FALLBACK_TICK_MS = 250;
 
@@ -46,6 +50,24 @@ function randomSeed(): number {
   const buf = new Uint32Array(1);
   crypto.getRandomValues(buf);
   return buf[0] ?? Date.now();
+}
+
+function loadRecent(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(recent: string[], asked: string[]): void {
+  try {
+    const next = [...recent.filter((id) => !asked.includes(id)), ...asked].slice(-RECENT_MAX);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // Storage blocked: the next game just draws from the whole bank.
+  }
 }
 
 class KuisDriver implements TvModel {
@@ -256,12 +278,18 @@ async function boot(): Promise<void> {
     size.value = { w, h };
   });
   await Promise.all([fontsReady(), preloadStage(size.value)]);
+  const recent = loadRecent();
   const match = new KuisMatch({
     seed: randomSeed(),
     rounds: roundsFrom(game.settings),
     now: game.now(),
     players: presenceOf(game),
+    recent: new Set(recent),
   });
+  saveRecent(
+    recent,
+    match.questions.map((q) => q.id),
+  );
   const driver = new KuisDriver(game, match);
   // Dev-only hook for local harnesses and e2e tests (reads the answer key, never in builds).
   if (import.meta.env.DEV) (window as unknown as { __kuis?: KuisMatch }).__kuis = match;

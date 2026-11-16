@@ -6,31 +6,19 @@
  * Limits (checked by tests): question <= 120 chars, option <= 22 chars, fact <= 110 chars.
  */
 
-export type Category = 'Budaya' | 'Kuliner' | 'Geografi' | 'Alam' | 'Sejarah' | 'Bahasa';
+import { ALAM } from './bank/alam';
+import { BAHASA } from './bank/bahasa';
+import { BUDAYA } from './bank/budaya';
+import type { Category, Question } from './bank/define';
+import { mk } from './bank/define';
+import { GEOGRAFI } from './bank/geografi';
+import { KULINER } from './bank/kuliner';
+import { SEJARAH } from './bank/sejarah';
 
-export interface Question {
-  id: string;
-  category: Category;
-  /** Optional sub-label shown next to the category, e.g. "Alat musik". */
-  topic?: string;
-  q: string;
-  options: readonly [string, string, string, string];
-  /** Index of the correct option in `options`. */
-  answer: number;
-  /** One short "Tahukah kamu?" sentence shown on reveal. */
-  fact: string;
-}
+export type { Category, Question } from './bank/define';
 
-const mk = (
-  id: string,
-  category: Category,
-  topic: string | undefined,
-  q: string,
-  options: readonly [string, string, string, string],
-  fact: string,
-): Question => ({ id, category, ...(topic ? { topic } : {}), q, options, answer: 0, fact });
-
-export const QUESTIONS: readonly Question[] = [
+/** The first questions, written together with the game. */
+const CORE: readonly Question[] = [
   /* ---------------------------------------------------------------- Budaya: alat musik */
   mk(
     'musik-angklung',
@@ -884,6 +872,16 @@ export const QUESTIONS: readonly Question[] = [
   ),
 ];
 
+export const QUESTIONS: readonly Question[] = [
+  ...CORE,
+  ...BUDAYA,
+  ...KULINER,
+  ...GEOGRAFI,
+  ...ALAM,
+  ...SEJARAH,
+  ...BAHASA,
+];
+
 /* ------------------------------------------------------------------ Session preparation */
 
 /** A question as played in one session: options already shuffled, `answer` re-pointed. */
@@ -935,19 +933,23 @@ export function shuffleQuestion(question: Question, rnd: () => number): Prepared
 
 /**
  * Pick `count` distinct questions and shuffle their options, deterministically from `seed`.
- * Light polish on top of pure randomness: avoids the same category twice in a row and the same
- * answer letter three times in a row whenever the pool allows it.
+ * Questions listed in `recent` (asked in earlier sessions on this screen) are only used once the
+ * fresh ones run out. Light polish on top of pure randomness: avoids the same category twice in a
+ * row and the same answer letter three times in a row whenever the pool allows it.
  */
 export function prepareQuestions(
   seed: number,
   count: number,
   bank: readonly Question[] = QUESTIONS,
+  recent: ReadonlySet<string> = new Set(),
 ): PreparedQuestion[] {
   const rnd = seededRng(seed);
   const n = Math.max(0, Math.min(Math.floor(count), bank.length));
-  const pool = [...bank];
+  const fresh = bank.filter((q) => !recent.has(q.id));
+  const stale = bank.filter((q) => recent.has(q.id));
   const picked: Question[] = [];
   while (picked.length < n) {
+    const pool = fresh.length ? fresh : stale;
     // Uniform over the remaining questions, minus the previous category when possible, so big
     // categories still show up more often but never twice in a row.
     const prev = picked[picked.length - 1]?.category;

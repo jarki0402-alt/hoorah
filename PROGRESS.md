@@ -25,6 +25,25 @@ Catatan pengerjaan proyek. Entri terbaru di paling atas. Setiap perubahan kode, 
 
 ## Log
 
+### 2026-11-16 · Kuis Nusantara: bank soal 104 → 474, soal yang baru keluar tidak diulang
+
+**Permintaan pemilik:** soal Kuis Nusantara masih sedikit, perbanyak.
+**Apa yang diubah:**
+- Bank soal dipecah per kategori: `kuis/bank/{budaya,bahasa,kuliner,alam,geografi,sejarah}.ts`, dengan bentuk dan aturan bersama di `kuis/bank/define.ts`. `questions.ts` tetap memuat 104 soal awal (`CORE`) lalu menggabungkan semuanya.
+- **370 soal baru**, ditulis oleh 3 agent paralel dengan batas topik yang tegas:
+  - Budaya +60, Bahasa +50, Kuliner +60, Alam +70, Geografi +70, Sejarah +60.
+  - Total per kategori: Budaya 97, Geografi 84, Alam 80, Kuliner 78, Sejarah 74, Bahasa 61.
+  - Fakta yang tidak pasti dicek ke web (KBBI, Kemendikbud, situs taman nasional, Wikipedia, Indonesia.travel, dan lain-lain). Yang tidak terverifikasi atau masih diperdebatkan dibuang, misalnya 1965, Serangan Umum 1 Maret, perancang lambang Garuda, Sofifi, dan perbatasan Sebatik.
+  - Claude memeriksa sendiri ke-370 soal beserta jawabannya.
+- **Soal tidak berulang:** layar mengingat 300 soal terakhir (`localStorage` `hoorah:kuis:recent`, pola sama dengan Kompak Gak?). `prepareQuestions` memakai soal yang belum keluar lebih dulu, baru soal lama kalau habis. Dengan 10 soal per permainan, sekitar 30 permainan berturut-turut tanpa soal ulang.
+- Tes baru: tidak ada dua soal dengan teks pertanyaan sama (antar-file), dan soal baru lebih diutamakan daripada soal yang baru keluar.
+**File:** `apps/web/src/games/kuis/{questions,logic,main}.ts(x)`, `apps/web/src/games/kuis/bank/*` (baru), `apps/web/src/games/kuis/logic.test.ts`.
+**Verifikasi:**
+- `npm run check` → lulus (1379 tes, build). Panjang soal, pilihan, dan fakta sesuai batas; 0 em dash.
+- `npm run e2e` → 8/8 lulus (3,4 menit, termasuk alur lengkap dengan Kuis).
+- `npm run docker:up` → `/health` ok, soal baru ada di aset container (`kuis-*.js`).
+**Selanjutnya:** pemilik push; di VM `update.sh` membangun versi ini.
+
 ### 2026-11-16 · Batas memori build di VM dilonggarkan (diukur), update.sh menjalankan versi barunya sendiri
 
 **Masalah (laporan pemilik):** `update.sh` menolak build di VM: RAM tersedia 331 MB + swap kosong 1154 MB = 1485 MB, kurang 15 MB dari batas 1500 MB. Batas itu sebelumnya perkiraan, bukan hasil ukur. Swap VM: `/swapfile` 1 GB + zram ±480 MB (dari Suwwara).

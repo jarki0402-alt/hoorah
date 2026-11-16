@@ -77,6 +77,20 @@ describe('question bank', () => {
     }
   });
 
+  it('never asks the same question twice (bank files are written separately)', () => {
+    const norm = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    const seen = new Map<string, string>();
+    for (const q of QUESTIONS) {
+      const key = norm(q.q);
+      expect(seen.get(key), `${q.id} repeats ${seen.get(key)}`).toBeUndefined();
+      seen.set(key, q.id);
+    }
+  });
+
   it('covers every category', () => {
     const cats = new Set(QUESTIONS.map((q) => q.category));
     expect(cats.size).toBe(6);
@@ -101,6 +115,15 @@ describe('prepareQuestions', () => {
       expect(p.options[p.answer]).toBe(src.options[src.answer]);
       expect([...p.options].sort()).toEqual([...src.options].sort());
     }
+  });
+
+  it('prefers questions not asked recently, then falls back to them', () => {
+    const recent = new Set(QUESTIONS.slice(0, QUESTIONS.length - 6).map((q) => q.id));
+    const list = prepareQuestions(7, 12, QUESTIONS, recent);
+    expect(list).toHaveLength(12);
+    expect(new Set(list.map((q) => q.id)).size).toBe(12);
+    expect(list.slice(0, 6).every((q) => !recent.has(q.id))).toBe(true);
+    expect(list.filter((q) => !recent.has(q.id))).toHaveLength(6);
   });
 
   it('clamps to the bank size', () => {

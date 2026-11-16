@@ -201,6 +201,8 @@ export interface MatchOptions {
   now: number;
   players: readonly PlayerPresence[];
   bank?: readonly Question[];
+  /** Question ids asked in earlier sessions on this screen: used only after the fresh ones. */
+  recent?: ReadonlySet<string>;
 }
 
 /** Ties share a rank (1, 1, 3). Input order breaks ties for display (join order). */
@@ -240,7 +242,12 @@ export class KuisMatch {
   private lastCue = Number.POSITIVE_INFINITY;
 
   constructor(opts: MatchOptions) {
-    this.questions = prepareQuestions(opts.seed, Math.max(1, Math.floor(opts.rounds)), opts.bank);
+    this.questions = prepareQuestions(
+      opts.seed,
+      Math.max(1, Math.floor(opts.rounds)),
+      opts.bank,
+      opts.recent,
+    );
     this.clock = new PauseClock(opts.now);
     this.syncPlayers(opts.players, opts.now);
   }
