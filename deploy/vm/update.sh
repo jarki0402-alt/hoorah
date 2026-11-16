@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# Puts a Hoorah build on the VM: pulls the image GitHub Actions built, copies its web files next to the previous
-# version, switches nginx's link and restarts the server. If the new server is not healthy within a minute, the
-# previous version comes back by itself. Suwwara is never touched.
+# Builds Hoorah on this VM from the repo it lives in (like Suwwara) and switches to it: git pull, docker build,
+# web files copied next to the previous version for nginx, server restarted. If the new server is not healthy
+# within a minute, the previous version comes back by itself. Suwwara is never touched.
 #
-#   ./update.sh            newest build (tag "latest")
-#   ./update.sh sha-1a2b3c4   a specific build (tags are listed on GitHub: Packages -> hoorah)
+#   ./deploy/vm/update.sh        pull the newest code from GitHub, build, switch
+#
+# The build needs ~1.5 GB of memory at its peak (RAM + swap). The VM has 1 GB shared with Suwwara, so a swap file
+# is required (DEPLOY.md section 2b); the check below refuses to build without enough room rather than let the
+# kernel kill processes (Suwwara's included) mid-build.
 set -euo pipefail
-cd "$(dirname "$0")"
 
-IMAGE_REPO="${HOORAH_IMAGE_REPO:-ghcr.io/jarki0402-alt/hoorah}"
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$REPO/deploy/vm"
+
 WEB_ROOT="${HOORAH_WEB_ROOT:-/srv/hoorah}"
-TAG="${1:-latest}"
-IMAGE="$IMAGE_REPO:$TAG"
+NEED_KB=$((1500 * 1024))
 
 say() { printf '\n==> %s\n' "$*"; }
 
@@ -29,14 +32,29 @@ healthy() {
 }
 
 if [ "${HOORAH_NO_PULL:-}" != "1" ]; then
-  say "Mengambil $IMAGE"
-  docker pull "$IMAGE"
+  say "Mengambil kode terbaru dari GitHub"
+  git -C "$REPO" pull --ff-only
+fi
+REV="$(git -C "$REPO" rev-parse --short=7 HEAD)"
+IMAGE="hoorah-server:$REV"
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  avail_kb="$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)"
+  swap_kb="$(awk '/^SwapFree:/ {print $2}' /proc/meminfo)"
+  if [ "$((avail_kb + swap_kb))" -lt "$NEED_KB" ] && [ "${HOORAH_FORCE_BUILD:-}" != "1" ]; then
+    echo "Memori kurang untuk build: RAM tersedia $((avail_kb / 1024)) MB + swap kosong $((swap_kb / 1024)) MB,"
+    echo "butuh minimal $((NEED_KB / 1024)) MB. Pasang swap dulu (DEPLOY.md bagian 2b), lalu jalankan lagi."
+    exit 1
+  fi
+  say "Membangun versi $REV (5-15 menit di e2-micro; Suwwara bisa sedikit lebih lambat selama build)"
+  docker build -f "$REPO/docker/Dockerfile" --target release \
+    --label "org.opencontainers.image.revision=$(git -C "$REPO" rev-parse HEAD)" \
+    -t "$IMAGE" "$REPO"
+else
+  say "Versi $REV sudah pernah dibangun, langsung dipasang"
 fi
 
-REV="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE" 2>/dev/null | cut -c1-7)"
-[ -n "$REV" ] || REV="$(date +%Y%m%d%H%M%S)"
 DIR="web-$REV"
-
 if [ ! -d "$WEB_ROOT/$DIR" ]; then
   say "Menyalin file web ke $WEB_ROOT/$DIR"
   tmp="$(docker create "$IMAGE")"
@@ -83,6 +101,17 @@ for old in "$WEB_ROOT"/web-*; do
   name="$(basename "$old")"
   [ "$name" = "$keep_current" ] || [ "$name" = "$keep_previous" ] || rm -rf "$old"
 done
+current_id="$(docker image inspect -f '{{.Id}}' hoorah-server:current)"
+previous_id="$(docker image inspect -f '{{.Id}}' hoorah-server:previous 2>/dev/null || true)"
+# Only the per-commit tags this script made (7 hex digits); anything else named hoorah-server is left alone.
+for tag in $(docker image ls hoorah-server --format '{{.Tag}}'); do
+  [[ "$tag" =~ ^[0-9a-f]{7}$ ]] || continue
+  id="$(docker image inspect -f '{{.Id}}' "hoorah-server:$tag")"
+  if [ "$id" != "$current_id" ] && [ "$id" != "$previous_id" ]; then
+    docker rmi "hoorah-server:$tag" >/dev/null || echo "(versi lama $tag belum bisa dihapus, dilewati)"
+  fi
+done
+# Only untagged leftovers; the build cache stays so the next build reuses `npm ci` (see DEPLOY.md, update rutin).
 docker image prune -f >/dev/null
 
 echo

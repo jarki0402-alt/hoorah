@@ -8,7 +8,7 @@ Catatan pengerjaan proyek. Entri terbaru di paling atas. Setiap perubahan kode, 
 - **Jalan di:** Docker lokal (nginx), `http://192.168.0.102:1010`, dan sementara `https://hoorah.fajarrizky.my.id` lewat Cloudflare Tunnel dari Mac sampai VM dipasang.
 - **Game:** 18 game jalan (Bajaj Rush, Jago Masak, Tarik Tambang, Kuis Nusantara, Rusun, Ular Tangga, Congklak, Makan Kerupuk, Balap Karung, Kompak Gak?, Ludo, Catur, Ular Arena, Rebut Wilayah, Lari Terus, Sambung Kata, Juragan Nusantara, Dapur Heboh), semua bisa main sendiri kecuali Kompak Gak?.
 - **Hoorah Pass (uji coba):** kode Pass bersama dari dashboard admin `http://192.168.0.102:1010/admin/`, disimpan di SQLite (`/data/hoorah.db` di Docker).
-- **Infrastruktur cloud:** VM e2-micro Google Cloud (Oregon) dipakai bersama Suwwara. Deploy Hoorah siap (`DEPLOY.md`, image dari GitHub Actions), **belum dipasang di VM**: langkahnya dijalankan pemilik.
+- **Infrastruktur cloud:** VM e2-micro Google Cloud (Oregon) dipakai bersama Suwwara. Deploy Hoorah siap (`DEPLOY.md`, **build di VM** lewat `deploy/vm/update.sh`, folder `/home/fajarrizky04febriano/hoorah`); langkah VM dijalankan pemilik.
 - **Kode:** GitHub `jarki0402-alt/hoorah` (publik), branch `main`.
 
 ## Format entri
@@ -24,6 +24,43 @@ Catatan pengerjaan proyek. Entri terbaru di paling atas. Setiap perubahan kode, 
 ```
 
 ## Log
+
+### 2026-11-16 · Deploy: build langsung di VM seperti Suwwara, path VM, langkah firewall rinci
+
+**Keputusan pemilik:** build di server (VM) saja, "yang pakem", seperti Suwwara. Folder di VM `/home/fajarrizky04febriano/hoorah`. Swap sudah dipasang lewat Suwwara. Minta langkah firewall GCP yang jelas.
+**Apa yang diubah:**
+- `deploy/vm/update.sh` ditulis ulang:
+  - Urutannya: `git pull --ff-only`, `docker build --target release` di VM (tag `hoorah-server:<commit>`, dilewati kalau commit itu sudah pernah dibangun), salin `/web` ke `/srv/hoorah/web-<commit>`, pindahkan tautan, restart, rollback otomatis kalau tidak sehat.
+  - **Pemeriksaan memori sebelum build:** RAM tersedia + swap kosong minimal 1,5 GB. Kalau kurang, build ditolak dengan pesan, supaya Suwwara tidak ikut mati kehabisan memori.
+  - Pembersihan hanya menghapus tag versi buatan skrip ini (7 heksadesimal); image lain tidak disentuh.
+- GitHub Actions: `release.yml` (membuat image) diganti `check.yml` (lint, typecheck, tes unit saja). Tidak ada lagi image di GitHub.
+- `scripts/stun-check.mjs`: cek dari Mac apakah UDP 3478 di VM terbuka (`node scripts/stun-check.mjs 35.212.247.252`).
+- DEPLOY.md ditulis ulang:
+  - Path lengkap `/home/fajarrizky04febriano/hoorah`.
+  - Swap cukup dicek, karena sudah dipasang lewat Suwwara. Swap kedua `/swapfile-hoorah` hanya dibuat kalau `update.sh` menolak build, supaya swap Suwwara tidak tertimpa.
+  - Firewall `hoorah-stun` diuraikan per kolom Console, ditambah perintah Cloud Shell dan cara mengecek.
+  - Peringatan jangan `sysctl --system`.
+- CLAUDE.md:
+  - Aturan "jangan build di VM" diganti keputusan baru, dengan syarat build hanya lewat `update.sh`.
+  - Baris Deploy VM dan `.github` diperbarui.
+- Komentar di `deploy/vm/compose.yaml` dan `docker/Dockerfile` diperbarui.
+**File:** `deploy/vm/update.sh`, `deploy/vm/compose.yaml`, `docker/Dockerfile`, `.github/workflows/check.yml` (dulu `release.yml`), `scripts/stun-check.mjs`, `DEPLOY.md`, `CLAUDE.md`, `PROGRESS.md`.
+**Verifikasi:**
+- Kebutuhan memori build:
+  - Build Docker (target `build`) dibatasi 700 MB tanpa swap: **gagal, exit 137** (kehabisan memori di `vite build`).
+  - Dibatasi 700 MB + swap 1,5 GB: **lulus**.
+  - `npm run build` di Mac: puncak RSS ±560 MB.
+- `update.sh` diuji di Linux (container docker-cli, repo di `/home/fajarrizky04febriano/hoorah`):
+  - Build pertama: build, salin, pasang, sehat, exit 0.
+  - Commit yang sama: tidak dibangun ulang, exit 0.
+  - `rollback.sh`: sehat.
+  - Image `hoorah-server:latest` milik Docker Mac tidak tersentuh (sebelum perbaikan, pembersihan mencoba menghapusnya dan skrip berhenti dengan error).
+- `stun-check.mjs`: ke Docker Mac (3479) "OK", ke port tertutup "TIDAK ADA JAWABAN".
+- `npm run lint` → lulus (585 file), `bash -n` ketiga skrip VM → lulus.
+**Selanjutnya / catatan:**
+- Pemilik menjalankan DEPLOY.md di VM (langkah 2–5).
+- Selama build di VM (5–15 menit pertama kali), Suwwara bisa sedikit melambat. Lakukan saat sepi.
+- Package `ghcr.io/jarki0402-alt/hoorah` yang mungkin sudah terbuat dari push pertama tidak dipakai lagi. Boleh dihapus dari GitHub → Packages.
 
 ### 2026-11-16 · Siap produksi: nginx menggantikan Caddy, deploy ke VM lewat GitHub Actions, indikator admin ala Suwwara, joystick seragam
 

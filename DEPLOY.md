@@ -1,12 +1,13 @@
 # DEPLOY.md: Hoorah ke VM Google Cloud (bersama Suwwara)
 
-Panduan langkah demi langkah. Perintah bertanda **Mac** dijalankan di laptop, di folder proyek. Perintah bertanda **VM** dijalankan lewat SSH di VM Google Cloud.
+Panduan langkah demi langkah. **Mac** = perintah di laptop, di folder proyek. **VM** = perintah lewat SSH di VM Google Cloud, sebagai pengguna `fajarrizky04febriano` (bukan root; jangan tambahkan `sudo` kecuali tertulis).
 
-**Alur:** Mac `git push` → GitHub Actions memeriksa kode lalu membuat image (`ghcr.io/jarki0402-alt/hoorah`) → VM `git pull` + `./deploy/vm/update.sh` (ambil image, pasang file web, restart server Hoorah).
+**Alur:** Mac `git push` → (GitHub memeriksa kode) → VM `/home/fajarrizky04febriano/hoorah/deploy/vm/update.sh` menarik kode, **membangun image di VM** (seperti Suwwara), memasang file web, dan me-restart server Hoorah.
 
-- Tidak ada build di VM: RAM 1 GB dipakai bersama Suwwara.
-- nginx di VM (milik Suwwara) hanya **ditambah** satu situs untuk `hoorah.fajarrizky.my.id`. File Suwwara tidak diubah, dan nginx cukup di-*reload* (bukan restart), jadi koneksi Suwwara tidak putus.
-- Hoorah di VM dibatasi maksimal 320 MB RAM (`deploy/vm/compose.yaml`).
+- Folder Hoorah di VM: `/home/fajarrizky04febriano/hoorah`. File web untuk nginx: `/srv/hoorah` (di luar folder home, karena nginx tidak boleh membaca isi `/home`).
+- nginx di VM (milik Suwwara) hanya **ditambah** satu situs `hoorah.fajarrizky.my.id`. File Suwwara tidak diubah, dan nginx cukup di-*reload*, jadi Suwwara tidak putus.
+- Build butuh ±1,5 GB memori sesaat (diuji: dengan 700 MB tanpa swap, build mati kehabisan memori; dengan swap, lulus). VM sudah punya swap dari Suwwara (langkah 2b, cukup dicek). `update.sh` menolak build kalau RAM + swap kurang, supaya Suwwara tidak ikut tumbang.
+- Server Hoorah dibatasi 320 MB RAM saat berjalan (`deploy/vm/compose.yaml`).
 
 ```
 HP & layar ──► hoorah.fajarrizky.my.id (DNS Cloudflare, awan ABU-ABU)
@@ -17,104 +18,134 @@ HP & layar ──► hoorah.fajarrizky.my.id (DNS Cloudflare, awan ABU-ABU)
    UDP 3478 (STUN: jalur langsung HP ↔ layar di Wi-Fi yang sama)
 ```
 
-File yang terlibat:
-
 | File di repo | Tempatnya di VM |
 | --- | --- |
 | `deploy/nginx/hoorah-server.conf` | `/etc/nginx/snippets/hoorah-server.conf` |
 | `deploy/nginx/hoorah.fajarrizky.my.id` | `/etc/nginx/sites-enabled/hoorah.fajarrizky.my.id` |
-| `deploy/vm/compose.yaml`, `update.sh`, `rollback.sh`, `backup.sh` | dipakai langsung dari `~/hoorah/deploy/vm/` |
+| `deploy/vm/update.sh`, `rollback.sh`, `backup.sh`, `compose.yaml` | dipakai langsung dari `/home/fajarrizky04febriano/hoorah/deploy/vm/` |
 | `deploy/vm/.env` (tidak masuk git) | dibuat sendiri di langkah 4 |
 
 ---
 
-## 1. Git: push dari Mac (akun GitHub `jarki0402-alt`)
+## 1. Git di Mac (akun GitHub `jarki0402-alt`)
 
-Repo: https://github.com/jarki0402-alt/hoorah (**publik**: siapa pun bisa membaca isinya, jadi jangan pernah commit kata sandi atau `.env`).
+Repo: https://github.com/jarki0402-alt/hoorah (**publik**: jangan pernah commit kata sandi atau `.env`).
 
-### 1a. Sekali saja: token GitHub
-
-1. Masuk GitHub sebagai **jarki0402-alt** → foto profil → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
-2. Isi: nama `hoorah-mac`, masa berlaku sesukamu, **Repository access**: *Only select repositories* → `hoorah`.
-3. **Permissions** → Repository permissions: **Contents: Read and write**, **Workflows: Read and write** (wajib, karena repo berisi `.github/workflows`).
-4. **Generate token**, salin (hanya tampil sekali).
-
-### 1b. Sekali saja: sambungkan folder ke repo
-
-**Mac**
+### Sekali saja
+1. Token: GitHub (masuk sebagai **jarki0402-alt**) → foto profil → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**. Repository access: *Only select repositories* → `hoorah`. Permissions: **Contents: Read and write**, **Workflows: Read and write**. Salin tokennya.
+2. **Mac**:
 ```bash
 cd ~/Documents/vibe/game
-git remote add origin https://jarki0402-alt@github.com/jarki0402-alt/hoorah.git
+git remote add origin https://jarki0402-alt@github.com/jarki0402-alt/hoorah.git   # sudah ada? lewati
 git config user.name "jarki0402-alt"
 git config user.email "jarki0402-alt@users.noreply.github.com"
 ```
-Nama pengguna di alamat remote (`jarki0402-alt@`) membuat Keychain macOS menyimpan token khusus akun ini, jadi tidak bentrok dengan akun GitHub lain di laptop. Email `noreply` menjaga email pribadi tidak tampil di riwayat commit repo publik.
+Saat pertama `git push`, password diisi **token** (Keychain macOS menyimpannya untuk akun ini saja).
 
-Kalau `origin` sudah ada dengan alamat lain: `git remote set-url origin https://jarki0402-alt@github.com/jarki0402-alt/hoorah.git`.
-
-### 1c. Setiap kali ada perubahan
-
+### Setiap ada perubahan
 **Mac**
 ```bash
-git status                      # lihat apa yang berubah
+git status
 git add -A
 git commit -m "Short English description of the change"
-git push origin main            # pertama kali: diminta password → tempel TOKEN dari 1a (bukan password GitHub)
+git push origin main
 ```
-Lalu buka https://github.com/jarki0402-alt/hoorah/actions: tunggu workflow **Release** hijau (±5–8 menit). Kalau merah, klik untuk melihat langkah yang gagal; VM tidak perlu disentuh selama belum hijau.
-
-Ambil perubahan dari GitHub ke Mac (kalau pernah mengedit di tempat lain): `git pull origin main`.
+Opsional: https://github.com/jarki0402-alt/hoorah/actions, workflow **Check** hijau berarti lint, typecheck, dan tes unit lulus. Kalau merah, jangan update VM dulu.
 
 ---
 
-## 2. Sebelum mulai di VM (2 menit)
+## 2. Persiapan VM (sekali)
 
-Masuk VM: Google Cloud Console → **Compute Engine** → **VM instances** → tombol **SSH** di baris VM (atau `gcloud compute ssh NAMA_VM --zone ZONA_VM` dari Mac).
+Masuk VM: Google Cloud Console → **Compute Engine** → **VM instances** → tombol **SSH** di baris VM.
+
+### 2a. Cek kondisi
+**VM**
+```bash
+whoami                          # fajarrizky04febriano
+free -h                         # RAM dan swap
+swapon --show                   # kosong = belum ada swap
+df -h /                         # sisa disk minimal ±5 GB (image + cache build + swap)
+docker compose version
+nginx -v
+```
+
+### 2b. Swap (sudah dipasang saat menyiapkan Suwwara)
+Build butuh RAM tersedia + swap kosong minimal ±1,5 GB. Swap dari Suwwara dipakai bersama, **jangan buat `/swapfile` baru** (bisa menimpa milik Suwwara).
 
 **VM**
 ```bash
-free -h                         # catat RAM "available"; Hoorah memakai sampai 320 MB
-df -h /                         # sisa disk minimal ±2 GB
-docker compose version          # Docker Compose v2 (sudah ada untuk Suwwara)
-nginx -v                        # nginx yang melayani Suwwara
-docker stats --no-stream        # pemakaian RAM tiap container Suwwara
+swapon --show                   # harus ada baris swap (mis. /swapfile)
+free -h                         # kolom "available" (Mem) + "free" (Swap) idealnya ≥ 1,5 GB
+grep -c swap /etc/fstab         # ≥ 1: swap tetap aktif setelah VM restart
 ```
-Kalau RAM *available* di bawah ±350 MB, berhenti dulu dan kabari: Hoorah bisa membuat Suwwara kekurangan memori.
+`update.sh` memeriksa angka ini sendiri sebelum build dan berhenti dengan pesan jelas kalau kurang. Hanya kalau itu terjadi, tambah swap **kedua** dengan nama sendiri (tidak menyentuh milik Suwwara):
+```bash
+sudo fallocate -l 1G /swapfile-hoorah && sudo chmod 600 /swapfile-hoorah
+sudo mkswap /swapfile-hoorah && sudo swapon /swapfile-hoorah
+echo '/swapfile-hoorah none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h
+```
+**Jangan** menjalankan `sudo sysctl --system`: itu menerapkan ulang setelan bawaan Google yang mematikan internet semua container, termasuk Suwwara (DEPLOY.md Suwwara §14).
 
 ---
 
-## 3. Google Cloud: firewall
+## 3. Firewall Google Cloud: buka UDP 3478
 
-Port 80/443 sudah terbuka untuk Suwwara. Hoorah hanya butuh **UDP 3478** (STUN).
+Port 80 dan 443 sudah terbuka untuk Suwwara. Hoorah hanya butuh **UDP 3478** (STUN, supaya HP dan layar di Wi-Fi yang sama bisa tersambung langsung tanpa lewat server).
 
-**Console:** **VPC network** → **Firewall** → **Create firewall rule**:
+### Lewat Console (klik)
+1. Buka https://console.cloud.google.com, pastikan project yang dipilih (kiri atas) adalah project VM Suwwara.
+2. Cek nama jaringan VM: menu ☰ → **Compute Engine** → **VM instances** → klik nama VM → bagian **Network interfaces** → kolom **Network** (biasanya `default`).
+3. Menu ☰ → **VPC network** → **Firewall** (atau ketik "Firewall" di kotak pencarian atas).
+4. Klik **+ CREATE FIREWALL RULE** di atas.
+5. Isi:
 
 | Kolom | Isi |
 | --- | --- |
 | Name | `hoorah-stun` |
-| Network | `default` (jaringan VM) |
-| Direction | Ingress |
-| Action on match | Allow |
-| Targets | All instances in the network |
+| Description | `Hoorah STUN (WebRTC)` |
+| Logs | Off |
+| Network | nama jaringan dari langkah 2 (biasanya `default`) |
+| Priority | `1000` |
+| Direction of traffic | **Ingress** |
+| Action on match | **Allow** |
+| Targets | **All instances in the network** |
+| Source filter | **IPv4 ranges** |
 | Source IPv4 ranges | `0.0.0.0/0` |
-| Protocols and ports | Specified → **UDP** → `3478` |
+| Second source filter | None |
+| Protocols and ports | **Specified protocols and ports** → centang **UDP** → isi `3478` (TCP jangan dicentang) |
 
-Atau dari Cloud Shell:
+6. Klik **CREATE**. Tunggu beberapa detik sampai `hoorah-stun` muncul di daftar dengan status aktif.
+
+### Atau lewat Cloud Shell
+Klik ikon **>_** (Activate Cloud Shell) di kanan atas Console, lalu:
 ```bash
 gcloud compute firewall-rules create hoorah-stun --network=default --direction=INGRESS \
-  --action=ALLOW --rules=udp:3478 --source-ranges=0.0.0.0/0
+  --action=ALLOW --rules=udp:3478 --source-ranges=0.0.0.0/0 --description="Hoorah STUN (WebRTC)"
 ```
-Jangan membuka `tcp:8790` atau `tcp:1010`: server Hoorah hanya didengar nginx di VM itu sendiri. Pastikan juga VM tetap di **Network tier: Standard** (Compute Engine → VM → Network interfaces), karena jatah gratis data keluar 200 GiB/bulan hanya berlaku di Standard.
+
+### Yang TIDAK boleh dibuka
+Jangan buat aturan untuk `tcp:8790` atau `tcp:1010`: server Hoorah hanya didengar nginx di VM itu sendiri. Di daftar Firewall, cukup pastikan ada aturan yang mengizinkan **tcp:80** dan **tcp:443** (milik Suwwara, biasanya `default-allow-http` dan `default-allow-https`).
+
+### Cek dari Mac (setelah langkah 4 selesai, server Hoorah harus sudah jalan)
+```bash
+cd ~/Documents/vibe/game
+node scripts/stun-check.mjs 35.212.247.252          # OK: STUN di ...:3478 menjawab ...
+```
+`TIDAK ADA JAWABAN` berarti aturan belum aktif, nama jaringannya salah, atau server Hoorah belum jalan.
+
+Pastikan juga VM di **Network tier: Standard** (Compute Engine → VM → Network interfaces): jatah gratis data keluar 200 GiB/bulan hanya berlaku di Standard.
 
 ---
 
-## 4. VM: ambil kode dan siapkan Hoorah (sekali)
+## 4. Ambil kode dan jalankan Hoorah di VM (sekali)
 
 **VM**
 ```bash
-git clone https://github.com/jarki0402-alt/hoorah.git ~/hoorah
-sudo mkdir -p /srv/hoorah && sudo chown "$USER" /srv/hoorah
-nano ~/hoorah/deploy/vm/.env
+cd /home/fajarrizky04febriano
+git clone https://github.com/jarki0402-alt/hoorah.git
+sudo mkdir -p /srv/hoorah && sudo chown fajarrizky04febriano /srv/hoorah
+nano /home/fajarrizky04febriano/hoorah/deploy/vm/.env
 ```
 Isi `.env` (tanpa spasi di sekitar `=`, tanpa tanda kutip):
 ```
@@ -122,139 +153,114 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=isi-sandi-kuat-minimal-10-karakter
 MAX_PLAYERS=2
 ```
-Simpan: `Ctrl+O`, `Enter`, `Ctrl+X`. Admin hanya dibuat saat server **pertama kali** menyala; mengubah baris ini setelahnya tidak membuat admin baru (lihat langkah 8).
+Simpan: `Ctrl+O`, `Enter`, `Ctrl+X`. Admin hanya dibuat saat server **pertama kali** menyala (langkah 8 untuk membuat/reset sesudahnya).
 
-### Image dari GitHub bisa diambil tanpa login?
-
-Setelah workflow pertama hijau (langkah 1c), coba:
+Build dan jalankan (5–15 menit pertama kali, berikutnya lebih cepat karena `npm ci` tersimpan di cache):
 ```bash
-docker pull ghcr.io/jarki0402-alt/hoorah:latest
-```
-- Berhasil: lanjut.
-- `unauthorized` / `denied`: di GitHub buka profil → **Packages** → **hoorah** → **Package settings** → **Change visibility** → **Public**. (Isinya sama dengan kode di repo publik; tidak ada rahasia di dalam image.)
-
-### Jalankan Hoorah
-
-**VM**
-```bash
-cd ~/hoorah/deploy/vm
-./update.sh
+/home/fajarrizky04febriano/hoorah/deploy/vm/update.sh
 curl -s http://127.0.0.1:8790/health          # {"ok":true,...}
 ```
-Sampai di sini Hoorah sudah jalan di VM, tetapi belum bisa dibuka dari luar (DNS dan nginx belum diarahkan).
+Selama build, Suwwara bisa sedikit lebih lambat (CPU dan swap terpakai). Lakukan saat sepi.
+
+Kalau sebelumnya sempat menjalankan versi lama panduan ini (image dari GitHub), cukup jalankan `update.sh` yang baru; image lama ikut dibersihkan.
 
 ---
 
-## 5. Cloudflare + sertifikat + nginx (lakukan berurutan, saat tidak ada yang sedang main)
+## 5. Cloudflare + sertifikat + nginx (berurutan, saat tidak ada yang sedang main)
 
-Selama langkah 5b sampai 5d (±5 menit), `hoorah.fajarrizky.my.id` belum bisa dibuka.
+Selama 5b–5d (±5 menit), `hoorah.fajarrizky.my.id` belum bisa dibuka.
 
 ### 5a. Lepas Hoorah dari Cloudflare Tunnel di Mac
+Cloudflare dashboard → **Zero Trust** → **Networks** → **Tunnels** → tunnel di Mac → **Configure** → **Public Hostname** → hapus baris `hoorah.fajarrizky.my.id`.
 
-Cloudflare dashboard → **Zero Trust** → **Networks** → **Tunnels** → tunnel yang di Mac → **Configure** → **Public Hostname** → hapus baris `hoorah.fajarrizky.my.id`.
-(Docker Hoorah di Mac tetap bisa dipakai lewat Wi-Fi: `http://IP-LAN:1010`.)
-
-### 5b. DNS: arahkan ke VM, awan abu-abu
-
+### 5b. DNS ke VM, awan abu-abu
 Cloudflare → domain `fajarrizky.my.id` → **DNS** → **Records**:
-1. Hapus record `hoorah` yang lama (biasanya CNAME ke `...cfargotunnel.com`).
-2. **Add record**: Type **A**, Name `hoorah`, IPv4 `35.212.247.252` (IP VM yang sama dengan Suwwara), Proxy status **DNS only** (awan **abu-abu**), TTL Auto. **Save**.
+1. Hapus record `hoorah` yang lama (CNAME ke `...cfargotunnel.com`).
+2. **Add record**: Type **A**, Name `hoorah`, IPv4 `35.212.247.252`, Proxy status **DNS only** (awan **abu-abu**), TTL Auto → **Save**.
 
-Kenapa abu-abu: lewat proxy Cloudflare, dari ISP Indonesia tiap permintaan ±0,4–0,9 detik (langsung ±0,19 detik), dan data yang lewat proxy tidak masuk jatah gratis Google sehingga ditagih (diukur saat memindahkan Suwwara, DEPLOY.md Suwwara §13).
+Kenapa abu-abu: lewat proxy Cloudflare, dari ISP Indonesia tiap permintaan ±0,4–0,9 detik (langsung ±0,19 detik), dan data yang lewat proxy ditagih Google (diukur saat memindahkan Suwwara).
 
-Cek dari **Mac** (tunggu 1–2 menit):
-```bash
-dig +short hoorah.fajarrizky.my.id            # harus 35.212.247.252
-```
+**Mac** (tunggu 1–2 menit): `dig +short hoorah.fajarrizky.my.id` → `35.212.247.252`.
 
 ### 5c. Sertifikat HTTPS
-
 **VM**
 ```bash
 sudo certbot certonly --nginx -d hoorah.fajarrizky.my.id
-sudo certbot certificates                       # hoorah.fajarrizky.my.id muncul, VALID 89 days
+sudo certbot certificates            # hoorah.fajarrizky.my.id muncul, VALID 89 days
 ```
-`certonly` hanya mengambil sertifikat, tanpa mengubah file nginx mana pun. Perpanjangan otomatis memakai jadwal certbot yang sudah ada untuk Suwwara.
+`certonly` tidak mengubah file nginx mana pun. Perpanjangan otomatis memakai jadwal certbot yang sudah ada untuk Suwwara.
 
 ### 5d. Pasang situs Hoorah di nginx
-
 **VM**
 ```bash
-cd ~/hoorah
+cd /home/fajarrizky04febriano/hoorah
 sudo cp deploy/nginx/hoorah-server.conf /etc/nginx/snippets/hoorah-server.conf
 sudo cp deploy/nginx/hoorah.fajarrizky.my.id /etc/nginx/sites-enabled/hoorah.fajarrizky.my.id
 sudo nginx -t
 ```
-Harus tertulis `syntax is ok` dan `test is successful`. **Kalau tidak**, batalkan (Suwwara tetap aman karena nginx belum di-reload):
+Harus `syntax is ok` dan `test is successful`. **Kalau tidak**, batalkan (Suwwara aman karena belum di-reload) dan kirim pesan error-nya:
 ```bash
 sudo rm /etc/nginx/sites-enabled/hoorah.fajarrizky.my.id /etc/nginx/snippets/hoorah-server.conf
 ```
-lalu kirim pesan error-nya ke saya. Kalau sukses:
+Kalau sukses:
 ```bash
 sudo systemctl reload nginx
 ```
 
 ### 5e. Periksa
-
-Dari **Mac**:
+**Mac**
 ```bash
-curl -s https://hoorah.fajarrizky.my.id/health                     # {"ok":true,...}
-curl -sI https://hoorah.fajarrizky.my.id/ | grep -i server          # server: nginx (bukan cloudflare)
-curl -s -o /dev/null -w "%{http_code}\n" https://suwwara.fajarrizky.my.id/   # Suwwara tetap 200
+curl -s https://hoorah.fajarrizky.my.id/health                                # {"ok":true,...}
+curl -sI https://hoorah.fajarrizky.my.id/ | grep -i server                     # server: nginx
+curl -s -o /dev/null -w "%{http_code}\n" https://suwwara.fajarrizky.my.id/    # Suwwara tetap 200
+node scripts/stun-check.mjs hoorah.fajarrizky.my.id                           # OK: STUN ... menjawab
 ```
-Lalu buka `https://hoorah.fajarrizky.my.id` di laptop (jadi layar utama) dan scan QR dari HP: sekali lewat Wi-Fi yang sama, sekali lewat data seluler. Buka `https://hoorah.fajarrizky.my.id/admin/` dan masuk dengan admin dari langkah 4.
+Lalu buka `https://hoorah.fajarrizky.my.id` di laptop (layar utama) dan scan QR dari HP: sekali lewat Wi-Fi yang sama, sekali lewat data seluler. Dashboard: `https://hoorah.fajarrizky.my.id/admin/`.
 
 ---
 
 ## 6. Update rutin
 
-1. **Mac**: `git add -A && git commit -m "..." && git push origin main`, tunggu **Release** hijau di tab Actions.
+1. **Mac**: `git add -A && git commit -m "..." && git push origin main`
 2. **VM**:
 ```bash
-cd ~/hoorah && git pull
-./deploy/vm/update.sh
+/home/fajarrizky04febriano/hoorah/deploy/vm/update.sh
 ```
-`update.sh` mengambil image terbaru, menyalin file web ke `/srv/hoorah/web-<commit>`, memindahkan tautan `current`, lalu me-restart server Hoorah. Kalau server baru tidak sehat dalam ±1 menit, versi sebelumnya otomatis dipulihkan. Pemain di room tidak dikeluarkan: room disimpan sebelum restart dan dipulihkan sesudahnya.
+`update.sh` menjalankan `git pull`, memeriksa memori, membangun image baru (`hoorah-server:<commit>`), menyalin file web ke `/srv/hoorah/web-<commit>`, memindahkan tautan `current`, lalu me-restart server. Kalau server baru tidak sehat dalam ±1 menit, versi sebelumnya otomatis dipulihkan. Pemain di room tidak dikeluarkan (room disimpan sebelum restart dan dipulihkan sesudahnya).
 
 3. **Hanya kalau `git pull` menampilkan perubahan di `deploy/nginx/`**: ulangi 5d (`cp` dua file → `sudo nginx -t` → `sudo systemctl reload nginx`).
 
-Memasang versi tertentu: `./deploy/vm/update.sh sha-1a2b3c4` (daftar tag: GitHub → Packages → hoorah).
+Cache build disimpan supaya build berikutnya cepat. Jangan `docker builder prune` setiap update; cek disk sesekali dengan `df -h /`, dan baru kalau di atas ±80%: `docker builder prune -f --filter until=720h`.
 
 ## 7. Kembali ke versi sebelumnya
-
 **VM**
 ```bash
-~/hoorah/deploy/vm/rollback.sh
+/home/fajarrizky04febriano/hoorah/deploy/vm/rollback.sh
 ```
-Server dan file web kembali bersama ke versi sebelum `update.sh` terakhir. Dijalankan dua kali = kembali ke versi baru.
+Server dan file web kembali bersama ke versi sebelum update terakhir. Dijalankan dua kali = kembali ke versi baru.
 
 ## 8. Admin
-
-- Buat atau reset admin (sandi acak dicetak sekali):
 ```bash
-cd ~/hoorah/deploy/vm && docker compose exec server node server.js admin set admin
+cd /home/fajarrizky04febriano/hoorah/deploy/vm
+docker compose exec server node server.js admin set admin       # buat/reset, sandi acak dicetak sekali
+docker compose exec server node server.js admin list
 ```
-- Daftar admin: `docker compose exec server node server.js admin list`
 
 ## 9. Cadangan database (admin, kode Pass, statistik)
-
 **VM**
 ```bash
-~/hoorah/deploy/vm/backup.sh                    # uji sekali: "Tersimpan: ~/hoorah-backups/hoorah-....db.gz"
-crontab -e                                      # tambahkan baris di bawah, simpan
+/home/fajarrizky04febriano/hoorah/deploy/vm/backup.sh      # uji sekali: "Tersimpan: /home/fajarrizky04febriano/hoorah-backups/..."
+crontab -e                                                # tambahkan baris di bawah, simpan
 ```
 ```
-30 3 * * * $HOME/hoorah/deploy/vm/backup.sh >> $HOME/hoorah-backups/backup.log 2>&1
+30 3 * * * /home/fajarrizky04febriano/hoorah/deploy/vm/backup.sh >> /home/fajarrizky04febriano/hoorah-backups/backup.log 2>&1
 ```
-14 cadangan terbaru disimpan. Salin sesekali ke luar VM (cadangan yang hanya ada di VM ikut hilang bersama VM):
-```bash
-# dari Mac
-gcloud compute scp NAMA_VM:~/hoorah-backups/hoorah-TANGGAL.db.gz . --zone ZONA_VM
-```
+14 cadangan terbaru disimpan di `/home/fajarrizky04febriano/hoorah-backups`. Salin sesekali ke luar VM (tombol **⚙ → Download file** di jendela SSH Google Cloud, isi path file `.db.gz`).
+
 Pulihkan (mengganti data sekarang):
 ```bash
-cd ~/hoorah/deploy/vm
-gunzip -c ~/hoorah-backups/hoorah-TANGGAL.db.gz > /tmp/hoorah.db && chmod 644 /tmp/hoorah.db
+cd /home/fajarrizky04febriano/hoorah/deploy/vm
+gunzip -c /home/fajarrizky04febriano/hoorah-backups/hoorah-TANGGAL.db.gz > /tmp/hoorah.db && chmod 644 /tmp/hoorah.db
 docker compose stop server
 docker compose run --rm --no-deps -v /tmp/hoorah.db:/restore.db:ro --entrypoint sh server \
   -c 'cp /restore.db /data/hoorah.db && rm -f /data/hoorah.db-wal /data/hoorah.db-shm'
@@ -262,26 +268,24 @@ docker compose up -d server && rm /tmp/hoorah.db
 ```
 
 ## 10. Memantau
-
 - Dashboard admin → **Server**: RAM dan CPU VM (Suwwara ikut terhitung), memori Hoorah dibanding batas, disk, dan **Data keluar VM** dibanding jatah gratis 200 GiB/bulan (dibagi dengan Suwwara).
-- Log: `cd ~/hoorah/deploy/vm && docker compose logs --tail 100 server`
-- Pemakaian RAM: `docker stats --no-stream`
+- Log: `cd /home/fajarrizky04febriano/hoorah/deploy/vm && docker compose logs --tail 100 server`
+- RAM per container: `docker stats --no-stream`
 
 ## Darurat (diserang)
-
-Sama seperti Suwwara: Cloudflare → DNS → record `hoorah` jadi awan **oranye**, lalu Security → **Under Attack Mode**. Konfigurasi nginx Hoorah sudah membaca IP asli dari Cloudflare, jadi tidak perlu diubah. Kembalikan ke abu-abu setelah aman (selama oranye, data keluar ditagih dan koneksi dari Indonesia lebih lambat).
+Cloudflare → DNS → record `hoorah` jadi awan **oranye**, lalu Security → **Under Attack Mode**. nginx Hoorah sudah membaca IP asli dari Cloudflare. Kembalikan ke abu-abu setelah aman (selama oranye, data keluar ditagih dan koneksi dari Indonesia lebih lambat).
 
 ## Masalah umum
-
 | Gejala | Penyebab / tindakan |
 | --- | --- |
-| `docker pull` ditolak (`unauthorized`) | Package GitHub masih privat: langkah 4, "Change visibility → Public" |
-| `update.sh`: "Folder /srv/hoorah belum ada" | `sudo mkdir -p /srv/hoorah && sudo chown "$USER" /srv/hoorah` |
+| `update.sh`: "Memori kurang untuk build" | Swap Suwwara sedang terpakai banyak atau terlalu kecil: tunggu Suwwara sepi lalu ulangi, atau tambah swap kedua (langkah 2b) |
+| Build berhenti dengan `killed`, `exit code 137`, atau `signal: killed` | Kehabisan memori: cek `free -h` (swap aktif?), tutup yang tidak perlu, jalankan lagi |
+| `update.sh`: "Folder /srv/hoorah belum ada" | `sudo mkdir -p /srv/hoorah && sudo chown fajarrizky04febriano /srv/hoorah` |
+| `update.sh`: `git pull` gagal ("not possible to fast-forward") | Ada perubahan lokal di VM: `cd /home/fajarrizky04febriano/hoorah && git status`, kembalikan dengan `git checkout -- <file>` (file `.env` aman, tidak dilacak git) |
 | `update.sh`: server tidak sehat, otomatis rollback | Baca log yang dicetak; biasanya `.env` salah ketik. Perbaiki, jalankan lagi |
+| `permission denied ... docker.sock` | Pengguna belum di grup docker: `sudo usermod -aG docker fajarrizky04febriano`, keluar lalu masuk SSH lagi |
 | `sudo nginx -t` gagal | Hapus dua file Hoorah (5d), kirim pesan error-nya. Suwwara tidak terpengaruh selama belum di-reload |
-| `certbot`: "Timeout during connect" atau "unauthorized" | DNS belum mengarah ke VM atau awan masih oranye: cek `dig +short`, tunggu 2 menit, ulangi |
-| Halaman Hoorah memakai sertifikat Suwwara (peringatan nama tidak cocok) | Situs Hoorah belum dipasang/di-reload (5d) |
-| HP di Wi-Fi yang sama tidak tersambung langsung (selalu lewat server) | UDP 3478 belum dibuka (langkah 3) |
-| Push ditolak `refusing to allow ... workflow` | Token belum punya izin **Workflows: Read and write** (1a) |
-| Push ditolak `403` / meminta login terus | Token salah atau milik akun lain: buat ulang (1a); hapus yang tersimpan lewat Keychain Access → cari `github.com` dengan akun `jarki0402-alt` |
-| Suwwara melambat setelah Hoorah naik | `docker stats --no-stream`; kabari angka RAM-nya. Batas Hoorah bisa diturunkan di `deploy/vm/compose.yaml` (`mem_limit`) |
+| `certbot`: "Timeout during connect" / "unauthorized" | DNS belum ke VM atau awan masih oranye: `dig +short`, tunggu 2 menit, ulangi |
+| Domain Hoorah memakai sertifikat Suwwara (nama tidak cocok) | Situs Hoorah belum dipasang/di-reload (5d) |
+| `stun-check`: TIDAK ADA JAWABAN / HP selalu lewat server | Aturan `hoorah-stun` (langkah 3) belum ada, jaringan salah, atau server Hoorah mati |
+| Suwwara melambat | Wajar sebentar saat build. Kalau terus: `docker stats --no-stream`, kirim angkanya; batas Hoorah ada di `deploy/vm/compose.yaml` (`mem_limit`) |
