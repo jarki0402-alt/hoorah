@@ -1342,6 +1342,32 @@ html:not([data-game]) .eyebrow.soft {
   margin-top: 0;
 }
 
+/* Eyes closed (`dark`): a near-black screen with dim text, nothing bright to glance at. The
+   black layer covers the whole viewport but stays under the view's own text (own stacking
+   context, the panes are `display: contents` upright). */
+.msg-view.is-dark {
+  isolation: isolate;
+}
+
+.msg-view.is-dark::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: #030407;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.msg-view.is-dark .title {
+  margin-top: 30vh;
+  color: #5c6272;
+}
+
+.msg-view.is-dark .eyebrow,
+.msg-view.is-dark .view-sub {
+  color: #454a57;
+}
+
 .msg-view .hero-avatar svg {
   width: clamp(52px, calc(var(--vh) * 14), 120px);
   height: clamp(52px, calc(var(--vh) * 14), 120px);

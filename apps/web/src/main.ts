@@ -30,6 +30,8 @@ function decide(): Role {
 }
 
 // Graphics diagnostics (`/?diag=1`), opened by hand on the device to check (e.g. a Smart TV).
-if (new URLSearchParams(location.search).has('diag')) void import('./diag/main');
+// `/?tv=1&diag=1` is the main screen with the in-game network panels (Lari Terus) instead.
+const query = new URLSearchParams(location.search);
+if (query.has('diag') && !query.has('tv')) void import('./diag/main');
 else if (decide() === 'screen') void import('./screen/main');
 else void import('./controller/main');

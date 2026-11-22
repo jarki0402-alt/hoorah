@@ -3,10 +3,12 @@
  * Every method takes the current game time explicitly (ms), so the same inputs always produce
  * the same tower. Skill is timing only.
  *
- * World units match the 1280x720 stage: ground at y = 680, each floor 50 high, the crane swings
- * around x = 640. The tower stands perfectly still; whether it stands is pure geometry.
+ * World units match the 1280x720 stage: ground at y = 680, each floor 50 high, the next floor
+ * swings like a pendulum under the crane around x = 640, hanging just above the tower top. The
+ * tower stands perfectly still; whether it stands is pure geometry.
  */
 import { floorWidth, RUSUN } from '../../shared/art/rusun';
+import { CONTROL_DEFAULTS, type RusunTuning } from '../../shared/controls';
 
 /* ------------------------------------------------------------------ Tuning */
 
@@ -14,16 +16,18 @@ export const CENTER_X = 640;
 export const GROUND_Y = 680;
 export const FLOOR_H = RUSUN.floorHeight;
 
-/** The hanging floor's center swings this far either side of CENTER_X (a pendulum on the crane). */
+/** The hanging floor's center swings this far either side of CENTER_X. */
 export const SWING_AMPLITUDE = 200;
-export const SWING_BASE_PERIOD = 3000;
-/** Each placed floor makes the swing 2 % faster. */
-export const SWING_PERIOD_DECAY = 0.98;
-export const SWING_MIN_PERIOD = 2000;
+/**
+ * Swing timing (Lab Kontrol on the main screen device can override it, see controls.ts): about
+ * 3.4 s there and back (1.7 s per side) at first, 1.5 % faster per placed floor, never under 2.4 s.
+ * At 3400 ms the mid-swing speed is about 0.37 px/ms, at 2400 ms about 0.52 px/ms.
+ */
+export const SWING_DEFAULTS: Readonly<RusunTuning> = CONTROL_DEFAULTS.rusun;
 
 export const TURN_MS = 8000;
-/** Straight gravity drop from the hook to the tower top. */
-export const FALL_MS = 340;
+/** Straight gravity drop from the hook to the tower top (the floor hangs just above it). */
+export const FALL_MS = 260;
 /** Pause after a landing before the next turn (crane fetches the next floor). */
 export const SETTLE_MS = 900;
 /** A miss: longer pause so the crash on the street registers. */
@@ -60,7 +64,7 @@ export interface Floor {
 }
 
 export interface Swing {
-  /** Game time when the pendulum phase was 0 (crane at center, moving right). */
+  /** Game time when the floor passed the center moving right (phase 0). */
   start: number;
   period: number;
 }
@@ -76,7 +80,7 @@ export interface Balance {
 
 export type Phase =
   | 'intro'
-  | 'swing'
+  | 'aim'
   | 'waiting'
   | 'falling'
   | 'settle'
@@ -192,14 +196,25 @@ export function balanceZone(ratio: number): BalanceZone {
   return 'green';
 }
 
-/** Swing period while placing floor `floorIndex` (floor 1 is the first one players place). */
-export function swingPeriod(floorIndex: number): number {
+/** Swing period (ms) while placing floor `floorIndex` (floor 1 is the first one players place). */
+export function swingPeriod(floorIndex: number, tune: RusunTuning = SWING_DEFAULTS): number {
   const placed = Math.max(0, floorIndex - 1);
-  return Math.max(SWING_MIN_PERIOD, SWING_BASE_PERIOD * SWING_PERIOD_DECAY ** placed);
+  const speedup = Math.min(0.5, Math.max(0, tune.speedup));
+  const min = Math.max(1, tune.minPeriodMs);
+  return Math.max(min, Math.max(min, tune.periodMs) * (1 - speedup) ** placed);
+}
+
+/**
+ * Pendulum position (-1 left end … +1 right end) at cycle phase `u` (any real; 1 = one period):
+ * a smooth sine, fastest over the center and easing into each end. Phase 0 is the center moving
+ * right, 0.25 the right end, 0.75 the left end.
+ */
+export function swingPosition(u: number): number {
+  return Math.sin(2 * Math.PI * u);
 }
 
 export function swingX(swing: Swing, t: number): number {
-  return CENTER_X + SWING_AMPLITUDE * Math.sin((2 * Math.PI * (t - swing.start)) / swing.period);
+  return CENTER_X + SWING_AMPLITUDE * swingPosition((t - swing.start) / swing.period);
 }
 
 /**
@@ -324,6 +339,8 @@ export interface RusunOptions {
   rounds: number;
   roster: readonly RosterEntry[];
   now: number;
+  /** Swing timing (the driver passes this device's Lab Kontrol values); defaults otherwise. */
+  swing?: Partial<RusunTuning>;
 }
 
 export class RusunLogic {
@@ -337,7 +354,9 @@ export class RusunLogic {
   current: number | null = null;
   turnStartAt = 0;
   deadline = 0;
-  swing: Swing = { start: 0, period: SWING_BASE_PERIOD };
+  swing: Swing = { start: 0, period: SWING_DEFAULTS.periodMs };
+  /** Swing timing for this game. */
+  readonly swingTune: RusunTuning;
   /** When the current timed phase (intro/settle/falling/collapse/topped/finale) ends. */
   phaseEndsAt = 0;
   fall: Fall | null = null;
@@ -359,6 +378,7 @@ export class RusunLogic {
 
   constructor(opts: RusunOptions) {
     this.rounds = Math.max(1, Math.floor(opts.rounds));
+    this.swingTune = { ...SWING_DEFAULTS, ...opts.swing };
     this.setRoster(opts.roster, opts.now);
     this.startRound(opts.now, true);
   }
@@ -391,6 +411,7 @@ export class RusunLogic {
     return this.order.filter((id) => this.roster.includes(id));
   }
 
+  /** Where the hanging floor's center is at game time `t`. */
   swingX(t: number): number {
     return swingX(this.swing, t);
   }
@@ -401,7 +422,7 @@ export class RusunLogic {
   }
 
   remainingMs(now: number): number {
-    return this.phase === 'swing' ? Math.max(0, this.deadline - now) : 0;
+    return this.phase === 'aim' ? Math.max(0, this.deadline - now) : 0;
   }
 
   /** Who goes after `after` (or first in join order), skipping disconnected players. */
@@ -419,7 +440,7 @@ export class RusunLogic {
   /** Whose turn it is, or who goes next while the crane fetches a floor. */
   upcoming(): number | null {
     switch (this.phase) {
-      case 'swing':
+      case 'aim':
       case 'falling':
         return this.current;
       case 'intro':
@@ -457,7 +478,7 @@ export class RusunLogic {
       }
       if (r.connected) this.connected.add(r.id);
     }
-    if (this.phase === 'swing' && this.current !== null && !this.connected.has(this.current)) {
+    if (this.phase === 'aim' && this.current !== null && !this.connected.has(this.current)) {
       const skipped = this.current;
       this.beginTurn(now, this.nextPlayer(skipped), skipped);
     } else if (this.phase === 'waiting') {
@@ -472,7 +493,7 @@ export class RusunLogic {
    * straight down: no rewinding to the press time, so it never jumps sideways.
    */
   drop(playerId: number, at: number, now: number): boolean {
-    if (this.phase !== 'swing' || playerId !== this.current) return false;
+    if (this.phase !== 'aim' || playerId !== this.current) return false;
     const pressedAt = Number.isFinite(at) ? at : now;
     if (pressedAt < this.turnStartAt - STALE_PRESS_MS) return false;
     this.release(now, now, false);
@@ -499,7 +520,7 @@ export class RusunLogic {
         if (now < this.phaseEndsAt) return false;
         this.beginTurn(this.phaseEndsAt, this.nextPlayer(this.lastTurnPlayer), null);
         return true;
-      case 'swing':
+      case 'aim':
         if (now < this.deadline) return false;
         this.release(this.deadline, this.deadline, true);
         return true;
@@ -545,9 +566,9 @@ export class RusunLogic {
     this.emit({ type: 'intro', round: this.round, at });
   }
 
-  /** Set up the pendulum for the next turn so it starts at an extreme (alternating sides). */
+  /** Set up the swing for the next turn so it starts at an end (alternating sides). */
   private prepareSwing(turnAt: number): void {
-    const period = swingPeriod(this.floors.length);
+    const period = swingPeriod(this.floors.length, this.swingTune);
     const fromRight = this.turns % 2 === 0;
     this.swing = { start: turnAt - period * (fromRight ? 0.25 : 0.75), period };
   }
@@ -562,7 +583,7 @@ export class RusunLogic {
     this.current = playerId;
     this.turnStartAt = at;
     this.deadline = at + TURN_MS;
-    this.phase = 'swing';
+    this.phase = 'aim';
     this.turns++;
     this.emit({ type: 'turn', playerId, floorIndex: this.floors.length, skipped });
   }

@@ -1,0 +1,62 @@
+/* Langkah Maut phone: the edge of the abyss. Light text on near-black, panels edged in hazard
+   yellow, the four arrows turned into big glowing diamonds (wajik).
+   Imported by the controller app; only active while Langkah Maut runs. */
+
+html[data-game="langkah"] {
+  --t-bg: #0e0f13;
+  --surface: #1b1d22;
+  --surface-2: #2a2b30;
+  --surface-3: #08090b;
+  --line: #34363d;
+  --t-panel: rgba(22, 23, 27, 0.94);
+  --t-panel-edge: #ffc928;
+  --t-eyebrow: #111214;
+  --t-eyebrow-bg: #ffc928;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #ffc928;
+  --t-good: #5be08f;
+  --t-track: #2a2b30;
+  --t-strip-bg: rgba(22, 23, 27, 0.96);
+  --t-strip-text: #e4e6ec;
+  --t-strip-btn: #2a2b30;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 8px;
+  --t-crown: #ffc928;
+}
+
+/* Diamond arrows: each square turned 45°, the icon turned back upright. */
+html[data-game="langkah"] .pad-dpad-ring {
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-game="langkah"] .pad-arrow {
+  border-radius: 18px;
+  background: #2a2b30;
+  color: #ffc928;
+  transform: rotate(45deg) scale(0.84);
+  box-shadow:
+    inset 0 0 0 3px #ffc928,
+    0 6px 0 #08090b;
+}
+
+html[data-game="langkah"] .pad-arrow > svg {
+  transform: rotate(-45deg);
+}
+
+html[data-game="langkah"] .pad-arrow.pressed {
+  background: #ffc928;
+  color: #111214;
+  transform: rotate(45deg) scale(0.8);
+  box-shadow:
+    inset 0 0 0 3px #ffc928,
+    0 2px 0 #08090b;
+}
+
+html[data-game="langkah"] .pad-dpad-hub {
+  opacity: 0;
+}
+
+html[data-game="langkah"] .pad-stat-value {
+  color: #ffc928;
+}

@@ -9,6 +9,9 @@
  * starting settings (bajaj/quality.ts); the quality ladder steps down while running. Debug pins:
  * `?q=0..3` shadow tier, `?k=` pixel ratio, `?aa=0|1` MSAA.
  *
+ * Network panel: `?diag=1` on this page or on the main screen (`/?tv=1&diag=1`) shows each phone's
+ * lag and whether the phones reach the screen directly or through the relay.
+ *
  * The model packs (public/models/lari) load in parallel with the shell connection; the shell
  * keeps its loading screen up until `ready()`.
  */
@@ -85,6 +88,33 @@ class DemoGame implements GameLike {
   }
 }
 
+/** The shell page (same origin) when this game runs inside it; null standalone or cross-origin. */
+function shellDocument(): Document | null {
+  try {
+    return window.parent !== window ? window.parent.document : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `?diag=1` here or on the shell page. */
+function wantsNetDiag(params: URLSearchParams): boolean {
+  if (params.get('diag') === '1') return true;
+  try {
+    return new URLSearchParams(window.parent.location.search).get('diag') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Phones on a direct link, as the shell marks it on its root (`data-direct`), null when unknown. */
+function directLinks(): number | null {
+  const raw = shellDocument()?.documentElement.dataset.direct;
+  if (raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) return;
@@ -134,7 +164,9 @@ async function boot(): Promise<void> {
     scene,
     demo > 0
       ? { autopilot: true, mode: demoMode, ...(secs > 0 ? { tuning: { sprintSeconds: secs } } : {}) }
-      : {},
+      : wantsNetDiag(params)
+        ? { netDiag: { directLinks } }
+        : {},
   );
 
   const ratio = () => startRatio(level, scale(), width(), window.devicePixelRatio);

@@ -1,0 +1,645 @@
+/* Lab Kontrol: phone-first, one column, the Hoorah dark palette. */
+.lab {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 16px calc(96px + env(safe-area-inset-bottom));
+}
+
+.lab-head h1 {
+  margin: 4px 0 4px;
+  font-size: 32px;
+  line-height: 1.1;
+  color: var(--yellow);
+}
+
+.lab-lead {
+  margin: 0 0 8px;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.lab-status {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.lab-status.on {
+  background: var(--orange);
+  color: #fff;
+}
+
+.lab-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 8px 0;
+  background: var(--ink);
+}
+
+.lab-tabs button,
+.lab-seg button,
+.lab-chip,
+.lab-btn {
+  min-height: 44px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-weight: 800;
+  font-size: 15px;
+  touch-action: manipulation;
+}
+
+.lab-chip {
+  padding: 0 14px;
+}
+
+.lab-tabs button.on,
+.lab-seg button.on {
+  border-color: var(--orange);
+  background: var(--orange);
+  color: #fff;
+}
+
+.lab-tab {
+  padding-top: 4px;
+}
+
+.lab-help {
+  margin: 4px 0 10px;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.lab-note {
+  margin: 10px 0 0;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.lab-readout {
+  margin: 8px 0;
+  min-height: 20px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Touch zones: no scroll, zoom, selection or long-press menu while testing. */
+.lab-zone {
+  position: relative;
+  border: 2px dashed var(--line);
+  border-radius: 18px;
+  background: var(--surface-3);
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Joystick */
+.lab-arena {
+  position: relative;
+  height: 190px;
+  border-radius: 18px;
+  background:
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--surface);
+  overflow: hidden;
+}
+
+.lab-arena-fruit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+
+/* The controller's layout in a box: left half takes the thumb (dashed divider shows the line),
+   a faint ring rests bottom left, round buttons sit bottom right. */
+.lab-pad {
+  --ring: 136px;
+  height: 260px;
+  overflow: hidden;
+}
+
+.lab-pad::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 50%;
+  border-left: 1px dashed var(--line);
+  pointer-events: none;
+}
+
+.lab-stick-zone {
+  position: absolute;
+  inset: 0 50% 0 0;
+  touch-action: none;
+}
+
+.lab-stick {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.lab-stick.is-rest {
+  left: calc(var(--ring) / 2 + 12px);
+  top: calc(100% - var(--ring) / 2 - 12px);
+  opacity: 0.38;
+}
+
+.lab-stick-ring,
+.lab-stick-reach,
+.lab-stick-dead,
+.lab-stick-knob {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.lab-stick-ring {
+  width: var(--ring);
+  height: var(--ring);
+  background: rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 0 0 3px var(--line);
+}
+
+.lab-stick-reach {
+  border: 2px dashed rgba(255, 247, 240, 0.3);
+}
+
+.lab-stick-dead {
+  background: rgba(255, 247, 240, 0.08);
+}
+
+.lab-stick-knob {
+  width: 58px;
+  height: 58px;
+  background: var(--orange);
+  box-shadow: 0 4px 0 var(--orange-dark);
+}
+
+.lab-stick-help {
+  position: absolute;
+  left: 12px;
+  bottom: calc(var(--ring) + 20px);
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.lab-pad-buttons {
+  --main: 92px;
+  --small: 64px;
+  --arc: calc(var(--main) / 2 + var(--small) / 2 + 14px);
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: var(--main);
+  height: var(--main);
+}
+
+.lab-pad-btn {
+  --size: var(--small);
+  --ox: 0px;
+  --oy: 0px;
+  position: absolute;
+  left: calc(50% + var(--ox) - var(--size) / 2);
+  top: calc(50% + var(--oy) - var(--size) / 2);
+  width: var(--size);
+  height: var(--size);
+  border: none;
+  border-radius: 50%;
+  padding: 0;
+  background: var(--cream);
+  color: var(--ink);
+  box-shadow: 0 6px 0 #c9bba9;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.lab-pad-btn.slot-0 {
+  --size: var(--main);
+  background: var(--yellow);
+  box-shadow: 0 6px 0 var(--yellow-dark);
+  font-size: 18px;
+}
+
+.lab-pad-btn.slot-1 {
+  --ox: calc(var(--arc) * -0.9659);
+  --oy: calc(var(--arc) * -0.2588);
+}
+
+.lab-pad-btn.slot-2 {
+  --ox: calc(var(--arc) * -0.2588);
+  --oy: calc(var(--arc) * -0.9659);
+}
+
+.lab-pad-btn.on {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* Rusun */
+.lab-rusun {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+
+.lab-rusun-jib {
+  fill: var(--yellow);
+}
+
+.lab-rusun-cable {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.lab-rusun-floor {
+  fill: var(--orange);
+}
+
+.lab-rusun-tower {
+  fill: var(--surface-3);
+}
+
+/* Swipe */
+.lab-runner {
+  position: relative;
+}
+
+.lab-runner-canvas {
+  display: block;
+  width: 100%;
+  height: 230px;
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+
+.lab-runner-stats {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(17, 18, 20, 0.75);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-runner .lab-chip {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.lab-swipe-zone {
+  height: 230px;
+  transition: border-color 120ms;
+}
+
+.lab-swipe-zone[class*="is-"] {
+  border-color: var(--yellow);
+}
+
+.lab-swipe-cross {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lab-swipe-cross i {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 14px solid transparent;
+  opacity: 0.35;
+}
+
+.lab-swipe-cross .u {
+  left: calc(50% - 14px);
+  top: 18px;
+  border-bottom-color: var(--text);
+}
+
+.lab-swipe-cross .d {
+  left: calc(50% - 14px);
+  bottom: 18px;
+  border-top-color: var(--text);
+}
+
+.lab-swipe-cross .l {
+  left: 18px;
+  top: calc(50% - 14px);
+  border-right-color: var(--text);
+}
+
+.lab-swipe-cross .r {
+  right: 18px;
+  top: calc(50% - 14px);
+  border-left-color: var(--text);
+}
+
+.lab-swipe-zone.is-up .u,
+.lab-swipe-zone.is-down .d,
+.lab-swipe-zone.is-left .l,
+.lab-swipe-zone.is-right .r {
+  opacity: 1;
+}
+
+.lab-swipe-zone.is-up .u {
+  border-bottom-color: var(--yellow);
+}
+
+.lab-swipe-zone.is-down .d {
+  border-top-color: var(--yellow);
+}
+
+.lab-swipe-zone.is-left .l {
+  border-right-color: var(--yellow);
+}
+
+.lab-swipe-zone.is-right .r {
+  border-left-color: var(--yellow);
+}
+
+.lab-swipe-zone.is-tap {
+  background: var(--surface-2);
+}
+
+/* Haptics */
+.lab-method {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.lab-tests {
+  display: grid;
+  gap: 8px;
+}
+
+.lab-test {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-2);
+  text-align: left;
+  font-size: 15px;
+  font-weight: 700;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.lab-test.lit,
+.lab-move-zone.lit {
+  border-color: var(--yellow);
+}
+
+.lab-test-letter {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--orange);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+
+.lab-test-count {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lab-move-zone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 120px;
+  margin-top: 8px;
+  padding: 12px;
+  font-weight: 700;
+}
+
+.lab-move-zone small {
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+/* Sliders */
+.lab-sliders {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.lab-sub {
+  margin: 6px 0 -4px;
+  color: var(--yellow);
+  font-size: 16px;
+}
+
+.lab-slider {
+  display: grid;
+  gap: 4px;
+}
+
+.lab-slider-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lab-slider-label {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.lab-slider-value {
+  color: var(--yellow);
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lab-slider-hint {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.lab-slider input[type="range"] {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--orange);
+  touch-action: pan-y;
+}
+
+.lab-seg-wrap {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.lab-seg-wrap legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.lab-seg {
+  display: flex;
+  gap: 6px;
+}
+
+.lab-seg button {
+  flex: 1;
+}
+
+/* Save */
+.lab-saved {
+  margin: 14px 0 0;
+  padding: 12px;
+  border: 2px solid var(--green);
+  border-radius: 14px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.lab-saved p {
+  margin: 0 0 6px;
+}
+
+.lab-summary {
+  margin: 0 0 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-3);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.lab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 8px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: var(--ink);
+  border-top: 1px solid var(--line);
+}
+
+.lab-btn {
+  min-height: 52px;
+  border-color: var(--orange);
+  background: var(--orange);
+  color: #fff;
+  font-size: 16px;
+}
+
+.lab-btn.ghost {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.lab-tabs button:focus-visible,
+.lab-btn:focus-visible,
+.lab-chip:focus-visible,
+.lab-test:focus-visible,
+.lab-seg button:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* Diagnosa getar iPhone */
+.lab-diag {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+.lab-diag-switch input {
+  width: 52px;
+  height: 32px;
+  flex: none;
+}
+.lab-diag-overlay {
+  position: relative;
+}
+.lab-diag-cover {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+.lab-diag-cover input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0.001;
+}
+.lab-diag-log {
+  margin: 0;
+  padding-left: 18px;
+}

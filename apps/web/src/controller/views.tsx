@@ -7,8 +7,11 @@ import { Me, PlayerAvatar, Timer, usePress, useSecondsLeft, type V } from './com
 import { MenuView } from './menu';
 import { DriveView, GestureView } from './motion';
 import { PadView } from './pad';
-import { action, haptic, react, serverNow, tap } from './store';
+import { PeekView } from './peek';
+import { SlingView } from './sling';
+import { action, haptic, platform, react, serverNow, tap } from './store';
 import { STR } from './strings';
+import { thumbSrc, useThumbs, wantsThumbs } from './thumbs';
 import { WordView } from './word';
 
 function Actions({ actions }: { actions: NonNullable<V<'message'>['actions']> }) {
@@ -40,13 +43,15 @@ function Actions({ actions }: { actions: NonNullable<V<'message'>['actions']> })
 
 function MessageView({ v }: { v: V<'message'> }) {
   return (
-    <div class={`ctrl msg-view ${v.eyebrow ? 'has-eyebrow' : ''}`}>
+    <div class={`ctrl msg-view ${v.eyebrow ? 'has-eyebrow' : ''} ${v.dark ? 'is-dark' : ''}`}>
       <div class="panes">
         <div class="pane">
           {v.eyebrow && <div class="eyebrow soft">{v.eyebrow}</div>}
-          <div class="hero-avatar">
-            {v.avatarOf !== undefined ? <PlayerAvatar id={v.avatarOf} size={120} /> : <Me size={120} />}
-          </div>
+          {!v.dark && (
+            <div class="hero-avatar">
+              {v.avatarOf !== undefined ? <PlayerAvatar id={v.avatarOf} size={120} /> : <Me size={120} />}
+            </div>
+          )}
           <h1 class="title">{v.title}</h1>
           {v.subtitle && <div class="muted view-sub">{v.subtitle}</div>}
         </div>
@@ -119,6 +124,8 @@ function ChoiceView({ v }: { v: V<'choice'> }) {
   const expired = useSecondsLeft(v.deadline) === 0;
   const done = v.progress?.done ?? 0;
   const total = v.progress?.total ?? 0;
+  const gameId = platform.value.gameId;
+  const thumbs = useThumbs(gameId, wantsThumbs(gameId, v.options));
   return (
     <div class="ctrl choice-view">
       <div class="panes">
@@ -166,9 +173,16 @@ function ChoiceView({ v }: { v: V<'choice'> }) {
                 action('answer', o.id);
               }}
             >
-              <span class="letter" style={{ color: o.color }}>
-                {o.id}
-              </span>
+              {(() => {
+                const src = thumbs && gameId ? thumbSrc(gameId, thumbs, o.thumb) : null;
+                return src ? (
+                  <img class="answer-thumb" src={src} alt="" decoding="async" draggable={false} />
+                ) : (
+                  <span class="letter" style={{ color: o.color }}>
+                    {o.id}
+                  </span>
+                );
+              })()}
               <span class="label">{o.label}</span>
             </button>
           ))}
@@ -609,5 +623,9 @@ export function GameView({ v }: { v: ControllerView }) {
       return <PadView v={v} />;
     case 'word':
       return <WordView v={v} />;
+    case 'peek':
+      return <PeekView v={v} />;
+    case 'sling':
+      return <SlingView v={v} />;
   }
 }

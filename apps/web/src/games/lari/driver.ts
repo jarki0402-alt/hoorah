@@ -8,9 +8,10 @@ import type { ControllerView, PlayerInfo, RelayedInput } from '@hoorah/protocol'
 import type { GameResult } from '@hoorah/sdk';
 import type { Sfx } from '../../shared/audio';
 import { celebrate } from '../../shared/confetti';
+import { CONTROL_TUNING } from '../../shared/controls';
 import { cpuSkill, reportSoloResult, soloOpponents } from '../common/cpu';
 import { fieldSkills, RunnerBrain, TAKEOVER_SKILL } from './brain';
-import type { BoardRow, HudStore } from './hud';
+import type { BoardRow, HudStore, NetRow } from './hud';
 import { type LariEvent, LariRun, type Mode, parseMode, type Runner, type Tuning } from './logic';
 import { buildResult, finalRows, soloOutcome } from './results';
 import type { CamMode, LariScene, TagPos } from './scene';
@@ -43,7 +44,16 @@ const SOLO_OPPONENTS = 4;
 const HUD_MS = 100;
 const VIEW_MS = 450;
 const HELP_S = 9;
-const SFX_GAP: Partial<Record<Sfx, number>> = { jump: 90, ding: 60, skid: 160, hit: 120, select: 80 };
+const SFX_GAP: Partial<Record<Sfx, number>> = {
+  jump: 90,
+  ding: 60,
+  skid: 160,
+  hit: 120,
+  select: 80,
+  flip: 70,
+};
+/** Smoothing of the measured phone lag on the `?diag=1` panel (share of the newest sample). */
+const LAG_EMA = 0.25;
 
 type Beat = 'intro' | 'count' | 'run' | 'finish' | 'ended';
 
@@ -63,8 +73,13 @@ export interface DriverOptions {
   seed?: number;
   /** Mode override (demo). */
   mode?: Mode;
-  /** Rule overrides (demo: a short Sprint). */
+  /** Rule overrides (demo: a short Sprint); laid over the Lab's runner settings. */
   tuning?: Partial<Tuning>;
+  /**
+   * `?diag=1`: show each phone's lag and how many phones skip the relay. `directLinks` reads the
+   * shell's count of open direct (WebRTC) links, null when unknown.
+   */
+  netDiag?: { directLinks(): number | null };
 }
 
 export class LariDriver {
@@ -90,6 +105,8 @@ export class LariDriver {
   private readonly hurtUntil = new Map<number, number>();
   private result: GameResult | null = null;
   private clockT = 0;
+  /** Measured phone lag per player (ms, smoothed) for the `?diag=1` panel. */
+  private readonly lagMs = new Map<number, { avg: number; last: number }>();
   /** Measured fps (rendered frames) once a second: quality ladder and debug overlay. */
   onFps: ((fps: number) => void) | null = null;
   /** Called after every rendered frame (the quality ladder). */
@@ -113,11 +130,13 @@ export class LariDriver {
       ...this.people.map((p) => ({ id: p.id, cpu: false })),
       ...this.cpus.map((p) => ({ id: p.id, cpu: true })),
     ];
+    // Lane, jump and lag catch-up come from the Lab Kontrol settings of this browser.
+    const { laneTime, jumpV, gravity, fallMul, hang, lagCatch } = CONTROL_TUNING.runner;
     this.run = new LariRun({
       mode: this.mode,
       runners: roster,
       seed: opts.seed ?? randomSeed(),
-      ...(opts.tuning ? { tuning: opts.tuning } : {}),
+      tuning: { laneTime, jumpV, gravity, fallMul, hang, lagCatch, ...opts.tuning },
     });
     const skills = fieldSkills(cpuSkill(GAME_ID), this.cpus.length);
     this.cpus.forEach((c, i) => {
@@ -193,7 +212,28 @@ export class LariDriver {
       return;
     }
     const lag = Math.max(0, (this.game.now() - i.atMs) / 1000);
+    if (this.opts.netDiag) this.noteLag(i.from, lag * 1000);
     this.run.input(i.from, i.taps, i.buttons, lag);
+    // Sound and effects the moment the move lands, not on the next simulation step.
+    this.drain();
+  }
+
+  private noteLag(id: number, ms: number): void {
+    const prev = this.lagMs.get(id);
+    this.lagMs.set(id, { avg: prev ? prev.avg + (ms - prev.avg) * LAG_EMA : ms, last: ms });
+  }
+
+  /** Rows of the `?diag=1` panel: every person with their smoothed and last phone lag. */
+  netRows(): NetRow[] {
+    return this.people.map((p) => {
+      const l = this.lagMs.get(p.id);
+      return {
+        id: p.id,
+        name: this.names.get(p.id) ?? p.name,
+        avgMs: l ? Math.round(l.avg) : null,
+        lastMs: l ? Math.round(l.last) : null,
+      };
+    });
   }
 
   private onPlayers(): void {
@@ -380,6 +420,10 @@ export class LariDriver {
       case 'slide':
         this.sfx('skid');
         break;
+      case 'lane':
+        // Only people's moves: a soft swish confirms the swipe on the main screen at once.
+        if (e.id > 0) this.sfx('flip');
+        break;
       case 'coin':
         this.sfx('ding');
         break;
@@ -511,8 +555,17 @@ export class LariDriver {
       h.board.value = rows;
     }
     this.clockT = run.t;
+    if (this.opts.netDiag) {
+      const net = { rows: this.netRows(), direct: this.opts.netDiag.directLinks() };
+      const netSig = JSON.stringify(net);
+      if (netSig !== this.netSig) {
+        this.netSig = netSig;
+        h.net.value = net;
+      }
+    }
   }
   private boardSig = '';
+  private netSig = '';
   private drewPaused = false;
 
   /* ---------------------------------------------------------------- phones */

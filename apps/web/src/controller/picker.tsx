@@ -1,29 +1,61 @@
 /**
- * The Host's game picker (remote design "A + E"): tabs on top, the game list is the only part of
- * the controller that scrolls. Tapping a game opens its detail page on the main screen and closes
- * the picker. Loaded on demand: the poster art is only needed once the Host opens it.
+ * The Host's game picker (remote design "A + E"): the same groups as the main screen's home
+ * ("Pas untuk kalian", one per mood, Semua) as tabs on top; the game list is the only part of the
+ * controller that scrolls. A tab makes the main screen jump to that row; tapping a game opens its
+ * detail page there and closes the picker. Loaded on demand: the poster art is only needed once
+ * the Host opens it.
  */
-import { useEffect, useState } from 'preact/hooks';
-import { GAMES, type GameId, gamesForTab, HOME_TABS, type HomeTab, isHomeTab, MOODS } from '../shared/games';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { CATEGORIES, GAMES, type GameId, MOODS } from '../shared/games';
+import {
+  gridGames,
+  HOME_SECTIONS,
+  type HomeSection,
+  isHomeSection,
+  isNewGame,
+  sectionGames,
+} from '../shared/homeRows';
 import { keyArtUrl } from '../shared/keyart';
 import { Icon } from '../shared/ui';
 import { StatusRow } from './common';
 import { openGame, platform, players, setScreenTab } from './store';
 import { STR } from './strings';
+import './picker.css';
 
 export function GamePicker({ onClose }: { onClose: () => void }) {
   const pg = platform.value;
-  const screenTab: HomeTab = isHomeTab(pg.tab) ? pg.tab : 'fit';
-  // The main screen's tab is the truth; a tap here shows at once and the screen catches up.
-  const [tab, setTab] = useState<HomeTab>(screenTab);
-  useEffect(() => setTab(screenTab), [screenTab]);
+  // A category tab focused in the screen's "Semua game" grid still means the "Semua" group here.
+  const screenTab: HomeSection = isHomeSection(pg.tab)
+    ? pg.tab
+    : CATEGORIES.some((c) => c.id === pg.tab)
+      ? 'all'
+      : 'fit';
+  // The main screen's group is the truth; a tap here shows at once and the screen catches up.
+  const [tab, setTab] = useState<HomeSection>(screenTab);
+  // After a tap here the screen scrolls through other rows on its way to the new group; ignore
+  // those passing reports until it arrives (or a moment has gone by).
+  const pending = useRef<{ tab: HomeSection; at: number } | null>(null);
+  useEffect(() => {
+    const p = pending.current;
+    if (p && screenTab !== p.tab && performance.now() - p.at < 1500) return;
+    pending.current = null;
+    setTab(screenTab);
+  }, [screenTab]);
   const n = Math.max(1, players.value.filter((p) => p.connected).length);
   const onScreen = pg.page === 'home' || pg.page === 'detail' ? pg.gameId : undefined;
   const recent = (pg.recent ?? []).filter((id): id is GameId => id in GAMES);
   const fits = (id: GameId) => n >= GAMES[id].minPlayers && n <= GAMES[id].maxPlayers;
-  const list = gamesForTab(tab, n, recent);
+  // "Semua": every game, grouped by category with a heading per group.
+  const groups: { key: string; title?: string; games: GameId[] }[] =
+    tab === 'all'
+      ? CATEGORIES.map((c) => ({ key: c.id, title: c.label, games: gridGames(c.id, false) })).filter(
+          (g) => g.games.length > 0,
+        )
+      : [{ key: tab, games: sectionGames(tab, n, recent) }];
+  const empty = groups.every((g) => g.games.length === 0);
 
-  const pick = (t: HomeTab) => {
+  const pick = (t: HomeSection) => {
+    pending.current = { tab: t, at: performance.now() };
     setTab(t);
     setScreenTab(t);
   };
@@ -32,7 +64,10 @@ export function GamePicker({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
-  const tabs = HOME_TABS.map((t) => (t.id === 'fit' ? { ...t, label: STR.tabFit } : t));
+  const tabs = HOME_SECTIONS.map((id) => ({
+    id,
+    label: id === 'fit' ? STR.tabFit : id === 'all' ? STR.tabAll : MOODS[id].label,
+  }));
 
   return (
     <div class="ctrl picker landscape-split">
@@ -68,42 +103,54 @@ export function GamePicker({ onClose }: { onClose: () => void }) {
         </div>
         <div class="pane zone picker-list-pane">
           <div class="picker-list scroll-y" role="tabpanel">
-            {list.length === 0 && <div class="muted picker-empty">{STR.pickerEmpty}</div>}
-            {list.map((id) => {
-              const g = GAMES[id];
-              const here = id === onScreen;
-              const sub = !fits(id)
-                ? STR.needPlayers(g.minPlayers)
-                : recent[0] === id
-                  ? `${STR.players(g.minPlayers, g.maxPlayers)} · ${STR.lastPlayed}`
-                  : STR.players(g.minPlayers, g.maxPlayers);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  class={`pick-card ${here ? 'here' : ''}`}
-                  onClick={() => open(id)}
-                >
-                  <img class="pick-art" src={keyArtUrl(id)} alt="" decoding="async" draggable={false} />
-                  <span class="pick-text">
-                    <span class="pick-name">{g.title}</span>
-                    <span class="pick-meta">
-                      <span class={`mood-pill mood-${g.mood}`}>{MOODS[g.mood].label}</span>
-                      {here ? (
-                        <span class="pick-here">{STR.onScreen}</span>
-                      ) : (
-                        <span class="pick-sub">{sub}</span>
-                      )}
+            {empty && <div class="muted picker-empty">{STR.pickerEmpty}</div>}
+            {groups.flatMap((grp) => [
+              ...(grp.title
+                ? [
+                    <div key={`h-${grp.key}`} class="picker-group">
+                      {grp.title}
+                    </div>,
+                  ]
+                : []),
+              ...grp.games.map((id) => {
+                const g = GAMES[id];
+                const here = id === onScreen;
+                const sub = !fits(id)
+                  ? STR.needPlayers(g.minPlayers)
+                  : recent[0] === id
+                    ? `${STR.players(g.minPlayers, g.maxPlayers)} · ${STR.lastPlayed}`
+                    : STR.players(g.minPlayers, g.maxPlayers);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    class={`pick-card ${here ? 'here' : ''}`}
+                    onClick={() => open(id)}
+                  >
+                    <img class="pick-art" src={keyArtUrl(id)} alt="" decoding="async" draggable={false} />
+                    <span class="pick-text">
+                      <span class="pick-name">
+                        {g.title}
+                        {isNewGame(id) && <span class="pick-new">{STR.newTag}</span>}
+                      </span>
+                      <span class="pick-meta">
+                        <span class={`mood-pill mood-${g.mood}`}>{MOODS[g.mood].label}</span>
+                        {here ? (
+                          <span class="pick-here">{STR.onScreen}</span>
+                        ) : (
+                          <span class="pick-sub">{sub}</span>
+                        )}
+                      </span>
                     </span>
-                  </span>
-                  {!here && (
-                    <span class="pick-chev" aria-hidden="true">
-                      <Icon name="right" size={18} stroke={2.6} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                    {!here && (
+                      <span class="pick-chev" aria-hidden="true">
+                        <Icon name="right" size={18} stroke={2.6} />
+                      </span>
+                    )}
+                  </button>
+                );
+              }),
+            ])}
           </div>
         </div>
       </div>

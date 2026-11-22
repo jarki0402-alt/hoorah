@@ -1,21 +1,33 @@
 import type { JSX } from 'preact';
 import { arenaSvg } from './art/arena';
+import { bomSvg } from './art/bom';
 import { caturSvg } from './art/catur';
 import { congklakSvg } from './art/congklak';
 import { dapurSvg } from './art/dapur';
-import { bajajSvg, gambarSvg, masakSvg, panjatSvg } from './art/extra';
+import { ejaSvg } from './art/eja';
+import { esSvg } from './art/es';
+import { bajajSvg, masakSvg } from './art/extra';
+import { hantuSvg } from './art/hantu';
 import { juraganSvg } from './art/juragan';
 import { karungSvg } from './art/karung';
 import { kataSvg } from './art/kata';
 import { kerupukSvg } from './art/kerupuk';
 import { kompakSvg } from './art/kompak';
 import { kuisKeyArtSvg } from './art/kuis';
+import { langkahSvg } from './art/langkah';
 import { lariSvg } from './art/lari';
 import { ludoSvg } from './art/ludo';
+import { nyebrangSvg } from './art/nyebrang';
+import { obbySvg } from './art/obby';
+import { penyusupSvg } from './art/penyusup';
+import { runtuhSvg } from './art/runtuh';
 import { rusunSceneSvg } from './art/rusun';
+import { silumanSvg } from './art/siluman';
 import { svgUrl } from './art/svg';
+import { taliSvg } from './art/tali';
 import { tarikSceneSvg } from './art/tarik';
 import { ularSvg } from './art/ular';
+import { warnaSvg } from './art/warna';
 import { wilayahSvg } from './art/wilayah';
 import { GAMES, type GameId } from './games';
 
@@ -38,8 +50,18 @@ const ART: Record<GameId, () => string> = {
   kata: kataSvg,
   juragan: juraganSvg,
   dapur: dapurSvg,
-  gambar: gambarSvg,
-  panjat: panjatSvg,
+  obby: obbySvg,
+  tali: taliSvg,
+  bom: bomSvg,
+  runtuh: runtuhSvg,
+  es: esSvg,
+  langkah: langkahSvg,
+  nyebrang: nyebrangSvg,
+  penyusup: penyusupSvg,
+  eja: ejaSvg,
+  siluman: silumanSvg,
+  warna: warnaSvg,
+  hantu: hantuSvg,
 };
 
 /** Posters rendered from the 3D games' own scenes (`?poster=1`); the SVG art is the fallback. */
@@ -73,8 +95,18 @@ const LOGO_POS: Record<GameId, JSX.CSSProperties> = {
   kata: { left: '4%', top: '8%' },
   juragan: { left: '4%', top: '8%' },
   dapur: { left: '4%', top: '8%' },
-  gambar: { left: 0, right: 0, bottom: '4%', textAlign: 'center' },
-  panjat: { left: '4%', bottom: '4%' },
+  obby: { left: '4%', top: '8%' },
+  tali: { left: '4%', top: '8%' },
+  bom: { left: '4%', top: '8%' },
+  runtuh: { left: '4%', top: '8%' },
+  es: { left: '4%', top: '8%' },
+  langkah: { left: '4%', top: '8%' },
+  nyebrang: { left: '4%', top: '6%' },
+  penyusup: { left: '4%', top: '8%' },
+  eja: { left: '4%', top: '8%' },
+  siluman: { left: '4%', top: '8%' },
+  warna: { left: '4%', top: '8%' },
+  hantu: { left: '4%', top: '8%' },
 };
 
 interface KeyArtProps {

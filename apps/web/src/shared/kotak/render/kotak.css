@@ -1,0 +1,33 @@
+/* Box world: WebGL canvas and the name tags that follow players (stage px). */
+
+.kt-canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.kt-tags {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.kt-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 3px 10px 2px;
+  border-radius: 999px;
+  background: rgba(17, 18, 20, 0.78);
+  box-shadow: inset 0 0 0 2.5px var(--tag, #ffffff);
+  color: #fff7f0;
+  font: 800 15px / 1.2 var(--font-ui);
+  white-space: nowrap;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  will-change: transform;
+}

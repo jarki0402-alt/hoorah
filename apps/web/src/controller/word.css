@@ -242,3 +242,90 @@
     height: clamp(36px, calc(var(--vh) * 14), 48px);
   }
 }
+
+/* Title row with an optional extra button (e.g. "Dengar lagi"). */
+.word-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.word-title-row .word-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.word-extra {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--t-panel, var(--surface));
+  box-shadow: inset 0 0 0 2px var(--t-panel-edge, var(--line));
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: transform 0.08s ease;
+}
+
+.word-extra.pressed {
+  transform: scale(0.94);
+}
+
+/* Letter boxes (`slots`): one box per letter of the word, sized to fit the phone's width. */
+.word-slots {
+  --slot-gap: 5px;
+  display: grid;
+  grid-template-columns: repeat(var(--slots), minmax(0, 1fr));
+  gap: var(--slot-gap);
+  min-height: clamp(48px, calc(var(--vh) * 8), 64px);
+}
+
+.word-slots.is-long {
+  --slot-gap: 3px;
+}
+
+.word-slots.has-error {
+  animation: shake 0.3s ease;
+}
+
+.word-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  aspect-ratio: 0.82;
+  max-height: clamp(48px, calc(var(--vh) * 8), 64px);
+  border-radius: 10px;
+  background: var(--t-panel, var(--surface));
+  box-shadow: inset 0 -3px 0 var(--t-panel-edge, var(--line));
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(18px, calc(var(--vh) * 4), 30px);
+  line-height: 1;
+  color: var(--text);
+}
+
+.word-slots.is-long .word-slot {
+  font-size: clamp(14px, calc(var(--vh) * 3.2), 24px);
+  border-radius: 7px;
+}
+
+.word-slot.is-filled {
+  box-shadow: inset 0 -3px 0 var(--t-accent-text, var(--orange));
+}
+
+.word-slot.is-next {
+  box-shadow: inset 0 0 0 2px var(--orange);
+}
+
+.word-slots.has-error .word-slot {
+  box-shadow: inset 0 0 0 2px #ff5a4f;
+}

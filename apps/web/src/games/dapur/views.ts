@@ -68,6 +68,7 @@ export function setupView(ctx: SetupViewContext): ControllerView {
         label: STR.kitchens[k].name,
         sub: STR.kitchens[k].desc,
         color: KITCHEN_COLOR[k],
+        thumb: `kitchen-${k}`,
         ...(k === rec ? { badge: STR.recommended } : {}),
       }));
       view = {
@@ -87,6 +88,7 @@ export function setupView(ctx: SetupViewContext): ControllerView {
         label: STR.levels[d].name,
         sub: STR.levelSub(STR.levels[d].desc, i + 1),
         color: LEVEL_COLOR[d],
+        thumb: `level-${d}`,
       }));
       view = {
         kind: 'menu',

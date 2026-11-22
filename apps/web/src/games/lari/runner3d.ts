@@ -25,6 +25,8 @@ export interface PoseInput {
   speed: number;
   /** Vertical speed while airborne. */
   vy: number;
+  /** Take-off speed of the rules (m/s), the jump clip is scrubbed against it. */
+  jumpV: number;
   /** 0..1 through the stumble (tumble / bounce). */
   t: number;
   /** What tripped them. */
@@ -38,8 +40,6 @@ export interface PoseInput {
 /** Body lean into a lane change: at most this roll (rad), reached around `LEAN_SPEED` m/s sideways. */
 const MAX_LEAN = 0.2;
 const LEAN_SPEED = 8;
-/** Vertical take-off speed (m/s) the jump clip is scrubbed against (rules: TUNING.jumpV). */
-const JUMP_V = 6.6;
 /** Length of the run clip at time scale 1 (one stride cycle). */
 const RUN_CYCLE = 0.5;
 const JUMP_LEN = 0.6;
@@ -156,7 +156,8 @@ export class RunnerModel {
     if (action) {
       if (name === 'run') action.timeScale = (1.3 + p.speed * 0.075) * RUN_CYCLE;
       else if (name === 'jump') {
-        const u = Math.max(0, Math.min(1, (JUMP_V - p.vy) / (2 * JUMP_V)));
+        const v0 = Math.max(0.1, p.jumpV);
+        const u = Math.max(0, Math.min(1, (v0 - p.vy) / (2 * v0)));
         action.time = u * JUMP_LEN * 0.999;
       } else if (name === 'trip' || name === 'hit') action.time = Math.max(0, Math.min(0.999, p.t));
     }

@@ -2,10 +2,23 @@ import type { GameIcon } from '@hoorah/sdk';
 import { useEffect, useState } from 'preact/hooks';
 import { GAMES } from '../../shared/games';
 import { KeyArt } from '../../shared/keyart';
+import './party.css';
 import { Avatar, Icon, type IconName } from '../../shared/ui';
 import { FocusButton } from '../components';
 import { setFocusMap } from '../nav';
-import { goHome, lastResult, players, restartGame, sfx } from '../store';
+import { isFinalGame, standings } from '../party';
+import {
+  goHome,
+  lastResult,
+  nextPartyGame,
+  party,
+  partyLineup,
+  players,
+  restartGame,
+  sfx,
+  startParty,
+} from '../store';
+import { PARTY } from '../strings';
 
 const AWARD_ICON: Record<GameIcon, { icon: IconName; tint: string }> = {
   zap: { icon: 'zap', tint: '#FFC928' },
@@ -23,14 +36,21 @@ const AUTOPLAY_S = 10;
 export function ResultsPage() {
   const res = lastResult.value;
   const [left, setLeft] = useState(AUTOPLAY_S);
-  const [auto, setAuto] = useState(true);
+  // Mode Pesta: "Lanjut" to the next game instead of "Main lagi"; the final shows the champion.
+  const p = party.value;
+  const final = p ? isFinalGame(p) : false;
+  const [auto, setAuto] = useState(!final);
 
   useEffect(() => {
+    const cur = party.peek();
+    const last = cur ? isFinalGame(cur) : false;
     return setFocusMap(
       {
-        rows: [['again', 'change', 'done']],
+        rows: [cur ? (last ? ['party-again', 'done'] : ['next', 'done']) : ['again', 'change', 'done']],
         onOk: (id) => {
           if (id === 'again') restartGame();
+          else if (id === 'next') nextPartyGame();
+          else if (id === 'party-again') startParty(partyLineup());
           else goHome();
         },
         onBack: () => {
@@ -42,7 +62,7 @@ export function ResultsPage() {
           setAuto(false);
         },
       },
-      'again',
+      cur ? (last ? 'party-again' : 'next') : 'again',
     );
   }, []);
 
@@ -50,7 +70,8 @@ export function ResultsPage() {
     if (!auto) return;
     if (left <= 0) {
       setAuto(false);
-      restartGame();
+      if (party.peek()) nextPartyGame();
+      else restartGame();
       return;
     }
     const t = window.setTimeout(() => setLeft((s) => s - 1), 1000);
@@ -66,6 +87,48 @@ export function ResultsPage() {
   // Classic podium order: 2nd, 1st, 3rd.
   const order = top.length === 3 ? [top[1]!, top[0]!, top[2]!] : top.length === 2 ? [top[0]!, top[1]!] : top;
   const heights = [148, 108, 84];
+  const table = p
+    ? standings(
+        p,
+        players.value.map((pl) => pl.id),
+      )
+    : [];
+  const champions = table.filter((r) => r.rank === 1 && r.points > 0);
+  const nextGame = p && !final ? p.lineup[p.index + 1] : undefined;
+  const countdown = auto ? (
+    <span style={{ position: 'relative', width: 30, height: 30, display: 'inline-block' }}>
+      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+        <circle cx="15" cy="15" r="12" fill="none" stroke="rgba(17,18,20,0.25)" stroke-width="4" />
+        <circle
+          cx="15"
+          cy="15"
+          r="12"
+          fill="none"
+          stroke="#111214"
+          stroke-width="4"
+          stroke-linecap="round"
+          stroke-dasharray={`${(left / AUTOPLAY_S) * 75.4} 75.4`}
+          transform="rotate(-90 15 15)"
+          style={{ transition: 'stroke-dasharray 1s linear' }}
+        />
+      </svg>
+      <span
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12,
+          fontWeight: 800,
+        }}
+      >
+        {left}
+      </span>
+    </span>
+  ) : (
+    <Icon name="play" size={16} color="#111214" />
+  );
 
   return (
     <div class="page">
@@ -205,60 +268,90 @@ export function ResultsPage() {
         }}
       >
         <div style={{ display: 'flex', gap: 12 }}>
-          <FocusButton
-            id="again"
-            class="btn primary"
-            style={{ fontSize: 17, padding: '10px 20px 10px 12px' }}
-          >
-            {auto ? (
-              <span style={{ position: 'relative', width: 30, height: 30, display: 'inline-block' }}>
-                <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
-                  <circle cx="15" cy="15" r="12" fill="none" stroke="rgba(17,18,20,0.25)" stroke-width="4" />
-                  <circle
-                    cx="15"
-                    cy="15"
-                    r="12"
-                    fill="none"
-                    stroke="#111214"
-                    stroke-width="4"
-                    stroke-linecap="round"
-                    stroke-dasharray={`${(left / AUTOPLAY_S) * 75.4} 75.4`}
-                    transform="rotate(-90 15 15)"
-                    style={{ transition: 'stroke-dasharray 1s linear' }}
-                  />
-                </svg>
-                <span
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 12,
-                    fontWeight: 800,
-                  }}
+          {p ? (
+            <>
+              {final ? (
+                <FocusButton
+                  id="party-again"
+                  class="btn primary"
+                  style={{ fontSize: 17, padding: '10px 20px' }}
                 >
-                  {left}
-                </span>
-              </span>
-            ) : (
-              <Icon name="play" size={16} color="#111214" />
-            )}
-            Main lagi
-          </FocusButton>
-          <FocusButton id="change" class="btn">
-            Ganti game
-          </FocusButton>
-          <FocusButton id="done" class="btn">
-            Selesai
-          </FocusButton>
+                  <Icon name="restart" size={16} color="#111214" />
+                  {PARTY.again}
+                </FocusButton>
+              ) : (
+                <FocusButton
+                  id="next"
+                  class="btn primary"
+                  style={{ fontSize: 17, padding: '10px 20px 10px 12px' }}
+                >
+                  {countdown}
+                  {nextGame ? PARTY.next(GAMES[nextGame].title) : ''}
+                </FocusButton>
+              )}
+              <FocusButton id="done" class="btn">
+                {PARTY.done}
+              </FocusButton>
+            </>
+          ) : (
+            <>
+              <FocusButton
+                id="again"
+                class="btn primary"
+                style={{ fontSize: 17, padding: '10px 20px 10px 12px' }}
+              >
+                {countdown}
+                Main lagi
+              </FocusButton>
+              <FocusButton id="change" class="btn">
+                Ganti game
+              </FocusButton>
+              <FocusButton id="done" class="btn">
+                Selesai
+              </FocusButton>
+            </>
+          )}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
-          {auto
-            ? `Lanjut otomatis dalam ${left} detik · Host bisa memilih lain dari HP`
-            : 'Pilih langkah berikutnya'}
+          {p
+            ? final
+              ? PARTY.finalHint
+              : auto
+                ? PARTY.autoNext(left)
+                : p.index + 2 === p.lineup.length
+                  ? PARTY.doubleNext
+                  : 'Pilih langkah berikutnya'
+            : auto
+              ? `Lanjut otomatis dalam ${left} detik · Host bisa memilih lain dari HP`
+              : 'Pilih langkah berikutnya'}
         </div>
       </div>
+
+      {p && (
+        <div class={`party-table ${final ? 'is-final' : ''}`}>
+          <div class="party-table-head">
+            {final ? PARTY.finalEyebrow : PARTY.eyebrow(p.index + 1, p.lineup.length)}
+            {final && champions.length > 0 && (
+              <span class="party-champion">
+                {PARTY.champion(champions.map((c) => byId.get(c.playerId)?.name ?? 'Pemain').join(' & '))}
+              </span>
+            )}
+          </div>
+          <div class="party-table-rows">
+            {table.slice(0, 8).map((r) => {
+              const pl = byId.get(r.playerId);
+              return (
+                <div class={`party-row ${r.rank === 1 && r.points > 0 ? 'top' : ''}`} key={r.playerId}>
+                  <b>{r.rank}</b>
+                  {pl && <Avatar fruit={pl.fruit} ring={pl.color} size={26} />}
+                  <span class="party-name">{pl?.name ?? 'Pemain'}</span>
+                  <span class="party-points">{PARTY.points(r.points)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

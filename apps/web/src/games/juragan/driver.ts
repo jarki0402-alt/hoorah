@@ -1129,6 +1129,7 @@ export class JuraganDriver {
       place: tileName(i),
       from: LEVEL_NAME[s.level] ?? '',
       to: LEVEL_NAME[s.level + 1] ?? '',
+      toLevel: s.level + 1,
       rentNow: rentAt(L.tiles, i),
       rentNext: t.kind === 'city' ? cityRent(t, s.level + 1) * mult : 0,
       color: t.kind === 'city' ? GROUP_COLOR[t.group] : '#21344F',

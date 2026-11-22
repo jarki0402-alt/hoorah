@@ -73,6 +73,16 @@ export const STR = {
   offline: 'Terputus',
   swipeHelp: 'Usap HP: kiri atau kanan pindah jalur, atas lompat, bawah merunduk',
 
+  /* Network panel (`?diag=1` only) */
+  netTitle: 'JEDA HP KE LAYAR',
+  netLinkDirect: 'Sambungan: langsung (Wi-Fi sama)',
+  netLinkRelay: 'Sambungan: lewat server (relay)',
+  netLinkMixed: (direct: number, total: number) =>
+    `Sambungan: ${direct} dari ${total} HP langsung, sisanya relay`,
+  netLinkUnknown: 'Sambungan: tidak diketahui',
+  netNoInput: 'belum ada usapan',
+  netMs: (avg: number, last: number) => `${avg} ms (terakhir ${last})`,
+
   /* Phone */
   phoneTitle: (m: number) => `Jarak ${formatInt(m)} m`,
   phoneEyebrowSprint: (clock: string) => `SPRINT · ${clock}`,

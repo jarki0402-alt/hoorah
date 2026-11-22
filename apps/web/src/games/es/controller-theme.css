@@ -1,0 +1,40 @@
+/* Seluncur Es phone: a cold sea at dusk. Light text on deep blue water, panels edged in frost,
+   the slingshot pad an ice disc with the player's colour for the aim.
+   Imported by the controller app; only active while Seluncur Es runs. */
+
+html[data-game="es"] {
+  --t-bg: #0b2c3d;
+  --surface: #12384b;
+  --surface-2: #1c5468;
+  --surface-3: #082230;
+  --line: #2b6b82;
+  --t-panel: rgba(13, 50, 68, 0.94);
+  --t-panel-edge: #8ecfe3;
+  --t-eyebrow: #0b2c3d;
+  --t-eyebrow-bg: #bfe6f2;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #ffc928;
+  --t-good: #5be08f;
+  --t-track: #1c5468;
+  --t-strip-bg: rgba(13, 50, 68, 0.96);
+  --t-strip-text: #e1f2f8;
+  --t-strip-btn: #1c5468;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 10px;
+  --t-crown: #ffc928;
+}
+
+/* The floes along the bottom edge are part of the scene: keep the controls above them. */
+html[data-game="es"] .ctrl {
+  padding-bottom: max(calc(var(--pad-y) + min(30px, calc(var(--vh) * 4))), env(safe-area-inset-bottom));
+}
+
+html[data-game="es"] .sling-bg {
+  fill: #12384b;
+  stroke: rgba(191, 230, 242, 0.25);
+}
+
+html[data-game="es"] .sling-ice {
+  fill: rgba(238, 248, 252, 0.2);
+  stroke: #eef8fc;
+}

@@ -45,6 +45,20 @@ export interface FinishInfo {
   rows: { id: number; rank: number; value: string }[];
 }
 
+/** One person on the `?diag=1` panel: phone lag in ms (smoothed and last), null before input. */
+export interface NetRow {
+  id: number;
+  name: string;
+  avgMs: number | null;
+  lastMs: number | null;
+}
+
+/** The `?diag=1` panel: lag per person, and how many phones are on a direct link. */
+export interface NetDiag {
+  rows: NetRow[];
+  direct: number | null;
+}
+
 export class HudStore {
   readonly phase = signal<HudPhase>('intro');
   readonly mode = signal<Mode>('survive');
@@ -62,6 +76,8 @@ export class HudStore {
   readonly finish = signal<FinishInfo | null>(null);
   readonly help = signal(false);
   readonly paused = signal(false);
+  /** Only with `?diag=1`. */
+  readonly net = signal<NetDiag | null>(null);
   private readonly tags = new Map<number, HTMLElement>();
   private readonly tagState = new Map<number, string>();
   private key = 1;
@@ -173,6 +189,33 @@ function Board({ store }: { store: HudStore }) {
   );
 }
 
+/** `?diag=1` only: phone lag per person and the link type, to tell network lag from control feel. */
+function NetPanel({ net }: { net: NetDiag }) {
+  const people = net.rows.length;
+  const link =
+    net.direct === null
+      ? STR.netLinkUnknown
+      : net.direct <= 0
+        ? STR.netLinkRelay
+        : net.direct >= people
+          ? STR.netLinkDirect
+          : STR.netLinkMixed(net.direct, people);
+  return (
+    <div class="lr-net" aria-hidden="true">
+      <div class="lr-net-title">{STR.netTitle}</div>
+      <div class="lr-net-link">{link}</div>
+      {net.rows.map((r) => (
+        <div class="lr-net-row" key={r.id}>
+          <span class="lr-net-name">{r.name}</span>
+          <span class="lr-net-ms">
+            {r.avgMs === null ? STR.netNoInput : STR.netMs(r.avgMs, r.lastMs ?? r.avgMs)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Hud({ store }: { store: HudStore }) {
   const phase = store.phase.value;
   const count = store.count.value;
@@ -248,6 +291,8 @@ export function Hud({ store }: { store: HudStore }) {
       </div>
 
       {store.help.value && phase === 'run' && <div class="lr-help">{STR.swipeHelp}</div>}
+
+      {store.net.value && <NetPanel net={store.net.value} />}
 
       {finish && (
         <div class="lr-finish">

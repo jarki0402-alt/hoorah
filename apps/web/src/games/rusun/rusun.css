@@ -65,7 +65,7 @@
   transition: opacity 220ms var(--ease-out);
 }
 
-/* The hanging floor is swinging behind this card. */
+/* The hanging floor is sliding behind this card. */
 .rs-card.is-faded {
   opacity: 0.45;
 }

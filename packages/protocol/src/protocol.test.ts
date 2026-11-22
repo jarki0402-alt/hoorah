@@ -13,7 +13,21 @@ import {
   u16Delta,
   unpackStick,
 } from './input';
-import { CHESS_BOARD, CHESS_MOVE } from './messages';
+import {
+  CHESS_BOARD,
+  CHESS_MOVE,
+  encodeAim,
+  encodeArrowPress,
+  PAD_UP,
+  PEEK_WORD_MAX,
+  padHeart,
+  padRadar,
+  parseAim,
+  parseArrowPress,
+  peekWord,
+  RADAR_MAX,
+  thumbKey,
+} from './messages';
 import { generatePassCode, isPassCode, normalizePassCode } from './pass';
 import {
   formatRoomCode,
@@ -238,5 +252,108 @@ describe('Hoorah Pass codes and admin bodies', () => {
     expect(parseAdminPassUpdate({ maxRooms: null })).toEqual({ maxRooms: null });
     expect(parseAdminPassUpdate({})).toBeNull();
     expect(parseAdminPassUpdate({ revoked: 'ya' })).toBeNull();
+  });
+});
+
+describe('peek card word', () => {
+  it('keeps text only, trimmed and capped', () => {
+    expect(peekWord('  Kopi ')).toBe('Kopi');
+    expect(peekWord(42)).toBe('');
+    expect(peekWord(undefined)).toBe('');
+    expect(peekWord('a\u0000b')).toBe('ab');
+    expect(peekWord('x'.repeat(100))).toHaveLength(PEEK_WORD_MAX);
+  });
+});
+
+describe('secret map and heartbeat', () => {
+  it('keeps a valid radar and clamps positions into the map', () => {
+    const r = padRadar({
+      grid: ['####', '#.D#', '####'],
+      me: { x: 9, y: -2 },
+      people: [
+        { x: 1.5, y: 1.5, c: '#2F8CFF' },
+        { x: 2, y: 1, c: 'red' },
+        { x: 1, y: 1, c: '#FFC928', f: true },
+      ],
+      marks: [
+        { x: 1, y: 1, k: 'fuse', p: 4 },
+        { x: 2, y: 2, k: 'bomb' },
+        { x: 3, y: 1, k: 'exit', on: true },
+      ],
+      lit: true,
+    });
+    expect(r).not.toBeNull();
+    expect(r?.me).toEqual({ x: 4, y: 0 });
+    expect(r?.people).toEqual([
+      { x: 1.5, y: 1.5, c: '#2F8CFF' },
+      { x: 1, y: 1, c: '#FFC928', f: true },
+    ]);
+    expect(r?.marks).toEqual([
+      { x: 1, y: 1, k: 'fuse', p: 1 },
+      { x: 3, y: 1, k: 'exit', on: true },
+    ]);
+    expect(r?.lit).toBe(true);
+  });
+
+  it('drops unknown cells, oversized maps and broken input', () => {
+    expect(padRadar(null)).toBeNull();
+    expect(padRadar({ grid: [], me: { x: 0, y: 0 } })).toBeNull();
+    expect(padRadar({ grid: ['<script>'], me: { x: 0, y: 0 } })).toBeNull();
+    expect(padRadar({ grid: ['##'], me: { x: Number.NaN, y: 0 } })).toBeNull();
+    const big = padRadar({ grid: Array.from({ length: 60 }, () => '.'.repeat(90)), me: { x: 1, y: 1 } });
+    expect(big?.grid).toHaveLength(RADAR_MAX.rows);
+    expect(big?.grid[0]).toHaveLength(RADAR_MAX.cols);
+    expect(padHeart(0.4)).toBe(0.4);
+    expect(padHeart(7)).toBe(1);
+    expect(padHeart('x')).toBe(0);
+  });
+});
+
+describe('option picture key', () => {
+  it('accepts short lowercase ids only', () => {
+    expect(thumbKey('kota')).toBe('kota');
+    expect(thumbKey('mode-balap-2')).toBe('mode-balap-2');
+    expect(thumbKey('')).toBeNull();
+    expect(thumbKey('-x')).toBeNull();
+    expect(thumbKey('Kota')).toBeNull();
+    expect(thumbKey('../x')).toBeNull();
+    expect(thumbKey('<svg>')).toBeNull();
+    expect(thumbKey('a'.repeat(33))).toBeNull();
+    expect(thumbKey(7)).toBeNull();
+  });
+});
+
+describe('sling aim', () => {
+  it('round-trips in whole hundredths', () => {
+    expect(encodeAim({ x: -0.354, y: 0.7 })).toBe('-35,70');
+    expect(parseAim('-35,70')).toEqual({ x: -0.35, y: 0.7 });
+    expect(parseAim(encodeAim({ x: 0, y: 0 }))).toEqual({ x: 0, y: 0 });
+  });
+
+  it('clamps the power to the unit disc', () => {
+    const a = parseAim('100,100')!;
+    expect(Math.hypot(a.x, a.y)).toBeCloseTo(1, 6);
+    expect(encodeAim({ x: 3, y: 4 })).toBe('60,80');
+    expect(encodeAim({ x: Number.NaN, y: 0.5 })).toBe('0,50');
+  });
+
+  it('rejects malformed or out-of-range values', () => {
+    for (const bad of [undefined, 42, '', '1', '1,2,3', '101,0', '0,-101', 'a,b', ' 1,2', '1.5,2', '-0001,2'])
+      expect(parseAim(bad)).toBeNull();
+  });
+});
+
+describe('reliable arrow presses', () => {
+  it('round-trips a direction bit and the tap counter', () => {
+    expect(parseArrowPress(encodeArrowPress(PAD_UP, 70000))).toEqual({
+      bit: PAD_UP,
+      counter: 70000 & 0xffff,
+    });
+    expect(parseArrowPress('8:42')).toEqual({ bit: 8, counter: 42 });
+  });
+
+  it('rejects anything but one direction bit and a u16 counter', () => {
+    for (const bad of [undefined, 3, '', '3:1', '16:1', '4:65536', '4:-1', '4:1:2', 'a:b', ' 4:1'])
+      expect(parseArrowPress(bad)).toBeNull();
   });
 });

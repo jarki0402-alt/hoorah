@@ -1,0 +1,78 @@
+/* Obby phone: the toy island course on a sunny day. Dark text on bright sky, white panels edged in
+   toy blue, the stick zone is a sheet of baseplate studs and the stick base a round toy plate.
+   Imported by the controller app; only active while Obby runs. */
+
+html[data-game="obby"] {
+  --t-bg: #bfe6ff;
+  --text: #111214;
+  --text-2: #1d3550;
+  --text-3: #4a6680;
+  --surface: #ffffff;
+  --surface-2: #e4f3ff;
+  --surface-3: #2f8cff;
+  --line: #2f8cff;
+  --t-panel: rgba(255, 255, 255, 0.92);
+  --t-panel-edge: #2f8cff;
+  --t-eyebrow: #ffffff;
+  --t-eyebrow-bg: #2f8cff;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #1767c9;
+  --t-good: #13703a;
+  --t-track: #e4f3ff;
+  --t-strip-bg: #2f8cff;
+  --t-strip-text: #ffffff;
+  --t-strip-btn: #1767c9;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 10px;
+  --t-crown: #c99a12;
+}
+
+/* The sea along the bottom edge is part of the scene: keep the controls above it. */
+html[data-game="obby"] .ctrl {
+  padding-bottom: max(calc(var(--pad-y) + min(24px, calc(var(--vh) * 3))), env(safe-area-inset-bottom));
+}
+
+/* Stick zone: a white baseplate with toy studs. */
+html[data-game="obby"] .pad-stick-zone {
+  background-color: rgba(255, 255, 255, 0.9);
+  background-image: radial-gradient(circle, rgba(47, 140, 255, 0.16) 0 5px, transparent 6px);
+  background-size: 26px 26px;
+  box-shadow:
+    inset 0 0 0 3px #2f8cff,
+    0 6px 0 #1767c9;
+}
+
+/* Stick base: a round yellow toy plate with studs. */
+html[data-game="obby"] .pad-stick {
+  background-color: #ffc928;
+  background-image: radial-gradient(circle, rgba(201, 154, 18, 0.55) 0 4px, transparent 5px);
+  background-size: 24px 24px;
+  box-shadow:
+    inset 0 0 0 4px #c99a12,
+    0 6px 0 #c99a12;
+}
+
+html[data-game="obby"] .pad-stick-tick {
+  color: #8a6400;
+  opacity: 0.75;
+}
+
+html[data-game="obby"] .pad-stick-knob {
+  box-shadow:
+    inset 0 -7px 0 rgba(17, 18, 20, 0.28),
+    inset 0 4px 0 rgba(255, 255, 255, 0.35),
+    0 6px 0 #1d3550;
+}
+
+/* LOMPAT: a big red toy spring button. */
+html[data-game="obby"] .pad-btn.tone-yellow {
+  background: #f2453d;
+  color: #ffffff;
+  box-shadow:
+    inset 0 -6px 0 rgba(0, 0, 0, 0.18),
+    0 7px 0 #a8261f;
+}
+
+html[data-game="obby"] .pad-btn.pressed {
+  box-shadow: 0 2px 0 #a8261f;
+}

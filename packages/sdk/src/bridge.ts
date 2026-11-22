@@ -5,6 +5,136 @@ export const BRIDGE_TAG = 'hoorah/1';
 
 export type GameIcon = 'zap' | 'fire' | 'heart' | 'star' | 'crown' | 'target' | 'brain' | 'build';
 
+/**
+ * How busy the adaptive music is: 0 = base layer only (calm), 3 = every layer (climax).
+ * Song channels with `tier: n` sound while n <= intensity; channels without a tier always sound.
+ */
+export type MusicIntensity = 0 | 1 | 2 | 3;
+
+/**
+ * Sound effects the shell synthesizes (Web Audio, no files). Unknown names play nothing.
+ * Announcement sounds (`weker`, `gong`, `rooster`, `bell`, `flute`, `round`, `stinger-win`,
+ * `stinger-fall`) briefly duck the music so they read clearly from the sofa.
+ */
+export type SfxName =
+  // Interface and shared
+  | 'tick'
+  | 'tock'
+  | 'select'
+  | 'back'
+  | 'join'
+  | 'leave'
+  | 'correct'
+  | 'wrong'
+  | 'count'
+  | 'go'
+  | 'drop'
+  | 'perfect'
+  | 'collapse'
+  | 'pull'
+  | 'super'
+  | 'cheer'
+  | 'clap'
+  | 'boo'
+  | 'win'
+  | 'whistle'
+  | 'tension'
+  | 'reveal'
+  | 'ready'
+  // Announcements and stingers
+  | 'weker'
+  | 'gong'
+  | 'rooster'
+  | 'growl'
+  | 'bell'
+  | 'flute'
+  | 'round'
+  | 'stinger-win'
+  | 'stinger-fall'
+  // Racing and action
+  | 'engine'
+  | 'boost'
+  | 'item'
+  | 'hit'
+  | 'horn'
+  | 'lap'
+  | 'skid'
+  | 'throw'
+  | 'explode'
+  | 'jump'
+  | 'brake'
+  | 'reverse'
+  // Kitchen
+  | 'chop'
+  | 'sizzle'
+  | 'stir'
+  | 'flip'
+  | 'ding'
+  | 'pour'
+  | 'splash';
+
+const SFX_NAMES: ReadonlySet<string> = new Set<SfxName>([
+  'tick',
+  'tock',
+  'select',
+  'back',
+  'join',
+  'leave',
+  'correct',
+  'wrong',
+  'count',
+  'go',
+  'drop',
+  'perfect',
+  'collapse',
+  'pull',
+  'super',
+  'cheer',
+  'clap',
+  'boo',
+  'win',
+  'whistle',
+  'tension',
+  'reveal',
+  'ready',
+  'weker',
+  'gong',
+  'rooster',
+  'growl',
+  'bell',
+  'flute',
+  'round',
+  'stinger-win',
+  'stinger-fall',
+  'engine',
+  'boost',
+  'item',
+  'hit',
+  'horn',
+  'lap',
+  'skid',
+  'throw',
+  'explode',
+  'jump',
+  'brake',
+  'reverse',
+  'chop',
+  'sizzle',
+  'stir',
+  'flip',
+  'ding',
+  'pour',
+  'splash',
+]);
+
+export function isSfxName(name: unknown): name is SfxName {
+  return typeof name === 'string' && SFX_NAMES.has(name);
+}
+
+export function isMusicIntensity(level: unknown): level is MusicIntensity {
+  return level === 0 || level === 1 || level === 2 || level === 3;
+}
+
 export interface GameAward {
   playerId: number;
   title: string;
@@ -52,6 +182,8 @@ export type GameToShell =
   | { tag: typeof BRIDGE_TAG; type: 'end'; result: GameResult }
   | { tag: typeof BRIDGE_TAG; type: 'sfx'; name: string }
   | { tag: typeof BRIDGE_TAG; type: 'music'; track: string | null }
+  | { tag: typeof BRIDGE_TAG; type: 'musicIntensity'; level: MusicIntensity }
+  | { tag: typeof BRIDGE_TAG; type: 'musicHurry'; on: boolean }
   | { tag: typeof BRIDGE_TAG; type: 'quit' };
 
 export function isBridgeMessage<T extends { tag: string }>(data: unknown): data is T {

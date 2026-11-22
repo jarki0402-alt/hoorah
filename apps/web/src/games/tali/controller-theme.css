@@ -1,0 +1,74 @@
+/* Satu Tali phone: dusk cliffs. Dark text on a warm sky, cream panels edged in rope yellow; the
+   stick base is a round rock plate, LOMPAT a big yellow button and PEGANG an orange grip.
+   Imported by the controller app; only active while Satu Tali runs. */
+
+html[data-game="tali"] {
+  --t-bg: #ffb98a;
+  --text: #111214;
+  --text-2: #4a2a18;
+  --text-3: #7a4a2e;
+  --surface: #fff7f0;
+  --surface-2: #ffe7d4;
+  --surface-3: #c9794b;
+  --line: #c9794b;
+  --t-panel: rgba(255, 247, 240, 0.92);
+  --t-panel-edge: #e0a800;
+  --t-eyebrow: #111214;
+  --t-eyebrow-bg: #ffc928;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #a8461f;
+  --t-good: #13703a;
+  --t-track: #ffe7d4;
+  --t-strip-bg: #8c4f33;
+  --t-strip-text: #fff7f0;
+  --t-strip-btn: #b4663e;
+  --t-strip-btn-text: #fff7f0;
+  --t-strip-edge-h: 10px;
+  --t-crown: #e0a800;
+}
+
+/* The ledges along the bottom edge are part of the scene: keep the controls above them. */
+html[data-game="tali"] .ctrl {
+  padding-bottom: max(calc(var(--pad-y) + min(26px, calc(var(--vh) * 3.4))), env(safe-area-inset-bottom));
+}
+
+html[data-game="tali"] .pad-stick {
+  background-color: rgba(201, 121, 75, 0.85);
+  box-shadow:
+    inset 0 0 0 4px #8c4f33,
+    0 6px 0 rgba(140, 79, 51, 0.6);
+}
+
+html[data-game="tali"] .pad-stick-tick {
+  color: #fff7f0;
+  opacity: 0.7;
+}
+
+html[data-game="tali"] .pad-stick-knob {
+  box-shadow:
+    inset 0 -7px 0 rgba(17, 18, 20, 0.28),
+    inset 0 4px 0 rgba(255, 255, 255, 0.35),
+    0 6px 0 #4a2a18;
+}
+
+/* LOMPAT: rope yellow. */
+html[data-game="tali"] .pad-btn.tone-yellow {
+  background: #ffc928;
+  color: #111214;
+  box-shadow:
+    inset 0 -6px 0 rgba(0, 0, 0, 0.14),
+    0 7px 0 #b38600;
+}
+
+/* PEGANG: a warm orange grip. */
+html[data-game="tali"] .pad-btn.tone-orange {
+  background: #ff8a3d;
+  color: #111214;
+  box-shadow:
+    inset 0 -6px 0 rgba(0, 0, 0, 0.16),
+    0 7px 0 #a8461f;
+}
+
+html[data-game="tali"] .pad-btn.pressed {
+  box-shadow: 0 2px 0 #8c4f33;
+}

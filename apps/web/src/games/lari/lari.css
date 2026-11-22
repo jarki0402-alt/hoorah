@@ -578,3 +578,39 @@
     translate: 0 -20px;
   }
 }
+
+/* `?diag=1` only: phone lag and link type. */
+.lr-net {
+  position: absolute;
+  left: 22px;
+  bottom: 22px;
+  min-width: 220px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(17, 18, 20, 0.82);
+  box-shadow: inset 0 0 0 2px rgba(255, 247, 240, 0.1);
+  font-size: 14px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+.lr-net-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--yellow);
+}
+.lr-net-link {
+  margin-bottom: 4px;
+  color: rgba(255, 247, 240, 0.8);
+}
+.lr-net-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+.lr-net-name {
+  font-weight: 700;
+}
+.lr-net-ms {
+  font-variant-numeric: tabular-nums;
+}

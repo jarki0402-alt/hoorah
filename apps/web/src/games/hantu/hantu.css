@@ -1,0 +1,394 @@
+/* Hantu Tak Terlihat: HUD over the dark house (stage px, 1280x720 core). Warm candle text on
+   near-black glass, red only for danger. */
+
+.ht-world,
+.ht-hud-host {
+  position: absolute;
+  inset: 0;
+}
+
+.ht-world canvas {
+  display: block;
+}
+
+.ht-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--font-ui);
+  color: #f3e6c8;
+}
+
+.ht-top {
+  position: absolute;
+  left: 50%;
+  top: max(6px, calc(50% - 360px - 50px));
+  width: 1256px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ht-pill,
+.ht-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  background: rgba(16, 18, 20, 0.86);
+  box-shadow: inset 0 0 0 2px #3a2416;
+  white-space: nowrap;
+}
+
+.ht-place-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffe7a8;
+}
+
+.ht-place-fright {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #c08d3e;
+}
+
+.ht-goal {
+  display: flex;
+  gap: 8px;
+}
+
+.ht-chip {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ht-chip.on {
+  background: #ffc928;
+  color: #101214;
+}
+
+.ht-chip.exit {
+  background: #22b35e;
+  color: #fff;
+  animation: ht-pulse 0.8s ease-in-out infinite alternate;
+}
+
+.ht-safe {
+  font-size: 15px;
+  font-weight: 800;
+  color: #a6f4e6;
+}
+
+.ht-time {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.ht-time.urgent {
+  color: #ff6b57;
+}
+
+.ht-callout {
+  position: absolute;
+  left: 50%;
+  top: max(58px, calc(50% - 360px + 8px));
+  transform: translateX(-50%);
+  padding: 8px 22px;
+  border-radius: 18px;
+  background: #ff4d3d;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35);
+  animation: ht-call 2s ease-out forwards;
+}
+
+.ht-feed {
+  position: absolute;
+  left: max(12px, calc(50% - 628px));
+  bottom: max(10px, calc(50% - 360px - 46px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ht-feed-line {
+  padding: 6px 14px;
+  border-radius: 14px;
+  background: rgba(16, 18, 20, 0.86);
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffe7a8;
+  animation: ht-in 0.3s ease-out both;
+}
+
+/* Centre cards */
+.ht-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(5, 6, 8, 0.72);
+  animation: ht-fade 0.35s ease-out both;
+}
+
+.ht-eyebrow {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c08d3e;
+}
+
+.ht-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1.05;
+  color: #fff;
+  text-align: center;
+}
+
+.ht-whisper {
+  color: #a6f4e6;
+  animation: ht-whisper 2.4s ease-in-out infinite alternate;
+}
+
+.ht-cards {
+  display: flex;
+  gap: 24px;
+}
+
+.ht-card {
+  width: 340px;
+  padding-bottom: 14px;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #101214;
+  box-shadow:
+    inset 0 0 0 3px #3a2416,
+    0 8px 0 rgba(0, 0, 0, 0.35);
+  text-align: center;
+  transition: transform 0.18s ease;
+}
+
+.ht-card.on {
+  transform: translateY(-6px) scale(1.04);
+  box-shadow:
+    inset 0 0 0 4px #ffc928,
+    0 12px 0 rgba(0, 0, 0, 0.4);
+}
+
+.ht-card-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.ht-card-name {
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ht-card-sub {
+  margin: 4px 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.ht-foot {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffe7a8;
+}
+
+.ht-faces {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px 26px;
+  max-width: 1000px;
+}
+
+.ht-face {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.ht-q {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #ff4d3d;
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.ht-face-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.ht-end {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(760px, 92%);
+  padding: 24px 30px;
+  border-radius: 28px;
+  background: rgba(16, 18, 20, 0.96);
+  box-shadow: inset 0 0 0 3px #a6f4e6;
+  animation: ht-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.ht-end.bad {
+  box-shadow: inset 0 0 0 3px #ff4d3d;
+}
+
+.ht-end-sub {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ht-end-ghost {
+  font-size: 18px;
+  font-weight: 700;
+  color: #a6f4e6;
+}
+
+.ht-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 6px 0;
+}
+
+.ht-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ht-row-name {
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ht-row-note {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ht-row-pts {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: #ffc928;
+}
+
+.ht-paused-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 6, 8, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ht-paused .ht-paused-veil {
+  opacity: 1;
+}
+
+@keyframes ht-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ht-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+@keyframes ht-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes ht-pulse {
+  to {
+    filter: brightness(1.25);
+  }
+}
+
+@keyframes ht-whisper {
+  from {
+    opacity: 0.65;
+    letter-spacing: 0;
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.02em;
+  }
+}
+
+@keyframes ht-call {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.9);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.05);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(1);
+  }
+}

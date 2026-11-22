@@ -10,19 +10,18 @@ describe('game list tabs', () => {
   });
 
   it('"Pas untuk kalian" lists playable games for the player count, recent first', () => {
-    const two = gamesForTab('fit', 2, ['ludo', 'nope', 'gambar']);
+    const two = gamesForTab('fit', 2, ['ludo', 'nope', 'penyusup']);
     expect(two[0]).toBe('ludo');
-    expect(two).not.toContain('gambar'); // 3+ players and not available yet
+    expect(two).not.toContain('penyusup'); // needs 3 players
     expect(two.every((id) => GAMES[id].available)).toBe(true);
     expect(new Set(two).size).toBe(two.length);
     expect(gamesForTab('fit', 1)).not.toContain('kompak'); // needs 2
     expect(gamesForTab('fit', 0)).toEqual(gamesForTab('fit', 1));
   });
 
-  it('a category lists its games in catalog order; teasers only when asked', () => {
+  it('a category lists its games in catalog order, all playable', () => {
     expect(gamesForTab('papan', 2)).toEqual(['ular', 'congklak', 'ludo', 'catur', 'juragan']);
-    expect(gamesForTab('kuis', 2)).not.toContain('gambar');
-    expect(gamesForTab('kuis', 2, [], true)).toContain('gambar');
+    for (const id of CATALOG) expect(GAMES[id].available).toBe(true);
   });
 
   it('every game has a mood with a label, and no text mentions a length in minutes', () => {

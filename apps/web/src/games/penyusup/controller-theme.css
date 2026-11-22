@@ -1,0 +1,40 @@
+/* ---------------------------------------------------------------- penyusup: black poster stage
+   Black stage under a yellow spotlight, like the main screen. The secret card is a cream poster
+   card edged in yellow; its back is a dark striped card with a big yellow question mark.
+   Contrast checked for small text on the stage (#0a0a0b) and panels (#18181a). */
+
+html[data-game="penyusup"] {
+  --t-bg: #0a0a0b;
+  --surface: #18181a;
+  --surface-2: #222225;
+  --surface-3: #000000;
+  --line: #3a3a3e;
+  --text-2: #e4e4e8;
+  --text-3: #a0a0a6;
+  --t-panel: #18181a;
+  --t-panel-edge: #2e2e30;
+  --t-eyebrow: #ffc928;
+  --t-accent-text: #ffc928;
+  --t-good: #4ed98a;
+  --t-track: #2a2a2d;
+  --t-strip-bg: #ffc928;
+  --t-strip-text: #0a0a0b;
+  --t-strip-btn: #0a0a0b;
+  --t-strip-btn-text: #ffffff;
+  --t-crown: #ffc928;
+  --t-peek-back: #18181a;
+  --t-peek-edge: #ffc928;
+  --t-peek-mark: #ffc928;
+  --t-peek-face: #fff7dc;
+  --t-peek-face-edge: #ffc928;
+  --t-peek-blank: #0e8a93;
+}
+
+html[data-game="penyusup"] .peek-title,
+html[data-game="penyusup"] .menu-title {
+  letter-spacing: 0.01em;
+}
+
+html[data-game="penyusup"] .peek-word {
+  letter-spacing: -0.01em;
+}

@@ -142,6 +142,12 @@ export function viewKey(v: ControllerView): string {
     case 'word':
       // A new turn (or a refused word) starts with an empty input.
       return `word|${v.turn}`;
+    case 'peek':
+      // A new deal turns the card face down; turns and timers update it in place.
+      return `peek|${v.deal}`;
+    case 'sling':
+      // A new shot drops the local aim; lock counts and timers update it in place.
+      return `sling|${v.shot}`;
   }
 }
 
@@ -338,7 +344,9 @@ export function RoomView() {
   }, [pg.paused, inGame]);
   const hostMenu = isHost && inGame && (pg.paused || hostOpening);
   const menuOpen = hostMenu || playerMenu;
-  const showPill = inGame && !menuOpen;
+  // A dark night screen (Kampung Siluman) shows nothing lit, not even the menu pill.
+  const nightDark = v?.kind === 'message' && v.dark === true;
+  const showPill = inGame && !menuOpen && !nightDark;
   // The pill sits at the top centre, above the game controls, never on top of them.
   useEffect(() => {
     document.documentElement.classList.toggle('has-pill', showPill);

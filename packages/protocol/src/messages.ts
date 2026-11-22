@@ -248,6 +248,29 @@ export const PAD_ACTION = 16;
 export const PAD_DIRS = PAD_LEFT | PAD_RIGHT | PAD_UP | PAD_DOWN;
 
 /**
+ * `dpad` with `reliable`: every arrow press also goes over the reliable game channel as
+ * `action(PAD_ARROW_ACTION, encodeArrowPress(bit, taps))`, carrying the same `taps` counter as its
+ * fast frame and the phone's press time (`at`). The game takes whichever arrives first and drops
+ * the other, so a lost fast frame never loses a step.
+ */
+export const PAD_ARROW_ACTION = 'arrow';
+
+export function encodeArrowPress(bit: number, counter: number): string {
+  return `${bit}:${counter & 0xffff}`;
+}
+
+/** An arrow press action value as the game may trust it (one direction bit, a u16 counter). */
+export function parseArrowPress(raw: unknown): { bit: number; counter: number } | null {
+  if (typeof raw !== 'string') return null;
+  const m = /^(\d{1,2}):(\d{1,5})$/.exec(raw);
+  if (!m) return null;
+  const bit = Number(m[1]);
+  const counter = Number(m[2]);
+  if (![PAD_LEFT, PAD_RIGHT, PAD_UP, PAD_DOWN].includes(bit) || counter > 0xffff) return null;
+  return { bit, counter };
+}
+
+/**
  * A right-thumb button of the `pad` view in `stick` mode (up to 3).
  * - `tap`: every press sends `action(id)` over the reliable game channel (never lost).
  * - `hold`: PAD_ACTION in INPUT_OP frames while pressed (at most one per view), e.g. chop.
@@ -262,8 +285,25 @@ export interface PadButton {
   press: 'tap' | 'hold';
   /** The main button is drawn larger and sits nearest the thumb. */
   big?: boolean;
+  /**
+   * `tap` only: after a press the button rests this long (ms, at most 10000) and shows a ring
+   * filling back up; presses during the rest are ignored on the phone. The game still enforces it.
+   */
+  cooldownMs?: number;
 }
-export type PadButtonIcon = 'hand' | 'knife' | 'throw' | 'zap';
+export type PadButtonIcon =
+  | 'hand'
+  | 'knife'
+  | 'throw'
+  | 'zap'
+  | 'jump'
+  | 'push'
+  | 'swap'
+  | 'restart'
+  | 'run'
+  | 'light'
+  | 'dark'
+  | 'door';
 
 export type DriveItemIcon = 'boost' | 'oil' | 'horn' | 'shield' | 'durian' | 'firecracker' | 'box';
 export type GestureIcon = 'knife' | 'spoon' | 'pan' | 'hand' | 'fire' | 'shaker' | 'pestle' | 'roll';
@@ -279,6 +319,21 @@ export interface MenuOption {
   /** Small tag, e.g. who already took this colour. */
   badge?: string;
   disabled?: boolean;
+  /**
+   * Picture of the option: a key into the game's thumbnail set (`controller/thumbs/<gameId>.ts`),
+   * see `thumbKey`. Unknown or invalid keys fall back to the plain text option.
+   */
+  thumb?: string;
+  /** Picture of the option: this player's avatar (e.g. choosing a player at night). */
+  avatarOf?: number;
+}
+
+/** Valid `thumb` keys: short lowercase ids, so a key can never smuggle markup or a URL. */
+export const THUMB_KEY = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+/** The `thumb` of an option as the phone may use it, or null when absent or invalid. */
+export function thumbKey(raw: unknown): string | null {
+  return typeof raw === 'string' && THUMB_KEY.test(raw) ? raw : null;
 }
 
 /** One side of a `chess` view: who plays it (a player, or a whole team in team mode). */
@@ -312,6 +367,152 @@ export const CHESS_BOARD = /^[pnbrqkPNBRQK.]{64}$/;
 /** A move in UCI form: from, to, optional promotion piece ("e2e4", "e7e8q"). */
 export const CHESS_MOVE = /^[a-h][1-8][a-h][1-8][qrbn]?$/;
 
+/** Cells of a `PadRadar` row. */
+export type RadarCell = '#' | '.' | 'o' | 'D' | 'd' | 'X' | 'x' | 'T' | 'F';
+
+/**
+ * The secret map of a `pad` view. `grid` rows use: `#` wall, `.` floor, `o` furniture, `D` closed
+ * door, `d` open door, `X` locked exit, `x` open exit, `T` tree, `F` fuse box. Positions are in
+ * cells (fractions allowed), (0, 0) the top-left corner of the map.
+ */
+export interface PadRadar {
+  grid: string[];
+  /** The phone's own position. */
+  me: { x: number; y: number };
+  /** Everyone else: colour, and `f` when they only drift around (no longer a target). */
+  people: { x: number; y: number; c: string; f?: boolean }[];
+  /** Objectives; `p` is the fuse's progress 0..1, `on` an open exit or a powered fuse. */
+  marks: { x: number; y: number; k: 'key' | 'fuse' | 'exit'; p?: number; on?: boolean }[];
+  /** The phone's owner is lit right now (drawn as a warning). */
+  lit?: boolean;
+}
+
+export const RADAR_MAX = { rows: 24, cols: 40, people: 16, marks: 24 } as const;
+const RADAR_ROW = /^[#.oDdXxTF]*$/;
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+function radarNum(v: unknown, max: number): number | null {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  return Math.max(0, Math.min(max, v));
+}
+
+/**
+ * A `PadRadar` as the phone may draw it, or null when it is unusable: rows trimmed to the limits
+ * and to known cells, positions clamped inside the map, unknown people and marks dropped.
+ */
+export function padRadar(raw: unknown): PadRadar | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r.grid) || r.grid.length === 0) return null;
+  const grid = r.grid
+    .slice(0, RADAR_MAX.rows)
+    .map((row) => (typeof row === 'string' && RADAR_ROW.test(row) ? row.slice(0, RADAR_MAX.cols) : ''));
+  const cols = Math.max(...grid.map((g) => g.length));
+  if (cols === 0) return null;
+  const rows = grid.length;
+  const at = (p: unknown): { x: number; y: number } | null => {
+    if (!p || typeof p !== 'object') return null;
+    const q = p as Record<string, unknown>;
+    const x = radarNum(q.x, cols);
+    const y = radarNum(q.y, rows);
+    return x === null || y === null ? null : { x, y };
+  };
+  const me = at(r.me);
+  if (!me) return null;
+  const people: PadRadar['people'] = [];
+  for (const p of Array.isArray(r.people) ? r.people.slice(0, RADAR_MAX.people) : []) {
+    const pos = at(p);
+    const c = (p as Record<string, unknown>)?.c;
+    if (!pos || typeof c !== 'string' || !HEX_COLOR.test(c)) continue;
+    people.push({ ...pos, c, ...((p as Record<string, unknown>).f === true ? { f: true } : {}) });
+  }
+  const marks: PadRadar['marks'] = [];
+  for (const m of Array.isArray(r.marks) ? r.marks.slice(0, RADAR_MAX.marks) : []) {
+    const pos = at(m);
+    const q = (m ?? {}) as Record<string, unknown>;
+    if (!pos || (q.k !== 'key' && q.k !== 'fuse' && q.k !== 'exit')) continue;
+    const p = radarNum(q.p, 1);
+    marks.push({ ...pos, k: q.k, ...(p !== null ? { p } : {}), ...(q.on === true ? { on: true } : {}) });
+  }
+  return { grid, me, people, marks, ...(r.lit === true ? { lit: true } : {}) };
+}
+
+/** The `heart` of a `pad` view as a level 0..1 (anything unusable reads as calm). */
+export function padHeart(raw: unknown): number {
+  return typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 0;
+}
+
+/** Longest secret a `peek` card shows; longer or non-text values are cut down by `peekWord`. */
+export const PEEK_WORD_MAX = 24;
+
+/** The secret of a `peek` view as the phone may show it: text only, trimmed, at most PEEK_WORD_MAX. */
+export function peekWord(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control characters is the point.
+  return Array.from(raw.replace(/[\u0000-\u001f\u007f]/g, '').trim())
+    .slice(0, PEEK_WORD_MAX)
+    .join('');
+}
+
+/**
+ * Slingshot aim of a `sling` view: the launch vector (x right, y down on the phone and on the
+ * main screen's top view), its length 0..1 being the power. Sent as `action('aim', "x,y")` with
+ * whole hundredths, e.g. "-35,-70".
+ */
+export interface SlingAim {
+  x: number;
+  y: number;
+}
+
+/** Shorter aims are treated as "no aim" (a tap, or a drag let go near the avatar). */
+export const SLING_MIN_POWER = 0.12;
+
+const SLING_AIM = /^(-?\d{1,3}),(-?\d{1,3})$/;
+
+function clampAim(x: number, y: number): SlingAim {
+  const len = Math.hypot(x, y);
+  return len > 1 ? { x: x / len, y: y / len } : { x, y };
+}
+
+/** The wire form of an aim (clamped to the unit disc, whole hundredths). */
+export function encodeAim(aim: SlingAim): string {
+  const a = clampAim(Number.isFinite(aim.x) ? aim.x : 0, Number.isFinite(aim.y) ? aim.y : 0);
+  const k = (v: number) => Math.max(-100, Math.min(100, Math.round(v * 100))) || 0;
+  return `${k(a.x)},${k(a.y)}`;
+}
+
+/** An `aim` action value as the game may trust it: null when malformed or out of range. */
+export function parseAim(raw: unknown): SlingAim | null {
+  if (typeof raw !== 'string') return null;
+  const m = SLING_AIM.exec(raw);
+  if (!m) return null;
+  const x = Number(m[1]);
+  const y = Number(m[2]);
+  if (Math.abs(x) > 100 || Math.abs(y) > 100) return null;
+  return clampAim(x / 100, y / 100);
+}
+
+/** One contestant on a `sling` view's radar (world units, relative to the arena centre). */
+export interface SlingDot {
+  id: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Radar of a `sling` view: the arena around the player, so the phone can show where a pull sends
+ * them. `reach` is how far a full-power launch slides (power² × reach, without collisions).
+ */
+export interface SlingMap {
+  /** Arena radius now. */
+  edge: number;
+  /** Arena radius after this shot (the cracked rim breaks off), if it shrinks. */
+  next?: number;
+  reach: number;
+  me: { x: number; y: number };
+  others: SlingDot[];
+}
+
 /**
  * A computer opponent (negative id) that a view mentions. Phones only know room players, so a view
  * that shows an opponent's avatar lists it here to draw its fruit and colour (PRD 6.4).
@@ -327,6 +528,11 @@ export interface GuestPlayer {
 export type ControllerView = ControllerViewBody & {
   /** Computer opponents mentioned by ids in this view (avatars), see `GuestPlayer`. */
   guests?: GuestPlayer[];
+  /**
+   * No vibration while this view is shown, not even tap feedback (secret night turns, where a
+   * buzzing phone would give away who is awake).
+   */
+  silent?: boolean;
 };
 
 type ControllerViewBody =
@@ -344,6 +550,8 @@ type ControllerViewBody =
        * shown as bubbles with the player's fruit on the main screen. The game never sees them.
        */
       reactions?: boolean;
+      /** Eyes closed: a near-black screen with dim text and no avatar (nothing to glance at). */
+      dark?: boolean;
     }
   | {
       kind: 'choice';
@@ -352,7 +560,8 @@ type ControllerViewBody =
       progress?: { done: number; total: number };
       deadline?: number;
       streak?: number;
-      options: { id: string; label: string; color: string; dark: string }[];
+      /** `thumb`: picture key, as in `MenuOption.thumb`. */
+      options: { id: string; label: string; color: string; dark: string; thumb?: string }[];
     }
   | {
       kind: 'locked';
@@ -403,7 +612,10 @@ type ControllerViewBody =
       eyebrow?: string;
       title: string;
       hint?: string;
-      /** `list`: rows with a second line. `swatch`: colour tiles in a grid. */
+      /**
+       * `list`: rows with a second line. `swatch`: colour tiles in a grid. Unset: rows, or picture
+       * tiles when every option has a `thumb` (an explicit `list` keeps rows, pictures on the left).
+       */
       layout?: 'list' | 'swatch';
       options: MenuOption[];
       selected?: string;
@@ -500,6 +712,10 @@ type ControllerViewBody =
       stats?: ViewStat[];
       /** Label of the action button (steer) or of a tap (swipe), e.g. "NGEBUT". Absent = no action. */
       actionLabel?: string;
+      /** `swipe` mode: false hides the arrow buttons, the swipe zone then takes the whole pad. */
+      keys?: boolean;
+      /** `swipe` mode: what a tap sends, PAD_ACTION (default, needs `actionLabel`) or PAD_UP. */
+      tapAction?: 'action' | 'up';
       /** `stick` mode: up to 3 buttons on the right thumb instead of the single action button. */
       buttons?: PadButton[];
       /** What the player holds, shown as a chip in the status row ("Dibawa: Tomat"). */
@@ -511,6 +727,18 @@ type ControllerViewBody =
       banner?: string;
       /** Disable input (countdown, knocked out, finished). */
       locked?: boolean;
+      /** `dpad`: also send every press reliably (see PAD_ARROW_ACTION), for games where a lost press is a fall. */
+      reliable?: boolean;
+      /**
+       * Secret map ("peta rahasia") for a hidden role, drawn under the controls: the walls, where
+       * everyone is and the objectives. Only the phone it is sent to sees it. See `padRadar`.
+       */
+      radar?: PadRadar;
+      /**
+       * Heartbeat meter, 0 (calm) .. 1 (racing): the phone beats faster as it rises, flashes its
+       * edges red and vibrates on strong beats. See `padHeart`.
+       */
+      heart?: number;
     }
   | {
       /**
@@ -534,6 +762,60 @@ type ControllerViewBody =
       error?: string;
       /** Changes on every new turn (and refusal) so the phone clears the typed letters. */
       turn: number;
+      /** Draw the input as `maxLength` letter boxes (the word's length is known, e.g. spelling). */
+      slots?: boolean;
+      /** A small extra button in the top row (e.g. "Dengar lagi"), sends `action(id)`. */
+      extra?: ViewAction;
+    }
+  | {
+      /**
+       * A secret card that stays face down until held (hold-to-peek): the word shows only while a
+       * finger is on the card, so nobody beside the player can read it. Nothing is sent while
+       * peeking. The optional button under the card sends `action(id)`.
+       */
+      kind: 'peek';
+      eyebrow: string;
+      title: string;
+      /** The secret (at most PEEK_WORD_MAX chars). Empty = no word: the card shows `blank`. */
+      word: string;
+      blank?: string;
+      /** Small print on the face of the card, under the word. */
+      caption?: string;
+      /** Corner tag on the card, e.g. "ID". */
+      tag?: string;
+      hint?: string;
+      /** Server time the current turn ends (timer). */
+      deadline?: number;
+      /** The player's turn: the card is lit up. */
+      spotlight?: boolean;
+      action?: ViewAction;
+      /** Changes on every new deal, so the phone resets the card face down. */
+      deal: number;
+    }
+  | {
+      /**
+       * Slingshot aim (portrait). Drag back from the avatar: the launch goes the opposite way and
+       * the drag length sets the power. While the finger is down the phone streams the launch
+       * vector as STICK_OP frames (the main screen draws the aim live); lifting it locks the aim
+       * with `action('aim', encodeAim(aim))`. Dragging again re-aims until `deadline`.
+       */
+      kind: 'sling';
+      eyebrow: string;
+      title: string;
+      /** The player's colour. */
+      color: string;
+      /** Server time aiming closes (countdown on the phone). */
+      deadline?: number;
+      /** The aim the game holds for this phone (echo of the last `aim` action); absent = none. */
+      aim?: SlingAim;
+      map?: SlingMap;
+      /** Short line under the pad, e.g. "3 dari 5 sudah terkunci". */
+      status?: string;
+      hint?: string;
+      /** Input off (everyone slides, round over). */
+      locked?: boolean;
+      /** Changes on every new shot, so the phone drops its local aim. */
+      shot: number;
     }
   | {
       kind: 'result';

@@ -7,8 +7,11 @@
  *                       ↘ reverb send → revIn → shared reverb ↗
  *                       ↘ delay send  → song delay → fader
  * A crossfade fades the old song's fader and reverb send while the new one starts cleanly.
+ * Adaptive layers (channels with a `tier`) fade inside their own strip; hurry eases the step
+ * length, so neither restarts the song (rules in ./adaptive).
  */
 
+import { clampIntensity, easeRate, hurryTarget, type Intensity, tierAudible } from './adaptive';
 import { type CompiledSong, compileSong, STEPS } from './score';
 import { getSong } from './songs';
 import { type Bus, Channel, reverbImpulse, rng, type Song } from './synth';
@@ -50,6 +53,8 @@ interface Instance {
   fader: GainNode;
   revIn: GainNode | null;
   extra: AudioNode[];
+  /** Step length at the written tempo; `stepDur` is this divided by the hurry factor. */
+  baseStepDur: number;
   stepDur: number;
   bar: number;
   step: number;
@@ -83,6 +88,10 @@ export class MusicPlayer {
   private reverbIn: GainNode | null = null;
   private timer: ReturnType<typeof setInterval> | 0 = 0;
   private seed = 1;
+  private intensity: Intensity = 0;
+  private hurry = false;
+  /** Current tempo factor (1 = as written), eased toward the hurry target. */
+  private rate = 1;
 
   private readonly realtime: boolean;
   private readonly lite: boolean;
@@ -119,6 +128,22 @@ export class MusicPlayer {
     if (this.realtime) this.ensureTimer();
   }
 
+  /** Adaptive layers: channels with tier <= level sound; changes fade without a restart. */
+  setIntensity(level: number): void {
+    const next = clampIntensity(level);
+    if (next === this.intensity) return;
+    this.intensity = next;
+    const inst = this.cur;
+    if (!inst) return;
+    const at = this.realtime ? this.ctx.currentTime : inst.time;
+    for (const ch of inst.channels.values()) ch.setAudible(tierAudible(ch.def.tier, next), at);
+  }
+
+  /** Eases the tempo up by about 8% (true) or back to the written tempo (false). */
+  setHurry(on: boolean): void {
+    this.hurry = on;
+  }
+
   /** Stops everything at once (no fade) and frees all nodes. */
   dispose(): void {
     if (this.cur) this.release(this.cur);
@@ -152,6 +177,11 @@ export class MusicPlayer {
     inst.bar = Math.floor(pos / STEPS);
     inst.step = pos % STEPS;
     inst.time += steps * inst.stepDur;
+    const target = hurryTarget(this.hurry);
+    if (this.rate !== target || inst.stepDur !== inst.baseStepDur / target) {
+      this.rate = easeRate(this.rate, target, steps * inst.stepDur);
+      inst.stepDur = inst.baseStepDur / this.rate;
+    }
   }
 
   private scheduleStep(inst: Instance): void {
@@ -161,7 +191,7 @@ export class MusicPlayer {
     const rand = this.rand;
     for (const e of events) {
       const ch = inst.channels.get(e.inst);
-      if (!ch) continue;
+      if (!ch?.scheduledAt(inst.time)) continue;
       const human = ch.def.human ?? 0.003;
       ch.play(e, inst.time + swing + (rand() - 0.5) * 2 * human, inst.stepDur);
     }
@@ -202,7 +232,9 @@ export class MusicPlayer {
     }
     const bus: Bus = { ctx, dry: fader, rev: revIn, dly: dlyIn, stats: this.stats, rand: this.rand };
     const channels = new Map<string, Channel>();
-    for (const [key, def] of Object.entries(song.inst)) channels.set(key, new Channel(def, bus));
+    for (const [key, def] of Object.entries(song.inst))
+      channels.set(key, new Channel(def, bus, tierAudible(def.tier, this.intensity)));
+    const baseStepDur = 60 / song.bpm / 4;
     return {
       id,
       song,
@@ -211,7 +243,8 @@ export class MusicPlayer {
       fader,
       revIn,
       extra,
-      stepDur: 60 / song.bpm / 4,
+      baseStepDur,
+      stepDur: baseStepDur / this.rate,
       bar: 0,
       step: 0,
       time: at,

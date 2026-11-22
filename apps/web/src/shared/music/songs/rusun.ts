@@ -1,5 +1,5 @@
 /**
- * "Menara Goyang" (wobbly tower): Rusun, stacking floors with a swinging crane.
+ * "Menara Goyang" (wobbly tower): Rusun, stacking floors from a sliding crane trolley.
  * Playful, lightly suspenseful, 104 bpm with a little swing. Marimba melody on a pelog-like
  * scale on D (D Eb F A Bb), xylophone answers, bouncy tuba, woodblock tick-tock and claves.
  * The Eb-over-D chord (a flat second over the bass) gives the gentle tension.

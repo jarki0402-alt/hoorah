@@ -21,9 +21,9 @@ import {
   SETTLE_MS,
   SURVIVE_BONUS,
   SWING_AMPLITUDE,
-  SWING_BASE_PERIOD,
-  SWING_MIN_PERIOD,
+  SWING_DEFAULTS,
   swingPeriod,
+  swingPosition,
   swingX,
   TURN_MS,
 } from './logic';
@@ -43,18 +43,27 @@ function newGame(ids: number[], rounds = 1, now = 0) {
 /** Run until the first turn starts and return the game at that moment. */
 function toFirstTurn(g: RusunLogic) {
   g.tick(INTRO_MS);
-  expect(g.phase).toBe('swing');
+  expect(g.phase).toBe('aim');
   return g.turnStartAt;
 }
 
-/** Find a time within the current turn where the crane is at `x` (moving either way). */
+/** First time in the current turn where the swing passes `x` (scan per ms, then bisect). */
 function timeAtX(g: RusunLogic, x: number): number {
-  const { start, period } = g.swing;
-  const a = Math.asin((x - CENTER_X) / SWING_AMPLITUDE);
-  const base = start + (a / (2 * Math.PI)) * period;
-  let t = base;
-  while (t < g.turnStartAt) t += period;
-  return t;
+  const side = (t: number) => Math.sign(g.swingX(t) - x);
+  const s0 = side(g.turnStartAt);
+  if (s0 === 0) return g.turnStartAt;
+  for (let t = g.turnStartAt + 1; t <= g.turnStartAt + g.swing.period; t++) {
+    if (side(t) === s0) continue;
+    let lo = t - 1;
+    let hi = t;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      if (side(mid) === s0) lo = mid;
+      else hi = mid;
+    }
+    return hi;
+  }
+  throw new Error(`the swing never reaches x = ${x}`);
 }
 
 /** Drop so the floor lands `offset` px from the (swaying) top center. Returns the land time. */
@@ -73,34 +82,71 @@ function events(g: RusunLogic): RusunEvent['type'][] {
 }
 
 describe('swing', () => {
-  it('follows x = 640 + A sin(2π(t - start)/period)', () => {
+  it('swings like a pendulum: center at phase 0, right end at 0.25, left end at 0.75', () => {
     const swing = { start: 1000, period: 2000 };
     expect(swingX(swing, 1000)).toBeCloseTo(CENTER_X);
     expect(swingX(swing, 1500)).toBeCloseTo(CENTER_X + SWING_AMPLITUDE);
+    expect(swingX(swing, 2000)).toBeCloseTo(CENTER_X);
     expect(swingX(swing, 2500)).toBeCloseTo(CENTER_X - SWING_AMPLITUDE);
+    expect(swingX(swing, 3000)).toBeCloseTo(CENTER_X);
+    // Never past the ends.
+    for (let t = 0; t < 4000; t += 7)
+      expect(Math.abs(swingX(swing, t) - CENTER_X)).toBeLessThanOrEqual(SWING_AMPLITUDE + 1e-9);
   });
 
-  it('starts at 3000 ms and shortens 2 % per placed floor down to 2000 ms', () => {
-    expect(SWING_BASE_PERIOD).toBe(3000);
-    expect(SWING_MIN_PERIOD).toBe(2000);
-    expect(swingPeriod(1)).toBe(3000);
-    expect(swingPeriod(2)).toBeCloseTo(3000 * 0.98);
-    expect(swingPeriod(11)).toBeCloseTo(3000 * 0.98 ** 10);
-    expect(swingPeriod(25)).toBe(2000);
+  it('is fastest over the center and eases smoothly into each end (no jerk)', () => {
+    const v = (u: number) => (swingPosition(u + 1e-5) - swingPosition(u - 1e-5)) / 2e-5;
+    expect(Math.abs(v(0))).toBeCloseTo(2 * Math.PI, 3);
+    expect(Math.abs(v(0.25))).toBeLessThan(1e-3);
+    expect(Math.abs(v(0.75))).toBeLessThan(1e-3);
+    // Continuous everywhere: no step between two close phases.
+    for (let u = 0; u < 1; u += 0.001)
+      expect(Math.abs(swingPosition(u + 0.001) - swingPosition(u))).toBeLessThan(0.007);
+    // The way back mirrors the way there.
+    expect(swingPosition(0.1)).toBeCloseTo(-swingPosition(0.6));
   });
 
-  it('starts each turn at an extreme, alternating sides', () => {
+  it('stays a fair timing game: the window to land PAS over the center stays playable', () => {
+    const midSpeed = (period: number) => (2 * Math.PI * SWING_AMPLITUDE) / period;
+    // PAS needs the drop within PAS_PX of the center: at least ~30 ms either way, even at the fastest.
+    expect(PAS_PX / midSpeed(SWING_DEFAULTS.minPeriodMs)).toBeGreaterThan(14);
+    expect(midSpeed(SWING_DEFAULTS.periodMs)).toBeLessThan(0.4);
+    expect(midSpeed(SWING_DEFAULTS.minPeriodMs)).toBeGreaterThan(0.5);
+  });
+
+  it('starts at 3400 ms (1.7 s per side), 1.5 % faster per placed floor, down to 2400 ms', () => {
+    expect(SWING_DEFAULTS).toEqual({ periodMs: 3400, speedup: 0.015, minPeriodMs: 2400 });
+    expect(swingPeriod(1)).toBe(3400);
+    expect(swingPeriod(2)).toBeCloseTo(3400 * 0.985);
+    expect(swingPeriod(11)).toBeCloseTo(3400 * 0.985 ** 10);
+    expect(swingPeriod(23)).toBeGreaterThan(2400);
+    expect(swingPeriod(30)).toBe(2400);
+  });
+
+  it('takes its timing from the Lab override, kept within sane limits', () => {
+    const tune = { periodMs: 3000, speedup: 0.02, minPeriodMs: 2000 };
+    expect(swingPeriod(1, tune)).toBe(3000);
+    expect(swingPeriod(3, tune)).toBeCloseTo(3000 * 0.98 ** 2);
+    expect(swingPeriod(1, { periodMs: 1500, speedup: 0.02, minPeriodMs: 2000 })).toBe(2000);
+    expect(swingPeriod(5, { periodMs: 3000, speedup: -1, minPeriodMs: 2000 })).toBe(3000);
+    const g = new RusunLogic({ rounds: 1, roster: roster(1), now: 0, swing: { periodMs: 4000 } });
+    toFirstTurn(g);
+    expect(g.swing.period).toBe(4000);
+    expect(g.swingTune).toEqual({ ...SWING_DEFAULTS, periodMs: 4000 });
+  });
+
+  it('starts each turn at an end of the swing, alternating sides', () => {
     const g = newGame([1]);
     const t0 = toFirstTurn(g);
     expect(g.swingX(t0)).toBeCloseTo(CENTER_X + SWING_AMPLITUDE);
     const land = dropAtOffset(g, 30);
     g.tick(land + SETTLE_MS);
-    expect(g.phase).toBe('swing');
+    expect(g.phase).toBe('aim');
     expect(g.swingX(g.turnStartAt)).toBeCloseTo(CENTER_X - SWING_AMPLITUDE);
-    expect(g.swing.period).toBeCloseTo(SWING_BASE_PERIOD * 0.98);
+    expect(g.swing.period).toBeCloseTo(SWING_DEFAULTS.periodMs * 0.985);
   });
 
-  it('sends the phone a plain button without a swing indicator', () => {
+  it('sends the phone a plain button without a position indicator', () => {
     const v = turnView(4, 9000.4);
     expect(v).toEqual({
       kind: 'button',
@@ -159,7 +205,7 @@ describe('turn order', () => {
     g.tick(60_000);
     expect(g.phase).toBe('waiting');
     g.setRoster([{ id: 1, connected: true }], 61_000);
-    expect(g.phase).toBe('swing');
+    expect(g.phase).toBe('aim');
     expect(g.current).toBe(1);
     expect(g.deadline).toBe(61_000 + TURN_MS);
   });
@@ -460,7 +506,7 @@ describe('rounds and scoring', () => {
     expect(g.floors).toHaveLength(1);
     expect(g.balance).toBe(0);
     g.tick(at + COLLAPSE_MS + INTRO_MS);
-    expect(g.phase).toBe('swing');
+    expect(g.phase).toBe('aim');
     expect(g.current).toBe(3);
     expect(g.bestHeight).toBe(2);
   });
@@ -491,11 +537,11 @@ describe('rounds and scoring', () => {
     clock.pause();
     server += 60_000;
     g.tick(clock.now());
-    expect(g.phase).toBe('swing');
+    expect(g.phase).toBe('aim');
     clock.resume();
     server += TURN_MS - 2000 - 1;
     g.tick(clock.now());
-    expect(g.phase).toBe('swing');
+    expect(g.phase).toBe('aim');
     server += 2;
     g.tick(clock.now());
     expect(g.phase).toBe('falling');
@@ -615,7 +661,7 @@ describe('a full simulated game', () => {
       let t = 0;
       for (let step = 0; step < 4000 && g.phase !== 'ended'; step++) {
         t += 37;
-        if (g.phase === 'swing' && t - g.turnStartAt > 1300) g.drop(g.current!, t - 40, t);
+        if (g.phase === 'aim' && t - g.turnStartAt > 1300) g.drop(g.current!, t - 40, t);
         g.tick(t);
         for (const e of g.drain())
           log.push(e.type === 'land' ? `land:${e.fall.playerId}:${e.points}` : e.type);

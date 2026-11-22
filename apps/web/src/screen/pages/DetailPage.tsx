@@ -1,6 +1,7 @@
 import type { ComponentChild } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { GAMES, MOODS } from '../../shared/games';
+import { cardTag } from '../../shared/homeRows';
 import { KeyArt } from '../../shared/keyart';
 import { Avatar, Icon, type IconName } from '../../shared/ui';
 import { FocusButton } from '../components';
@@ -10,6 +11,8 @@ import { connected, goHome, selected, sfx, startGame } from '../store';
 export function DetailPage() {
   const id = selected.value;
   const g = GAMES[id];
+  // Same tag as the home cards: "Baru" only for the newest wave.
+  const tag = cardTag(id);
 
   useEffect(() => {
     return setFocusMap(
@@ -64,7 +67,9 @@ export function DetailPage() {
       </div>
 
       <div class="detail-copy">
-        <div style={{ display: 'flex', gap: 8 }}>{g.badge && <span class="tag">{g.badge}</span>}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {tag && <span class={`tag card-badge-${tag.toLowerCase()}`}>{tag}</span>}
+        </div>
         <h1
           class="display outline-text hero-title"
           style={{ fontSize: 60, color: g.logoColor === '#FFFFFF' ? '#FFC928' : g.logoColor }}

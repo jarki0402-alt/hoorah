@@ -11,10 +11,12 @@ import {
   type GameResult,
   type GameToShell,
   isBridgeMessage,
+  type MusicIntensity,
+  type SfxName,
   type ShellToGame,
 } from './bridge';
 
-export type { GameAward, GameIcon, GameInit, GameResult } from './bridge';
+export type { GameAward, GameIcon, GameInit, GameResult, MusicIntensity, SfxName } from './bridge';
 
 type Handlers = {
   players: (players: PlayerInfo[]) => void;
@@ -104,12 +106,29 @@ export class HoorahGame {
    * Sound plays in the shell: the TV page already has the user gesture browsers require,
    * the game iframe might not.
    */
-  sfx(name: string): void {
+  sfx(name: SfxName | (string & {})): void {
     this.post({ tag: BRIDGE_TAG, type: 'sfx', name });
   }
 
+  /**
+   * Selects the song (`null` fades out). A new song starts at intensity 0 with hurry off, so
+   * call `musicIntensity`/`musicHurry` after this.
+   */
   music(track: string | null): void {
     this.post({ tag: BRIDGE_TAG, type: 'music', track });
+  }
+
+  /**
+   * Adaptive music layers: song channels with `tier <= level` sound. Changes fade per channel
+   * (about a second) without restarting the song. Songs without tiers ignore it.
+   */
+  musicIntensity(level: MusicIntensity): void {
+    this.post({ tag: BRIDGE_TAG, type: 'musicIntensity', level });
+  }
+
+  /** Nudges the tempo up about 8% (eased over a couple of seconds), e.g. for the last 10 seconds. */
+  musicHurry(on: boolean): void {
+    this.post({ tag: BRIDGE_TAG, type: 'musicHurry', on });
   }
 
   quit(): void {

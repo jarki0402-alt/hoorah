@@ -1,0 +1,51 @@
+/* Hantu Tak Terlihat phone: candlelight on dark planks. Warm cream text on near-black glass, LARI
+   as a warm lantern button, ghost powers in pale teal. Only active while the game runs. */
+
+html[data-game="hantu"] {
+  --t-bg: #1a120b;
+  --text: #f3e6c8;
+  --text-2: #e8dcc0;
+  --text-3: #bdaf94;
+  --surface: #101214;
+  --surface-2: #1c1d21;
+  --surface-3: #050608;
+  --line: #3a2416;
+  --t-panel: rgba(16, 18, 20, 0.9);
+  --t-panel-edge: #3a2416;
+  --t-eyebrow: #101214;
+  --t-eyebrow-bg: #ffd27a;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #ffd27a;
+  --t-good: #a6f4e6;
+  --t-track: #1c1d21;
+  --t-strip-bg: #050608;
+  --t-strip-text: #f3e6c8;
+  --t-strip-btn: #ffd27a;
+  --t-strip-btn-text: #101214;
+  --t-crown: #ffd27a;
+}
+
+html[data-game="hantu"] .pad-stick {
+  background: rgba(255, 231, 168, 0.06);
+  box-shadow: inset 0 0 0 3px rgba(255, 210, 122, 0.45);
+}
+
+html[data-game="hantu"] .pad-btn.tone-yellow {
+  background: #ffd27a;
+  color: #101214;
+  box-shadow:
+    0 7px 0 #8a5a10,
+    0 0 0 7px rgba(255, 210, 122, 0.16);
+}
+
+html[data-game="hantu"] .pad-btn.tone-orange {
+  background: #a6f4e6;
+  color: #101214;
+  box-shadow: 0 6px 0 #5fb8aa;
+}
+
+html[data-game="hantu"] .pad-btn.tone-cream {
+  background: #f3e6c8;
+  color: #101214;
+  box-shadow: 0 6px 0 #8e877a;
+}

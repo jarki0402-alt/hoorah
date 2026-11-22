@@ -14,17 +14,29 @@
  */
 import { useLayoutEffect } from 'preact/hooks';
 import { arenaTheme } from '../games/arena/controller-theme';
+import { bomTheme } from '../games/bom/controller-theme';
 import { caturTheme } from '../games/catur/controller-theme';
 import { congklakTheme } from '../games/congklak/controller-theme';
 import { dapurTheme } from '../games/dapur/controller-theme';
+import { ejaTheme } from '../games/eja/controller-theme';
+import { esTheme } from '../games/es/controller-theme';
+import { hantuTheme } from '../games/hantu/controller-theme';
 import { juraganTheme } from '../games/juragan/controller-theme';
 import { karungTheme } from '../games/karung/controller-theme';
 import { kataTheme } from '../games/kata/controller-theme';
 import { kerupukTheme } from '../games/kerupuk/controller-theme';
 import { kompakTheme } from '../games/kompak/controller-theme';
+import { langkahTheme } from '../games/langkah/controller-theme';
 import { lariTheme } from '../games/lari/controller-theme';
 import { ludoTheme } from '../games/ludo/controller-theme';
+import { nyebrangTheme } from '../games/nyebrang/controller-theme';
+import { obbyTheme } from '../games/obby/controller-theme';
+import { penyusupTheme } from '../games/penyusup/controller-theme';
+import { runtuhTheme } from '../games/runtuh/controller-theme';
+import { silumanTheme } from '../games/siluman/controller-theme';
+import { taliTheme } from '../games/tali/controller-theme';
 import { ularTheme } from '../games/ular/controller-theme';
+import { warnaTheme } from '../games/warna/controller-theme';
 import { wilayahTheme } from '../games/wilayah/controller-theme';
 import { f1, seeded, svgUrl } from '../shared/art/svg';
 
@@ -353,6 +365,18 @@ export const THEMES: Record<string, ControllerTheme> = {
   kata: kataTheme,
   juragan: juraganTheme,
   dapur: dapurTheme,
+  obby: obbyTheme,
+  tali: taliTheme,
+  bom: bomTheme,
+  runtuh: runtuhTheme,
+  es: esTheme,
+  langkah: langkahTheme,
+  nyebrang: nyebrangTheme,
+  penyusup: penyusupTheme,
+  eja: ejaTheme,
+  siluman: silumanTheme,
+  warna: warnaTheme,
+  hantu: hantuTheme,
 };
 
 const url = (key: string, s: string) => `url("${svgUrl(key, () => s)}")`;

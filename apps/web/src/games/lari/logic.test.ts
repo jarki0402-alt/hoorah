@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { fieldSkills, RunnerBrain } from './brain';
 import {
   distanceAt,
+  jumpArc,
+  jumpGravity,
   jumpShape,
+  LANE_EASE_SLOPE,
   LANE_QUEUE,
   LariRun,
   type Mode,
@@ -14,7 +17,7 @@ import {
   timeAtDistance,
 } from './logic';
 import { buildResult, finalRows, pickAwards, soloOutcome } from './results';
-import { type Coin, type Obstacle, seededRandom, Track } from './track';
+import { type Coin, LOW_LEN, type Obstacle, seededRandom, Track } from './track';
 import { countdownView, padView } from './views';
 
 const DT = 1 / 60;
@@ -75,9 +78,43 @@ describe('settings and speed', () => {
     for (const t of [0, 3, 40, 77, 150, 260, 500]) expect(timeAtDistance(distanceAt(t))).toBeCloseTo(t, 3);
   });
 
-  it('has a forgiving jump', () => {
-    expect(shape.airTime).toBeGreaterThan(0.65);
-    expect(shape.peak).toBeGreaterThan(1);
+  it('has a long, forgiving jump: about 0.75 s, quick rise, short float, slightly faster fall', () => {
+    expect(shape.airTime).toBeGreaterThan(0.72);
+    expect(shape.airTime).toBeLessThan(0.8);
+    expect(shape.peak).toBeGreaterThan(1.2);
+    expect(shape.peak).toBeLessThan(1.6);
+    // Lands exactly at airTime, from the apex (vy = 0) faster than it rose to it.
+    expect(jumpArc(shape.airTime, TUNING).y).toBeCloseTo(0, 6);
+    let apexAt = 0;
+    for (let t = 0; t < shape.airTime; t += 0.001) if (jumpArc(t, TUNING).vy > 0) apexAt = t;
+    expect(jumpArc(apexAt, TUNING).y).toBeCloseTo(shape.peak, 3);
+    expect(shape.airTime - apexAt).toBeLessThan(apexAt);
+    // Floats at the top: the last 10 cm below the apex last longer than in a plain parabola.
+    let nearTop = 0;
+    for (let t = 0; t < shape.airTime; t += 0.001)
+      if (jumpArc(t, TUNING).y > shape.peak - 0.1) nearTop += 0.001;
+    expect(nearTop).toBeGreaterThan(2 * Math.sqrt((2 * 0.1) / TUNING.gravity));
+  });
+
+  it('runs the arc continuously through the float', () => {
+    let prev = jumpArc(0, TUNING);
+    for (let t = 0.002; t < shape.airTime; t += 0.002) {
+      const a = jumpArc(t, TUNING);
+      expect(Math.abs(a.y - prev.y)).toBeLessThan(0.03);
+      expect(Math.abs(a.vy - prev.vy)).toBeLessThan(0.1);
+      prev = a;
+    }
+    // Gentle gravity around the apex, stronger on the way down than up.
+    expect(jumpGravity(0, TUNING)).toBeLessThan(TUNING.gravity);
+    expect(jumpGravity(-5, TUNING)).toBeGreaterThan(jumpGravity(5, TUNING));
+  });
+
+  it('stays clear of a low barrier long enough to pass it at top speed', () => {
+    let above = 0;
+    for (let t = 0; t < shape.airTime; t += 0.001)
+      if (jumpArc(t, TUNING).y >= TUNING.lowClear) above += 0.001;
+    // At 21 m/s the barrier plus the body takes under half the time above it.
+    expect(above * speedAt(1000)).toBeGreaterThan(2 * (LOW_LEN + 2 * TUNING.bodyHalf));
   });
 });
 
@@ -171,7 +208,7 @@ describe('moves and touches', () => {
 describe('lane changes', () => {
   const W = TUNING.laneW;
   /** Largest move of the body in one step: the eased change at its steepest. */
-  const MAX_STEP = (1.5 * W * DT) / TUNING.laneTime + 1e-9;
+  const MAX_STEP = (LANE_EASE_SLOPE * W * DT) / TUNING.laneTime + 1e-9;
 
   /** Step for `s` seconds and record the runner's x after every step. */
   function trace(run: LariRun, r: Runner, s: number): number[] {
@@ -203,11 +240,11 @@ describe('lane changes', () => {
     return { run, r };
   }
 
-  it('moves exactly one lane per lateral input, eased across in about 0.2 s', () => {
+  it('moves exactly one lane per lateral input, eased across in about 0.14 s', () => {
     const { run } = setup('survive', solo(false));
     const r = run.runner(1)!;
-    expect(TUNING.laneTime).toBeGreaterThanOrEqual(0.18);
-    expect(TUNING.laneTime).toBeLessThanOrEqual(0.22);
+    expect(TUNING.laneTime).toBeGreaterThanOrEqual(0.13);
+    expect(TUNING.laneTime).toBeLessThanOrEqual(0.15);
     run.input(1, 1, PAD_RIGHT, 0.25);
     expect(r.lane).toBe(1);
     // Nothing jumps when the swipe arrives, however late it was.
@@ -215,8 +252,10 @@ describe('lane changes', () => {
     const xs = trace(run, r, 0.5);
     expectSmooth(0, xs, 1);
     const settled = xs.indexOf(W) + 1;
-    expect(settled * DT).toBeGreaterThanOrEqual(0.18);
-    expect(settled * DT).toBeLessThanOrEqual(0.22 + DT);
+    expect(settled * DT).toBeGreaterThanOrEqual(TUNING.laneTime - DT);
+    expect(settled * DT).toBeLessThanOrEqual(TUNING.laneTime + DT);
+    // Sharp ease-out: a third of the way across within 2 frames of the swipe arriving.
+    expect(xs[1]!).toBeGreaterThan(W / 3);
     expect(r.lane).toBe(1);
     expect(Math.max(...xs)).toBe(W);
   });
@@ -403,6 +442,50 @@ describe('latency', () => {
     run.input(1, 1, PAD_UP, 0);
     seconds(run, 1.5);
     expect(r.stumbles).toBe(1);
+  });
+
+  it('catches a lagged jump up smoothly instead of popping it up its arc', () => {
+    const { run } = setup('survive', solo(false));
+    const r = run.runner(1)!;
+    seconds(run, 0.3);
+    run.input(1, 1, PAD_UP, 0.2);
+    // Leaves the ground now: no height appears in one go.
+    expect(r.y).toBeLessThan(0.01);
+    expect(r.arcOwed).toBeCloseTo(0.2, 6);
+    let prev = r.y;
+    const maxRise = TUNING.jumpV * (1 + TUNING.lagCatch) * DT + 1e-6;
+    for (let i = 0; i < 6; i++) {
+      run.step(DT);
+      expect(r.y - prev).toBeLessThanOrEqual(maxRise);
+      prev = r.y;
+    }
+    // Owed arc is played back at (1 + lagCatch) speed, then the jump runs at normal speed.
+    const catchUp = 0.2 / TUNING.lagCatch;
+    seconds(run, catchUp);
+    expect(r.arcOwed).toBe(0);
+    // Lands as if it had left the ground when pressed.
+    const { airTime } = jumpShape();
+    const t0 = run.t;
+    stepUntil(run, () => !r.air, 2);
+    const since = run.t - t0 + 6 * DT + Math.round(catchUp * 60) * DT;
+    expect(since + 0.2).toBeCloseTo(airTime, 1);
+  });
+
+  it('starts a lagged jump partway up its arc when the catch-up is off', () => {
+    const track = openTrack();
+    const run = new LariRun({
+      mode: 'survive',
+      runners: solo(false),
+      seed: 1,
+      track,
+      tuning: { lagCatch: 0 },
+    });
+    run.start();
+    const r = run.runner(1)!;
+    seconds(run, 0.3);
+    run.input(1, 1, PAD_UP, 0.1);
+    expect(r.y).toBeGreaterThan(0.5);
+    expect(r.arcOwed).toBe(0);
   });
 
   it('applies a late lane change as of the press', () => {
@@ -646,7 +729,14 @@ describe('phone views', () => {
     ]);
     seconds(run, 2);
     const live = padView(run, run.runner(1)!, 1, '#F2453D');
-    expect(live).toMatchObject({ kind: 'pad', mode: 'swipe', actionLabel: 'LOMPAT' });
+    // The whole screen swipes, no arrow keys, and a tap anywhere jumps.
+    expect(live).toMatchObject({
+      kind: 'pad',
+      mode: 'swipe',
+      actionLabel: 'LOMPAT',
+      keys: false,
+      tapAction: 'up',
+    });
     expect(live.kind === 'pad' && live.locked).toBeFalsy();
     expect(live.kind === 'pad' && live.title).toMatch(/^Jarak \d+ m$/);
     run.runner(3)!.d -= 30;

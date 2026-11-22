@@ -4,6 +4,8 @@ import {
   type GameResult,
   type GameToShell,
   isBridgeMessage,
+  isMusicIntensity,
+  type MusicIntensity,
   type ShellToGame,
 } from '@hoorah/sdk/bridge';
 
@@ -20,6 +22,8 @@ export interface BridgeHandlers {
   end: (result: GameResult) => void;
   sfx: (name: string) => void;
   music: (track: string | null) => void;
+  musicIntensity: (level: MusicIntensity) => void;
+  musicHurry: (on: boolean) => void;
   quit: () => void;
 }
 
@@ -108,6 +112,12 @@ export class GameBridge {
         return;
       case 'music':
         h.music(m.track);
+        return;
+      case 'musicIntensity':
+        if (isMusicIntensity(m.level)) h.musicIntensity(m.level);
+        return;
+      case 'musicHurry':
+        h.musicHurry(m.on === true);
         return;
       case 'quit':
         h.quit();

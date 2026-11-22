@@ -5,57 +5,100 @@
  * the buses and the sound effects.
  */
 
+import type { MusicIntensity, SfxName } from '@hoorah/sdk/bridge';
 import { looksLikeTv } from './device';
+import { DUCKS, mergeDuck } from './music/adaptive';
 import { MusicPlayer } from './music/player';
 import type { Track } from './music/songs';
 
 export type { Track };
 
-export type Sfx =
-  | 'tick'
-  | 'select'
-  | 'back'
-  | 'join'
-  | 'leave'
-  | 'correct'
-  | 'wrong'
-  | 'count'
-  | 'go'
-  | 'drop'
-  | 'perfect'
-  | 'collapse'
-  | 'pull'
-  | 'super'
-  | 'cheer'
-  | 'clap'
-  | 'boo'
-  | 'win'
-  | 'whistle'
-  | 'tension'
-  | 'reveal'
-  // Bajaj Rush
-  | 'engine'
-  | 'boost'
-  | 'item'
-  | 'hit'
-  | 'horn'
-  | 'lap'
-  | 'skid'
-  // Jago Masak
-  | 'chop'
-  | 'sizzle'
-  | 'stir'
-  | 'flip'
-  | 'ding'
-  | 'pour'
-  | 'splash'
-  // Bajaj Rush v2
-  | 'throw'
-  | 'explode'
-  | 'jump'
-  | 'brake'
-  | 'reverse'
-  | 'ready';
+/** Every sound name the engine knows; shared with games through the SDK. */
+export type Sfx = SfxName;
+
+type PitchPath = readonly (readonly [number, number])[];
+
+/** Rooster syllables: [start s, pitch path]. */
+const ROOSTER: readonly (readonly [number, PitchPath])[] = [
+  [
+    0,
+    [
+      [0, 520],
+      [0.12, 640],
+    ],
+  ],
+  [
+    0.16,
+    [
+      [0, 560],
+      [0.12, 700],
+    ],
+  ],
+  [
+    0.32,
+    [
+      [0, 620],
+      [0.14, 880],
+    ],
+  ],
+  [
+    0.48,
+    [
+      [0, 900],
+      [0.1, 1150],
+      [0.45, 1100],
+      [0.62, 760],
+    ],
+  ],
+];
+
+/** Suling phrase: [start s, length s, Hz]. */
+const FLUTE: readonly (readonly [number, number, number])[] = [
+  [0, 0.15, 659],
+  [0.15, 0.15, 880],
+  [0.3, 0.7, 988],
+];
+
+/** Falling horn sighs: [start s, pitch path]. */
+const FALL: readonly (readonly [number, PitchPath])[] = [
+  [
+    0,
+    [
+      [0, 392],
+      [0.26, 370],
+    ],
+  ],
+  [
+    0.32,
+    [
+      [0, 370],
+      [0.26, 349],
+    ],
+  ],
+  [
+    0.64,
+    [
+      [0, 349],
+      [0.26, 330],
+    ],
+  ],
+  [
+    0.96,
+    [
+      [0, 330],
+      [0.3, 322],
+      [0.6, 294],
+    ],
+  ],
+];
+
+/** Bell partials: [frequency ratio, level, length factor]. */
+const BELL_PARTIALS: readonly (readonly [number, number, number])[] = [
+  [1, 1, 1],
+  [2, 0.45, 0.7],
+  [2.76, 0.3, 0.45],
+  [5.4, 0.12, 0.25],
+];
 
 /** Music bus level: under the sound effects. */
 const MUSIC_LEVEL = 0.22;
@@ -65,6 +108,11 @@ class AudioEngine {
   private master!: GainNode;
   private sfxBus!: GainNode;
   private musicBus!: GainNode;
+  /** Announcement ducking, after the music on/off level. */
+  private duckBus!: GainNode;
+  private duck: { depth: number; until: number } | null = null;
+  private intensity: MusicIntensity = 0;
+  private hurry = false;
   private noise!: AudioBuffer;
   private muted = false;
   private musicOn = true;
@@ -89,10 +137,13 @@ class AudioEngine {
     this.sfxBus.connect(this.master);
     this.musicBus = ctx.createGain();
     this.musicBus.gain.value = this.musicOn ? MUSIC_LEVEL : 0;
-    this.musicBus.connect(this.master);
+    this.duckBus = ctx.createGain();
+    this.musicBus.connect(this.duckBus).connect(this.master);
     // Smart TV browsers and 1–2 core machines get the music without reverb/delay (cheaper).
     const weak = looksLikeTv() || (navigator.hardwareConcurrency || 4) <= 2;
     this.player = new MusicPlayer(ctx, this.musicBus, { lite: weak });
+    this.player.setIntensity(this.intensity);
+    this.player.setHurry(this.hurry);
     const len = ctx.sampleRate;
     this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
     const data = this.noise.getChannelData(0);
@@ -150,7 +201,34 @@ class AudioEngine {
   music(track: Track | null): void {
     if (track === this.track) return;
     this.track = track;
+    // Every song starts calm and at its written tempo.
+    this.musicIntensity(0);
+    this.musicHurry(false);
     if (this.ctx?.state === 'running') this.player?.play(track);
+  }
+
+  /** Adaptive layers of the current song (channels with tier <= level sound). */
+  musicIntensity(level: MusicIntensity): void {
+    this.intensity = level;
+    this.player?.setIntensity(level);
+  }
+
+  /** Tempo about 8% up while on, eased in and out. */
+  musicHurry(on: boolean): void {
+    this.hurry = on;
+    this.player?.setHurry(on);
+  }
+
+  /** Pulls the music down under an announcement sound, merging with a duck already running. */
+  private duckFor(name: Sfx, now: number): void {
+    const spec = DUCKS[name];
+    if (!spec) return;
+    const d = mergeDuck(this.duck, now, spec);
+    this.duck = d;
+    const g = this.duckBus.gain;
+    g.cancelScheduledValues(now);
+    g.setTargetAtTime(d.depth, now, 0.03);
+    g.setTargetAtTime(1, d.until, 0.25);
   }
 
   sfx(name: Sfx): void {
@@ -158,6 +236,7 @@ class AudioEngine {
     if (ctx?.state !== 'running') return;
     const t = ctx.currentTime + 0.005;
     const b = this.sfxBus;
+    this.duckFor(name, ctx.currentTime);
     switch (name) {
       case 'tick':
         this.voice(b, 1320, t, 0.035, 'sine', 0.25);
@@ -334,7 +413,195 @@ class AudioEngine {
           this.voice(b, f, t + i * 0.08, 0.14, 'triangle', 0.2);
         });
         return;
+      case 'tock':
+        // The lower, woodier half of a clock's tick-tock.
+        this.voice(b, 760, t, 0.05, 'sine', 0.24);
+        this.noiseHit(b, t, 0.025, 'bandpass', 2400, 0.16);
+        return;
+      case 'weker':
+        // Wind-up alarm clock: the hammer rattles between two small bells for about a second.
+        for (let i = 0; i < 20; i++) {
+          const at = t + i * 0.045;
+          const f = i % 2 ? 2350 : 2093;
+          const fade = i < 15 ? 1 : (20 - i) / 5;
+          this.voice(b, f, at, 0.07, 'triangle', 0.07 * fade, 0.002);
+          this.voice(b, f * 2.76, at, 0.04, 'sine', 0.025 * fade, 0.002);
+        }
+        return;
+      case 'gong':
+        // Big hanging gong: a soft mallet thump, a low beating hum and a few inharmonic partials.
+        this.noiseHit(b, t, 0.12, 'lowpass', 700, 0.35);
+        this.voice(b, 98, t, 2.6, 'sine', 0.42, 0.01);
+        this.voice(b, 99.4, t, 2.4, 'sine', 0.24, 0.01);
+        this.voice(b, 198, t, 1.8, 'sine', 0.13, 0.02);
+        this.voice(b, 267, t, 1.4, 'sine', 0.09, 0.03);
+        this.voice(b, 412, t, 0.9, 'sine', 0.05, 0.04);
+        return;
+      case 'rooster':
+        // "Ku-ku-ru-yuuuk": four raspy syllables, the last one long and bending down.
+        for (const [at, pts] of ROOSTER) {
+          this.sweep(b, t + at, pts, 'sawtooth', 0.15, {
+            filter: ['bandpass', 1600, 1.4],
+            vibrato: [38, 22],
+            attack: 0.015,
+          });
+        }
+        return;
+      case 'growl':
+        // Low growl: a detuned saw pair with a rough fast tremolo, kept dark by a lowpass.
+        this.sweep(
+          b,
+          t,
+          [
+            [0, 82],
+            [0.3, 96],
+            [0.8, 74],
+          ],
+          'sawtooth',
+          0.26,
+          { filter: ['lowpass', 520, 2], vibrato: [6, 4], tremolo: [23, 0.6], attack: 0.06 },
+        );
+        this.sweep(
+          b,
+          t,
+          [
+            [0, 61],
+            [0.8, 55],
+          ],
+          'sawtooth',
+          0.16,
+          { filter: ['lowpass', 400, 1], tremolo: [17, 0.5], attack: 0.08 },
+        );
+        this.noiseHit(b, t, 0.8, 'lowpass', 350, 0.16);
+        return;
+      case 'bell':
+        this.bellTone(b, 1046, t, 1.3, 0.22);
+        return;
+      case 'flute':
+        // Suling call: a breathy bamboo flute, a short rising phrase that settles with vibrato.
+        for (const [at, dur, f] of FLUTE) {
+          const last = at === FLUTE[FLUTE.length - 1]![0];
+          const pts: [number, number][] = [
+            [0, f],
+            [dur, last ? f * 0.985 : f],
+          ];
+          this.sweep(b, t + at, pts, 'sine', 0.2, { attack: 0.035, vibrato: last ? [5.5, 9] : undefined });
+          this.sweep(b, t + at, pts, 'triangle', 0.04, { attack: 0.035 });
+          this.noiseHit(b, t + at, Math.min(dur, 0.25), 'bandpass', f * 1.5, 0.05);
+        }
+        return;
+      case 'round': {
+        // Next round: a short snare roll into a bright chord hit.
+        for (let i = 0; i < 8; i++) this.noiseHit(b, t + i * 0.035, 0.05, 'bandpass', 2200, 0.12 + i * 0.03);
+        const hit = t + 0.3;
+        this.kick(b, hit, 0.6);
+        this.noiseHit(b, hit, 0.3, 'highpass', 4000, 0.22);
+        for (const f of [392, 523, 659]) this.voice(b, f, hit, 0.5, 'square', 0.07);
+        this.voice(b, 784, hit, 0.6, 'triangle', 0.14);
+        return;
+      }
+      case 'stinger-win': {
+        // Short fanfare: a quick pickup into a held major chord with a shimmer on top.
+        [523, 659, 784].forEach((f, i) => {
+          this.voice(b, f, t + i * 0.09, 0.12, 'square', 0.15);
+        });
+        const hit = t + 0.3;
+        this.kick(b, hit, 0.5);
+        this.noiseHit(b, hit, 0.6, 'highpass', 5000, 0.16);
+        for (const f of [523, 659, 784, 1047]) {
+          this.voice(b, f, hit, 1.0, 'triangle', 0.14);
+          this.voice(b, f * 2, hit, 0.6, 'sine', 0.035);
+        }
+        return;
+      }
+      case 'stinger-fall':
+        // "Wah wah wah waaah": falling horn sighs, the last one long and wobbling down.
+        for (const [at, pts] of FALL) {
+          const long = pts.length > 2;
+          this.sweep(b, t + at, pts, 'sawtooth', 0.12, {
+            filter: ['lowpass', 1100, 1.2],
+            vibrato: long ? [6, 7] : undefined,
+            attack: 0.03,
+          });
+        }
+        return;
     }
+  }
+
+  /**
+   * One oscillator following a pitch path (`points`: [seconds from `t`, Hz], linear between),
+   * with optional filter, vibrato ([rate Hz, depth Hz]) and tremolo ([rate Hz, depth 0–1]).
+   * The note lasts until the last point.
+   */
+  private sweep(
+    bus: AudioNode,
+    t: number,
+    points: readonly (readonly [number, number])[],
+    wave: OscillatorType,
+    vol: number,
+    opts: {
+      attack?: number;
+      filter?: readonly [BiquadFilterType, number, number];
+      vibrato?: readonly [number, number];
+      tremolo?: readonly [number, number];
+    } = {},
+  ): void {
+    const ctx = this.ctx!;
+    const first = points[0];
+    const last = points[points.length - 1];
+    if (!first || !last || last[0] <= 0) return;
+    const end = t + last[0];
+    const osc = ctx.createOscillator();
+    osc.type = wave;
+    osc.frequency.setValueAtTime(first[1], t);
+    for (const [at, f] of points.slice(1)) osc.frequency.linearRampToValueAtTime(f, t + at);
+    const g = ctx.createGain();
+    const attack = Math.min(opts.attack ?? 0.01, last[0] / 3);
+    const release = Math.min(0.12, last[0] * 0.3);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + attack);
+    g.gain.setValueAtTime(vol, Math.max(t + attack, end - release));
+    g.gain.exponentialRampToValueAtTime(0.0001, end);
+    const sources: OscillatorNode[] = [osc];
+    let node: AudioNode = osc;
+    if (opts.filter) {
+      const f = ctx.createBiquadFilter();
+      f.type = opts.filter[0];
+      f.frequency.value = opts.filter[1];
+      f.Q.value = opts.filter[2];
+      node = node.connect(f);
+    }
+    if (opts.vibrato) {
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.frequency.value = opts.vibrato[0];
+      depth.gain.value = opts.vibrato[1];
+      lfo.connect(depth).connect(osc.frequency);
+      sources.push(lfo);
+    }
+    if (opts.tremolo) {
+      const trem = ctx.createGain();
+      trem.gain.value = 1 - opts.tremolo[1] / 2;
+      const lfo = ctx.createOscillator();
+      const depth = ctx.createGain();
+      lfo.frequency.value = opts.tremolo[0];
+      depth.gain.value = opts.tremolo[1] / 2;
+      lfo.connect(depth).connect(trem.gain);
+      node = node.connect(trem);
+      sources.push(lfo);
+    }
+    node.connect(g).connect(bus);
+    for (const s of sources) {
+      s.start(t);
+      s.stop(end + 0.02);
+    }
+  }
+
+  /** Struck metal bell: inharmonic sine partials that die away at different speeds. */
+  private bellTone(bus: AudioNode, f: number, t: number, dur: number, vol: number): void {
+    for (const [ratio, level, length] of BELL_PARTIALS)
+      this.voice(bus, f * ratio, t, dur * length, 'sine', vol * level, 0.002);
+    this.noiseHit(bus, t, 0.03, 'highpass', 5000, vol * 0.6);
   }
 
   private voice(

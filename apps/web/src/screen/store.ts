@@ -20,11 +20,14 @@ import { audio, type Sfx, type Track } from '../shared/audio';
 import { autoRounds } from '../shared/automode';
 import { celebrate } from '../shared/confetti';
 import { prefs, session } from '../shared/device';
-import { GAMES, type GameId, type HomeTab, isHomeTab } from '../shared/games';
+import { GAMES, type GameId } from '../shared/games';
+import { type HomeSection, isHomeSection } from '../shared/homeRows';
 import { Net, type NetStatus } from '../shared/net';
 import { GameBridge } from './bridge';
 import { canFullscreen, enterFullscreen, toggleFullscreen } from './fullscreen';
+import { cardGame, focusSection } from './homeFocus';
 import { focused, press } from './nav';
+import { advance, newParty, type Party, pickLineup, scoreGame } from './party';
 import { ScreenRtc } from './rtc';
 import { STR } from './strings';
 
@@ -71,7 +74,12 @@ export const toasts = signal<Toast[]>([]);
 export const reactions = signal<ReactionBubble[]>([]);
 export const notice = signal<string | null>(null);
 /** Tab of the home row; the Host's phone picker and the main screen always show the same one. */
-export const homeTab = signal<HomeTab>('fit');
+/** The home group the Host last asked for from the phone picker (the home screen jumps to it). */
+export const homeTab = signal<HomeSection>('fit');
+/** Bumped on every group request from the phone, so the home screen jumps even to the same group. */
+export const homeJump = signal(0);
+/** Mode Pesta in progress (lineup, current game, party points), or null. */
+export const party = signal<Party | null>(null);
 /** Recently played games, most recent first (remembered on this screen; listed first in the Host's picker). */
 export const recent = signal<GameId[]>(
   prefs
@@ -211,7 +219,7 @@ function onPlatform(from: number, data: unknown): void {
     else press(msg.key);
   } else if (msg.k === 'open' && player.isHost && typeof msg.game === 'string') {
     openFromPhone(msg.game);
-  } else if (msg.k === 'tab' && player.isHost && isHomeTab(msg.tab)) {
+  } else if (msg.k === 'tab' && player.isHost && isHomeSection(msg.tab)) {
     tabFromPhone(msg.tab);
   } else if (msg.k === 'host' && player.isHost && HOST_COMMANDS.includes(msg.cmd)) {
     hostCommand(msg.cmd);
@@ -242,16 +250,17 @@ function openFromPhone(id: string): void {
   openDetail(id as GameId);
 }
 
-/** A tab tapped in the Host's picker: the home row shows the same games (home comes up if needed). */
-function tabFromPhone(tab: HomeTab): void {
+/** A group tapped in the Host's picker: the home screen jumps to the same row (home comes up if needed). */
+function tabFromPhone(tab: HomeSection): void {
   if (page.value === 'game') return;
   setHomeTab(tab);
   if (page.value !== 'home') goHome();
 }
 
-export function setHomeTab(tab: HomeTab): void {
-  if (homeTab.value === tab) return;
+export function setHomeTab(tab: HomeSection): void {
+  // Asked again (same group): still jump, the Host may have scrolled away since.
   homeTab.value = tab;
+  homeJump.value++;
   sfx('tick');
   sendPage();
 }
@@ -311,15 +320,14 @@ function platformPage(): PlatformPage {
 
 export function sendPage(to: number | 'all' = 'all'): void {
   const g = activeGame.value;
-  // On the home row the focused card is the game "on the screen" (the picker marks it).
-  const card = page.value === 'home' && focused.value.startsWith('card-') ? focused.value.slice(5) : null;
+  // On the home rows the focused card is the game "on the screen" (the picker marks it).
+  const home = page.value === 'home';
+  const card = home ? cardGame(focused.value) : null;
   const gameId =
     page.value === 'detail'
       ? selected.value
-      : page.value === 'home'
-        ? card && card in GAMES
-          ? (card as GameId)
-          : undefined
+      : home
+        ? (card ?? undefined)
         : (g?.id ?? lastResult.value?.gameId);
   const data: PlatformToController = {
     k: 'page',
@@ -330,7 +338,8 @@ export function sendPage(to: number | 'all' = 'all'): void {
     invite: inviting.value,
     seats: maxPlayers.value,
     recent: recent.value,
-    tab: homeTab.value,
+    // The group in focus on the home screen, so the picker opens on the same games.
+    tab: (home ? focusSection(focused.value) : null) ?? homeTab.value,
   };
   if (gameId) {
     data.gameId = gameId;
@@ -475,6 +484,8 @@ export function goJoin(): void {
 }
 
 export function goHome(): void {
+  // The game list is outside any party: back home, the party is over.
+  party.value = null;
   go('home');
 }
 
@@ -507,12 +518,46 @@ export function startGame(id: GameId = selected.value): void {
   sendPage();
 }
 
+/* ------------------------------------------------------------------ Mode Pesta */
+
+/** A fresh lineup for the players here now (the home poster shows it before the party starts). */
+export function partyLineup(): GameId[] {
+  return pickLineup(connected.value.length, recent.value);
+}
+
+/** Starts Mode Pesta with this lineup: its first game begins at once. */
+export function startParty(lineup: readonly GameId[]): void {
+  if (lineup.length === 0) {
+    toast(STR.partyNone);
+    sfx('wrong');
+    return;
+  }
+  party.value = newParty(lineup);
+  startGame(lineup[0]!);
+}
+
+/** Results page during a party: on to the next game, or null when this was the last one. */
+export function nextPartyGame(): void {
+  const p = party.value;
+  const next = p ? advance(p) : null;
+  if (!next) return;
+  party.value = next;
+  startGame(next.lineup[next.index]!);
+}
+
+/** Ends the party (after the final, or when the Host leaves it). */
+export function endParty(): void {
+  party.value = null;
+}
+
 export function restartGame(): void {
   const id = activeGame.value?.id ?? lastResult.value?.gameId;
   if (id) startGame(id);
 }
 
 export function quitGame(): void {
+  // Leaving a game mid-party ends the party.
+  party.value = null;
   inviting.value = false;
   activeGame.value = null;
   lastViews.clear();
@@ -575,6 +620,7 @@ export function attachGame(frame: HTMLIFrameElement, g: ActiveGame): void {
     vibrate: (to, pattern) => relayGame(to, { k: 'vibrate', pattern }),
     end: (result) => {
       batch(() => {
+        if (party.value) party.value = scoreGame(party.value, g.id, result.ranking);
         lastResult.value = { gameId: g.id, result };
         activeGame.value = null;
         page.value = 'results';
@@ -586,6 +632,8 @@ export function attachGame(frame: HTMLIFrameElement, g: ActiveGame): void {
     },
     sfx: (name) => audio.sfx(name as Sfx),
     music: (track) => audio.music((track as Track | null) ?? null),
+    musicIntensity: (level) => audio.musicIntensity(level),
+    musicHurry: (on) => audio.musicHurry(on),
     quit: () => quitGame(),
   });
 }

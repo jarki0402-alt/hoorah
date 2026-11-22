@@ -3,7 +3,11 @@ import type { ControllerView } from '@hoorah/protocol';
 import type { LariRun, Runner } from './logic';
 import { formatClock, formatInt, STR } from './strings';
 
-/** The swipe pad, or the same pad locked with a banner (intro, dropped out). */
+/**
+ * The swipe pad, or the same pad locked with a banner (intro, dropped out). The whole phone screen
+ * takes the strokes, no arrow buttons: swipe left/right = lane, up = jump, down = duck, and a tap
+ * anywhere jumps (PAD_UP).
+ */
 export function padView(
   run: LariRun,
   r: Runner,
@@ -35,6 +39,8 @@ export function padView(
     eyebrow,
     stats,
     actionLabel: STR.actionJump,
+    keys: false,
+    tapAction: 'up',
     hint: STR.phoneHint,
   };
   if (r.out) {

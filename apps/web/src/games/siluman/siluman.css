@@ -1,0 +1,751 @@
+/* Kampung Siluman main screen: a woodcut kampung behind one guide card. Night is deep blue under
+   the moon, day warm gold. Authored on the 1280x720 core; taller stages (16:10, 4:3) show more
+   sky, wider ones more kampung. Animations touch transform and opacity only. */
+
+.sl-root {
+  --sl-moon: #ffe7a3;
+  --sl-lamp: #ff8a1f;
+  --sl-cream: #fbf1dc;
+  --sl-ink: #0b1426;
+  --sl-card: rgba(9, 16, 32, 0.84);
+  --sl-card-edge: rgba(255, 231, 163, 0.28);
+  --sl-text-2: #c9d1e3;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0b1530;
+  color: var(--sl-cream);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+.sl-root.is-day {
+  --sl-card: rgba(58, 28, 12, 0.82);
+  --sl-card-edge: rgba(255, 243, 209, 0.3);
+  --sl-text-2: #f6dfc0;
+}
+
+.sl-noshell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b1530;
+  color: #fbf1dc;
+  font: 700 24px var(--font-ui);
+}
+
+/* Two painted skies cross-fade between night and day. */
+.sl-sky {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  transition: opacity 1.6s ease;
+  pointer-events: none;
+}
+
+.sl-root.is-day .is-night-sky,
+.sl-root.is-night .is-day-sky {
+  opacity: 0;
+}
+
+/* Deeper darkness while eyes are closed. */
+.sl-shade {
+  position: absolute;
+  inset: 0;
+  background: #020610;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+  pointer-events: none;
+}
+
+.sl-root.is-dusk .sl-shade,
+.sl-root.is-night .sl-shade {
+  opacity: 0.35;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.sl-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 40px 0;
+  width: 1280px;
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 108px;
+}
+
+.sl-logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: 0.02em;
+  color: var(--sl-moon);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+  margin-right: 8px;
+}
+
+.sl-chip {
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--sl-moon);
+  color: var(--sl-ink);
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+}
+
+.sl-guide {
+  padding: 6px 12px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px var(--sl-card-edge);
+  color: var(--sl-text-2);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.sl-root.is-day .sl-logo {
+  color: #3f1f0f;
+  text-shadow: none;
+}
+
+.sl-root.is-day .sl-guide {
+  color: #5a2e17;
+  box-shadow: inset 0 0 0 2px rgba(90, 46, 23, 0.45);
+}
+
+.sl-head-right {
+  margin-left: auto;
+}
+
+.sl-clock {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  transition: opacity 0.4s ease;
+}
+
+.sl-clock.is-hidden {
+  opacity: 0;
+}
+
+.sl-clock svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.sl-clock-track {
+  fill: var(--sl-card);
+  stroke: rgba(255, 255, 255, 0.14);
+  stroke-width: 10;
+}
+
+.sl-clock-arc {
+  fill: none;
+  stroke: var(--sl-moon);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.sl-clock.is-low .sl-clock-arc {
+  stroke: var(--sl-lamp);
+}
+
+.sl-clock-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+}
+
+/* ---------------------------------------------------------------- body + card */
+
+.sl-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1280px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 60px;
+  min-height: 0;
+}
+
+.sl-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 520px;
+  max-width: 900px;
+  padding: 26px 40px 30px;
+  border-radius: 28px;
+  background: var(--sl-card);
+  box-shadow:
+    inset 0 0 0 2px var(--sl-card-edge),
+    0 18px 40px rgba(0, 0, 0, 0.35);
+  text-align: center;
+  animation: sl-rise 0.5s ease both;
+}
+
+.sl-card.is-wide {
+  max-width: 1080px;
+}
+
+.sl-card.is-closed {
+  background: rgba(2, 6, 16, 0.6);
+}
+
+.sl-card.is-spot {
+  box-shadow:
+    inset 0 0 0 3px var(--sl-moon),
+    0 0 80px rgba(255, 231, 163, 0.25);
+}
+
+.sl-eyebrow {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sl-moon);
+}
+
+.sl-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 1.1;
+}
+
+.sl-sub {
+  max-width: 760px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--sl-text-2);
+}
+
+.sl-note {
+  margin-top: 4px;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--sl-moon);
+}
+
+.sl-note.is-warn {
+  color: var(--sl-lamp);
+}
+
+.sl-pic {
+  width: 300px;
+  height: 225px;
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 2px var(--sl-card-edge);
+}
+
+.sl-pic.is-small {
+  width: 176px;
+  height: 132px;
+  border-radius: 14px;
+}
+
+.sl-card.is-cue .sl-pic {
+  animation: sl-call 0.9s ease both;
+}
+
+.sl-pair {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.sl-bigav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.sl-bigav-name {
+  font-weight: 800;
+  font-size: 24px;
+}
+
+.sl-count {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 140px;
+  line-height: 1;
+  color: var(--sl-moon);
+}
+
+.sl-count.is-beat {
+  animation: sl-beat 0.9s ease both;
+}
+
+/* ---------------------------------------------------------------- setup tiles */
+
+.sl-tiles {
+  display: flex;
+  gap: 18px;
+  margin: 6px 0;
+}
+
+.sl-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 210px;
+  padding: 10px 10px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+  transition: transform 0.25s ease;
+}
+
+.sl-tile img {
+  width: 190px;
+  height: 142px;
+  border-radius: 12px;
+}
+
+.sl-tile.is-on {
+  box-shadow: inset 0 0 0 4px var(--sl-moon);
+  transform: translateY(-6px);
+}
+
+.sl-tile-name {
+  font-weight: 800;
+  font-size: 19px;
+}
+
+.sl-tile-sub {
+  font-size: 14px;
+  color: var(--sl-text-2);
+}
+
+/* ---------------------------------------------------------------- tally */
+
+.sl-tally-last {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+}
+
+.sl-vote {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--sl-moon);
+  animation: sl-pop 0.3s ease both;
+}
+
+.sl-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--sl-cream);
+}
+
+.sl-vote-skip {
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--sl-text-2);
+}
+
+.sl-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 640px;
+}
+
+.sl-bar {
+  display: grid;
+  grid-template-columns: 200px 1fr 40px;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.sl-bar b {
+  font-family: var(--font-display);
+  font-size: 28px;
+  text-align: right;
+}
+
+.sl-bar-track {
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.sl-bar-fill {
+  height: 100%;
+  border-radius: 9px;
+  background: var(--sl-lamp);
+  transform-origin: left center;
+  transition: transform 0.35s ease;
+}
+
+.sl-bar.is-skip .sl-bar-fill {
+  background: #8b93a7;
+}
+
+/* ---------------------------------------------------------------- reveal: the card turns slowly */
+
+.sl-flip {
+  width: 260px;
+  height: 250px;
+  perspective: 900px;
+}
+
+.sl-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: sl-turn 1.6s ease 1.2s both;
+}
+
+.sl-flip-back,
+.sl-flip-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 22px;
+  backface-visibility: hidden;
+}
+
+.sl-flip-back {
+  background: var(--sl-ink);
+  box-shadow: inset 0 0 0 4px var(--sl-moon);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 120px;
+  color: var(--sl-moon);
+}
+
+.sl-flip-face {
+  background: var(--sl-cream);
+  color: var(--sl-ink);
+  transform: rotateY(180deg);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 34px;
+}
+
+.sl-flip-face img {
+  width: 220px;
+  height: 165px;
+  border-radius: 14px;
+}
+
+.sl-late {
+  animation: sl-rise 0.5s ease 2.9s both;
+}
+
+/* ---------------------------------------------------------------- final */
+
+.sl-final {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  animation: sl-rise 0.6s ease both;
+}
+
+.sl-final-head {
+  padding: 16px 40px 18px;
+  border-radius: 24px;
+  background: var(--sl-card);
+  box-shadow: inset 0 0 0 2px var(--sl-card-edge);
+  text-align: center;
+}
+
+.sl-final-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 58px;
+  line-height: 1;
+  color: var(--sl-moon);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.sl-final.is-siluman .sl-final-title {
+  color: var(--sl-lamp);
+}
+
+.sl-final-body {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.sl-final-cast {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border-radius: 22px;
+  background: var(--sl-card);
+}
+
+.sl-cast {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.sl-cast img {
+  width: 96px;
+  height: 72px;
+  border-radius: 10px;
+}
+
+.sl-cast svg {
+  margin-top: -16px;
+}
+
+.sl-cast.is-out img {
+  opacity: 0.55;
+}
+
+.sl-cast-name {
+  max-width: 116px;
+  font-weight: 800;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sl-cast-role {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sl-moon);
+}
+
+.sl-chron {
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  background: var(--sl-card);
+  text-align: left;
+}
+
+.sl-chron-line {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--sl-text-2);
+}
+
+/* ---------------------------------------------------------------- the village row */
+
+.sl-strip {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+  padding: 16px 32px 22px;
+  width: 1280px;
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 136px;
+  border-radius: 28px 28px 0 0;
+  background: rgba(4, 9, 18, 0.42);
+}
+
+.sl-strip.is-dense {
+  gap: 6px 8px;
+}
+
+.sl-seat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 92px;
+  transition:
+    opacity 0.5s ease,
+    transform 0.4s ease;
+}
+
+.sl-strip.is-dense .sl-seat {
+  width: 70px;
+}
+
+.sl-seat-av {
+  position: relative;
+}
+
+.sl-seat.is-away {
+  opacity: 0.5;
+}
+
+.sl-seat.is-ghost {
+  opacity: 0.55;
+}
+
+.sl-seat.is-ghost .sl-seat-av {
+  filter: grayscale(0.7);
+}
+
+.sl-seat.is-spot {
+  transform: translateY(-10px) scale(1.12);
+}
+
+.sl-tick {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--sl-moon);
+  color: var(--sl-ink);
+  font-weight: 800;
+  font-size: 14px;
+  animation: sl-pop 0.3s ease both;
+}
+
+.sl-seat-name {
+  max-width: 100%;
+  font-weight: 800;
+  font-size: 15px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sl-strip.is-dense .sl-seat-name {
+  font-size: 13px;
+}
+
+.sl-seat-tag {
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(255, 231, 163, 0.18);
+  color: var(--sl-moon);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sl-marks {
+  position: absolute;
+  top: -12px;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sl-lamp);
+  color: #1a0e05;
+  font-weight: 800;
+  font-size: 14px;
+  animation: sl-pop 0.25s ease both;
+}
+
+/* ---------------------------------------------------------------- animation */
+
+@keyframes sl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sl-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sl-call {
+  0% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes sl-beat {
+  0% {
+    opacity: 0.2;
+    transform: scale(1.4);
+  }
+  30% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes sl-turn {
+  from {
+    transform: none;
+  }
+  to {
+    transform: rotateY(180deg);
+  }
+}

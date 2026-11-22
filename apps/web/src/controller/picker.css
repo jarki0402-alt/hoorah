@@ -1,0 +1,48 @@
+/* Game picker extras (loaded with the picker): group headings under "Semua", the "Baru" tag,
+   and six group tabs that still fit beside the list when the phone is held sideways. */
+
+.picker-group {
+  flex: none;
+  padding: 6px 4px 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.picker-group:first-child {
+  padding-top: 0;
+}
+
+.pick-new {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  vertical-align: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .picker .picker-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .picker .picker-tab {
+    min-width: 0;
+    padding: 0 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .picker-group {
+    grid-column: 1 / -1;
+  }
+}

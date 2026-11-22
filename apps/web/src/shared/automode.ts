@@ -56,9 +56,37 @@ const RULES: Record<GameId, Rule> = {
   // Not read: the Host picks the kitchen and difficulty inside the game; one round is about three
   // minutes whatever the head count (more cooks get more orders instead).
   dapur: () => 1,
+  // Tracks per session (about a minute each plus podium). Three: an easy opener, then harder ones.
+  obby: () => 3,
+  // Sections (bagian) of the chosen route, each ending at a flag; the last one is the summit
+  // with the climbing wall. Six, as on the approved board: warm-up, escalation, summit.
+  tali: () => 6,
+  // Rounds (one BUM each, two bombs in the last). Five: with 3 lives each, someone can be knocked
+  // out in a small group while a big group still ranks by lives left.
+  bom: () => 5,
+  // Rounds (rules). All seven: about five minutes, the dark final scores double.
+  runtuh: () => 7,
+  // Rondes on the shrinking floe (several shots each, about a minute). Five: the last one doubles.
+  es: () => 5,
+  // Babak for Acak (up to 60 s each); a babak the Host picks plays 3 times instead.
+  langkah: () => 4,
+  // Rondes (Balapan up to 2 minutes, Bertahan up to 90 s), a map per ronde. Three, the last one
+  // scoring double so a bad start can still be won back.
+  nyebrang: () => 3,
+  // Rondes, a new word pair each (clue turns, vote, reveal: about 3 minutes with a small table).
+  // A big table takes longer per ronde, so it plays two.
+  penyusup: (n) => (n <= 6 ? 3 : 2),
+  // Words per session (group play; solo is an endless streak run until the lives are gone). A
+  // big group waits longer for every phone each word, so it spells fewer.
+  eja: (n) => (n <= 4 ? 10 : 8),
+  // Not read: one story runs until a side wins (nights and days, about 12–20 minutes).
+  siluman: () => 1,
+  // Stages in a row from the one the Host picks (2 to 3 minutes each plus intro and stars).
+  warna: () => 4,
+  // Rounds, the ghost role passing to someone new each round: alone one round against the
+  // computer, two people swap once, bigger groups play three.
+  hantu: (n) => (n <= 1 ? 1 : n === 2 ? 2 : 3),
   // Not playable yet (segera hadir); no game reads these.
-  gambar: () => 1,
-  panjat: () => 1,
 };
 
 /** `settings.rounds` for a game with this many human players (bad counts are treated as 1). */

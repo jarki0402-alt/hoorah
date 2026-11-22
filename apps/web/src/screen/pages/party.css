@@ -1,0 +1,76 @@
+/* Mode Pesta table on the results page: one strip above the buttons (1280×720 stage). */
+
+.party-table {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 128px;
+  width: fit-content;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 1180px;
+  animation: rise-in 0.5s var(--ease-out) both;
+}
+
+.party-table-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.party-champion {
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 0;
+  color: var(--yellow);
+}
+
+.party-table-rows {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.party-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 4px 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  white-space: nowrap;
+  background: rgba(30, 31, 35, 0.92);
+}
+
+.party-row.top {
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.party-name {
+  font-weight: 800;
+}
+
+.party-points {
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+/* The final: the table is the news, so it moves up a little and grows. */
+.party-table.is-final {
+  bottom: 136px;
+}
+
+.party-table.is-final .party-row {
+  font-size: 16px;
+  padding: 6px 16px 6px 10px;
+}

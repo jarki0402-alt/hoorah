@@ -20,8 +20,18 @@ export type GameId =
   | 'kata'
   | 'juragan'
   | 'dapur'
-  | 'gambar'
-  | 'panjat';
+  | 'obby'
+  | 'tali'
+  | 'bom'
+  | 'runtuh'
+  | 'es'
+  | 'langkah'
+  | 'nyebrang'
+  | 'penyusup'
+  | 'eja'
+  | 'siluman'
+  | 'warna'
+  | 'hantu';
 
 /** Groups in the Host's game picker on the phone. */
 export type GameCategory = 'papan' | 'lomba' | 'kuis' | 'aksi';
@@ -59,6 +69,8 @@ export interface GameInfo {
   mood: GameMood;
   available: boolean;
   badge?: 'BARU' | 'FAVORIT' | 'SEGERA';
+  /** Release wave; games of the newest wave (3) carry the "Baru" label on the home screen. */
+  wave?: number;
   logoColor: string;
   howTo: { t: string; d: string }[];
   track?: Track;
@@ -123,7 +135,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     title: 'Rusun',
     tagline: 'Susun setinggi mungkin, jangan sampai roboh!',
     description:
-      'Lantai baru berayun di tali crane. Jatuhkan pas di atas menara, bergiliran. Makin tinggi, lantai makin kecil dan ayunan makin cepat. Yang merobohkan, kalah.',
+      'Lantai baru digeser crane ke kanan dan kiri, tepat di atas menara. Jatuhkan pas, bergiliran. Makin tinggi, lantai makin kecil dan geserannya makin cepat. Yang merobohkan, kalah.',
     minPlayers: 1,
     maxPlayers: 8,
     control: 'Satu tombol',
@@ -140,7 +152,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     ],
     track: 'rusun',
     tips: [
-      'Lihat ayunan crane di layar utama, bukan di HP.',
+      'Lihat gerak crane di layar utama, bukan di HP.',
       'Pantau meter KESEIMBANGAN di pojok kanan atas.',
     ],
   },
@@ -547,39 +559,357 @@ export const GAMES: Record<GameId, GameInfo> = {
       'Di level Heboh, masakan gosong bisa terbakar. Padamkan dengan pemadam merah.',
     ],
   },
-  gambar: {
-    id: 'gambar',
-    title: 'Gambar Kilat',
-    tagline: 'Gambar, tebak, tertawa.',
-    description: 'Segera hadir.',
+  obby: {
+    id: 'obby',
+    wave: 3,
+    title: 'Obby',
+    tagline: 'Balapan rintangan. Siapa duluan ke bendera?',
+    description:
+      'Balapan di lintasan rintangan dari balok mainan: palang berputar, lantai yang hilang, ban berjalan, dan pegas lompat. Joystick untuk lari, tombol LOMPAT untuk melompat. Injak lantai kotak-kotak untuk menyimpan; jatuh berarti kembali ke titik simpan terakhirmu. Kamera mengikuti rombongan, jadi yang tertinggal dipindah ke dekat mereka. Tiga lintasan pendek, total poin menentukan juara.',
+    minPlayers: 1,
+    maxPlayers: 8,
+    control: 'Joystick + LOMPAT',
+    orientation: 'Mendatar',
+    category: 'aksi',
+    mood: 'heboh',
+    available: true,
+    badge: 'BARU',
+    logoColor: '#FFC928',
+    howTo: [
+      { t: 'Lari dan lompat', d: 'Joystick kiri untuk lari dan belok, tombol LOMPAT besar di kanan.' },
+      { t: 'Titik simpan', d: 'Injak lantai kotak-kotak. Jatuh? Muncul lagi di titik simpan terakhirmu.' },
+      {
+        t: 'Jangan tertinggal',
+        d: 'Keluar layar lebih dari 2 detik: dipindah ke titik simpan dekat rombongan.',
+      },
+    ],
+    track: 'obby',
+    tips: ['Palang berputar bisa dilompati.', 'Lari penuh sebelum menginjak pegas supaya terlempar jauh.'],
+  },
+  tali: {
+    id: 'tali',
+    wave: 3,
+    title: 'Satu Tali',
+    tagline: 'Satu jatuh, semua ikut tertarik. Naik bareng!',
+    description:
+      'Satu tim terikat satu tali elastis, mendaki tebing, hutan bambu, atau puncak salju lewat celah, rakit geser, palang berputar, dan dinding panjat. Kalau ada yang jatuh, tahan PEGANG supaya tidak ikut terseret, lalu mundur untuk menariknya naik. Sentuh bendera bersama untuk lanjut ke bagian berikutnya. Main sendiri? Kamu diikat ke karung pemberat yang bisa diseret dan dilempar.',
+    minPlayers: 1,
+    maxPlayers: 4,
+    control: 'Joystick + LOMPAT + PEGANG',
+    orientation: 'Mendatar',
+    category: 'aksi',
+    mood: 'ramai',
+    available: true,
+    badge: 'BARU',
+    logoColor: '#FFC928',
+    howTo: [
+      { t: 'Satu tali', d: 'Semua terikat. Kalau terlalu jauh, tali menarik yang tertinggal.' },
+      { t: 'Tahan PEGANG', d: 'Teman jatuh? Tahan PEGANG, lalu mundur untuk menariknya naik.' },
+      {
+        t: 'Bendera bersama',
+        d: 'Semua berdiri di bendera untuk lanjut. Jatuh semua? Ulang dari bendera terakhir.',
+      },
+    ],
+    track: 'tali',
+    tips: [
+      'Tergantung di tali? Ketuk PANJAT berkali-kali untuk naik.',
+      'Tahan PEGANG di dinding panjat untuk memanjat ke atas.',
+      'Lompat bareng saat palang lewat. Yang telat ikut tertarik!',
+    ],
+  },
+  bom: {
+    id: 'bom',
+    wave: 3,
+    title: 'Bom Oper',
+    tagline: 'Bom berdetak, waktunya rahasia. Oper sebelum BUM!',
+    description:
+      'Kejar-kejaran di halaman, pasar, atau atap gedung dengan bom yang sumbunya menyala. Waktu ledaknya rahasia, hanya percikan sumbu yang makin cepat. Dekati teman lalu ketuk OPER, tapi bom tidak bisa langsung dioper balik. Pemegang bom lari sedikit lebih cepat. BUM berarti kehilangan satu dari tiga nyawa, dan ronde terakhir memakai dua bom sekaligus.',
+    minPlayers: 1,
+    maxPlayers: 8,
+    control: 'Joystick + OPER',
+    orientation: 'Mendatar',
+    category: 'aksi',
+    mood: 'heboh',
+    available: true,
+    badge: 'BARU',
+    logoColor: '#FFC928',
+    howTo: [
+      { t: 'Lari', d: 'Joystick untuk lari. Pemegang bom sedikit lebih cepat, jadi selalu bisa mengejar.' },
+      { t: 'Ketuk OPER', d: 'Tombol menyala "Dekat!" saat ada teman di dalam lingkar merah.' },
+      { t: 'Tiga nyawa', d: 'BUM! Pemegangnya kehilangan satu nyawa. Nyawa terbanyak menang.' },
+    ],
+    track: 'bom',
+    tips: [
+      'Yang baru mengoper kebal 2 detik, jadi bom tidak bisa langsung kembali.',
+      'Sumbu berdenyut makin cepat menjelang ledakan.',
+      'Ronde terakhir ada dua bom!',
+    ],
+  },
+  runtuh: {
+    id: 'runtuh',
+    wave: 3,
+    title: 'Lantai Runtuh',
+    tagline: 'Aturan berganti, petak yang salah runtuh!',
+    description:
+      'Panggung kuis malam tanpa soal tertulis. Tiap babak layar menyebut aturan baru: warna, simbol, angka, jangan diam, gelombang, sampai lampu padam. Pindah ke petak yang benar sebelum waktu habis, petak yang salah runtuh ke jurang. DORONG lawan di dekatmu, tapi tombolnya perlu jeda. Yang jatuh ikut lagi babak berikutnya, dan babak terakhir berpoin ganda.',
+    minPlayers: 1,
+    maxPlayers: 8,
+    control: 'Joystick + DORONG',
+    orientation: 'Mendatar',
+    category: 'aksi',
+    mood: 'ramai',
+    available: true,
+    badge: 'BARU',
+    logoColor: '#FFC928',
+    howTo: [
+      { t: 'Ikuti aturan', d: 'Tiap babak layar menyebut aturan: warna, simbol, angka, atau gerak.' },
+      {
+        t: 'Pindah petak',
+        d: 'Joystick untuk pindah petak sebelum hitung mundur habis. Petak yang salah runtuh.',
+      },
+      { t: 'DORONG', d: 'Geser pemain di dekatmu. Setelah itu jeda 3 detik, terlihat di cincin tombol.' },
+    ],
+    track: 'runtuh',
+    tips: [
+      'Jatuh tidak lama: poinmu tetap, dan kamu ikut lagi di babak berikutnya.',
+      'Babak Gelap berpoin ganda. Ingat petak yang menyala!',
+    ],
+  },
+  es: {
+    id: 'es',
+    title: 'Seluncur Es',
+    tagline: 'Tarik, bidik, lepas. Terakhir di atas es menang!',
+    description:
+      'Semua berdiri di bongkah es di laut dingin. Tarik ketapel di HP untuk arah dan kekuatan, lepas untuk mengunci. Waktu habis, semua meluncur bersamaan dan saling tabrak. Tiap luncuran tepi es retak dan patah. Terakhir di atas es dapat poin terbanyak, ronde terakhir berpoin ganda.',
+    minPlayers: 1,
+    maxPlayers: 8,
+    control: 'Ketapel: tarik dan lepas',
+    orientation: 'Tegak',
+    category: 'aksi',
+    mood: 'heboh',
+    available: true,
+    badge: 'BARU',
+    logoColor: '#EEF8FC',
+    howTo: [
+      {
+        t: 'Tarik ke belakang',
+        d: 'Tarik dari buahmu di HP. Arah luncur kebalikan dari tarikan, makin jauh makin kuat.',
+      },
+      { t: 'Lepas untuk mengunci', d: 'Masih boleh bidik ulang sebelum hitung mundur habis.' },
+      {
+        t: 'Meluncur bersamaan',
+        d: 'Tabrak lawan sampai tercebur. Tepi es yang retak patah setelah luncuran.',
+      },
+    ],
+    track: 'es',
+    wave: 3,
+    tips: [
+      'Bidikan dikunci di HP, jadi sinyal lambat tidak merugikan.',
+      'Garis putus-putus merah di es: bagian itu patah setelah luncuran ini.',
+      'Tercebur? Bersorak dari HP, lalu kembali ke es di ronde berikutnya.',
+    ],
+  },
+  langkah: {
+    id: 'langkah',
+    title: 'Langkah Maut',
+    tagline: 'Satu salah langkah, jatuh ke jurang!',
+    description:
+      'Jalan setapak di atas jurang gelap. Layar menampilkan panah, tekan arah yang sama di HP tepat waktu. Delapan babak menegangkan: Eskalator, Titian Tali, Tangga Gedung, Lorong Laser, Batu Sungai, Gua Runtuh, Ingat Jalan, Lift Rusak. Host memilih Acak atau babak tertentu. Yang jatuh ikut lagi babak berikutnya.',
+    minPlayers: 1,
+    maxPlayers: 16,
+    control: 'Tombol arah',
+    orientation: 'Tegak',
+    category: 'aksi',
+    mood: 'ramai',
+    available: true,
+    badge: 'BARU',
+    logoColor: '#FFC928',
+    howTo: [
+      { t: 'Lihat panah di layar', d: 'Tekan tombol arah yang sama di HP tepat waktu.' },
+      { t: 'Salah = jatuh', d: 'Salah arah atau terlambat, kamu jatuh. Ikut lagi di babak berikutnya.' },
+      { t: 'Kejar beruntun', d: 'Tekan pas di ketukan untuk bonus beruntun. Makin lama makin cepat.' },
+    ],
+    track: 'langkah',
+    wave: 3,
+    tips: [
+      'Waktu tekan diukur di HP, jadi tetap adil walau sinyal lambat.',
+      'Di Lorong Laser, tunggu laser dekat dulu. Terlalu cepat juga jatuh!',
+      'Babak terakhir berpoin ganda.',
+    ],
+  },
+  nyebrang: {
+    id: 'nyebrang',
+    wave: 3,
+    title: 'Nyebrang',
+    tagline: 'Lompat serentak, jangan tertinggal kamera!',
+    description:
+      'Seberangi jalan penuh angkot, sungai berbatang kayu, dan rel kereta. Satu usap, satu lompatan. Kamera terus maju, yang tertinggal di tepi layar gugur. Balapan ke garis akhir atau bertahan sampai tinggal sendiri, di map Kota, Sungai, Rel, dan Malam.',
+    minPlayers: 1,
+    maxPlayers: 8,
+    control: 'Usap atau tombol arah',
+    orientation: 'Tegak',
+    category: 'aksi',
+    mood: 'heboh',
+    available: true,
+    badge: 'BARU',
+    logoColor: '#FFC928',
+    howTo: [
+      { t: 'Usap untuk lompat', d: 'Satu usap ke mana saja = satu lompatan. Ketuk untuk maju.' },
+      { t: 'Hindari dan pijak', d: 'Awas angkot dan kereta. Di sungai, pijak batang kayu dan teratai.' },
+      { t: 'Jangan tertinggal', d: 'Kamera terus maju. Lolos tipis dari kendaraan dapat bonus.' },
+    ],
+    track: 'nyebrang',
+    tips: [
+      'Lampu merah berkedip di tepi rel artinya kereta datang. Tunggu dulu!',
+      'Batang kayu membawamu ke samping. Lompat sebelum hanyut keluar layar.',
+      'Ronde terakhir poinnya ganda.',
+    ],
+  },
+  penyusup: {
+    id: 'penyusup',
+    wave: 3,
+    title: 'Penyusup',
+    tagline: 'Semua dapat kata yang sama, kecuali satu.',
+    description:
+      'Tiap pemain melihat kata rahasia di HP, tapi satu penyusup dapat kata yang mirip. Bergiliran beri petunjuk satu kata, diucapkan atau diketik, lalu pilih siapa yang beda. Ada Si Kosong yang tidak dapat kata sama sekali. Kata dalam Bahasa Indonesia atau Inggris.',
     minPlayers: 3,
     maxPlayers: 16,
-    control: 'Gambar dan ketik',
+    control: 'Kartu rahasia dan voting',
     orientation: 'Tegak',
     category: 'kuis',
     mood: 'ramai',
-    available: false,
-    badge: 'SEGERA',
-    logoColor: '#FFFFFF',
-    howTo: [],
-    tips: [],
+    available: true,
+    badge: 'BARU',
+    logoColor: '#FFC928',
+    howTo: [
+      { t: 'Intip kartumu', d: 'Tahan kartu di HP untuk melihat kata rahasia. Lepas, kartu tertutup.' },
+      { t: 'Beri petunjuk', d: 'Satu kata, bergiliran. Jangan terlalu jelas, jangan terlalu samar.' },
+      { t: 'Cari yang beda', d: 'Pilih penyusupnya di HP. Suara dibuka bersamaan di layar.' },
+    ],
+    track: 'penyusup',
+    tips: [
+      'Kamu bisa saja penyusup tanpa sadar. Dengarkan dulu petunjuk yang lain.',
+      'Si Kosong yang tertangkap masih bisa menang dengan menebak kata warga.',
+      'Butuh 3 pemain atau lebih, jadi perlu Hoorah Pass.',
+    ],
   },
-  panjat: {
-    id: 'panjat',
-    title: 'Panjat Pinang',
-    tagline: 'Panjat, rebut hadiahnya!',
-    description: 'Segera hadir.',
-    minPlayers: 2,
+  eja: {
+    id: 'eja',
+    title: 'Juara Eja',
+    tagline: 'Dengar katanya, baca artinya, eja di HP.',
+    description:
+      'Lomba mengeja serentak. Layar membacakan kata dan menampilkan artinya, semua mengetik ejaannya di HP. Huruf dibuka bersama di layar. Kata makin sulit, salah eja mengurangi nyawa. Pilih Bahasa Indonesia atau English. Main sendiri: kejar rekor beruntun.',
+    minPlayers: 1,
     maxPlayers: 8,
-    control: 'Ritme',
+    control: 'Papan ketik huruf',
     orientation: 'Tegak',
-    category: 'lomba',
+    category: 'kuis',
+    mood: 'otak',
+    available: true,
+    wave: 3,
+    badge: 'BARU',
+    logoColor: '#1C1A17',
+    howTo: [
+      { t: 'Dengar dan baca', d: 'Kata dibacakan dan artinya tampil di layar utama.' },
+      { t: 'Ketik ejaannya', d: 'Ketik di HP lalu tekan Kirim. Kotak huruf menunjukkan panjang kata.' },
+      { t: 'Jaga nyawa', d: 'Benar dapat 2 poin, salah eja mengurangi nyawa. Kata Sulit berpoin ganda.' },
+    ],
+    track: 'eja',
+    tips: [
+      'Tekan Dengar lagi di HP kalau kurang jelas.',
+      'Nyawa habis? Tetap ketik di Latihan, kata yang benar masuk Kamus Saya.',
+      'Kurang satu huruf ditandai, jadi kamu tahu hampir benar.',
+    ],
+  },
+  siluman: {
+    id: 'siluman',
+    title: 'Kampung Siluman',
+    tagline: 'Malam menyamar, siang berdebat.',
+    description:
+      'Siluman menyamar di antara warga. Malam hari semua tutup mata, layar memanggil tiap peran dengan bunyinya: Siluman memilih, Dukun melihat satu peran, Tabib melindungi. Siang hari kampung berdiskusi, mencurigai, lalu voting rahasia di HP. Tanpa moderator, layar yang memandu.',
+    minPlayers: 5,
+    maxPlayers: 16,
+    control: 'Kartu peran dan voting',
+    orientation: 'Tegak',
+    category: 'kuis',
+    mood: 'ramai',
+    available: true,
+    wave: 3,
+    badge: 'BARU',
+    logoColor: '#FFE7A3',
+    howTo: [
+      { t: 'Intip peranmu', d: 'Tahan kartu di HP. Warga, Siluman, Dukun, atau Tabib. Rahasiakan!' },
+      {
+        t: 'Malam: tutup mata',
+        d: 'Buka mata hanya saat bunyi peranmu, pilih di HP, tutup lagi saat weker.',
+      },
+      {
+        t: 'Siang: cari siluman',
+        d: 'Diskusi, tandai yang dicurigai, lalu voting. Yang tersingkir jadi arwah.',
+      },
+    ],
+    track: 'siluman',
+    tips: [
+      'Hafalkan bunyinya: geraman Siluman, lonceng Dukun, seruling Tabib.',
+      'Arwah tetap ikut: tebak siluman saat voting untuk poin.',
+      'Butuh 5 pemain atau lebih, jadi perlu Hoorah Pass.',
+    ],
+  },
+  warna: {
+    id: 'warna',
+    title: 'Petualangan Warna',
+    tagline: 'Tiap buah punya warna. Hanya bersama semua bisa keluar.',
+    description:
+      'Teka-teki platform kerja sama di gua bercahaya. Tiap pemain dapat warna dan simbol sendiri. Kolam, gerbang, dan permata hanya untuk warna yang sama. Injak tombol, dorong kotak berat berdua, tarik tuas, naik lift, dan berdiri di pundak teman sampai semua masuk pintu warnanya.',
+    minPlayers: 1,
+    maxPlayers: 8,
+    control: 'Joystick dan LOMPAT',
+    orientation: 'Mendatar',
+    category: 'aksi',
+    mood: 'ramai',
+    available: true,
+    wave: 3,
+    badge: 'BARU',
+    logoColor: '#FFE27A',
+    howTo: [
+      { t: 'Kenali warnamu', d: 'Kolam warnamu aman. Kolam warna lain = kembali ke titik simpan.' },
+      { t: 'Kerja sama', d: 'Tombol injak, tuas, lift, dan kotak berat butuh teman.' },
+      { t: 'Semua keluar', d: 'Naik ke pundak teman, lalu masuk pintu sesuai warnamu.' },
+    ],
+    track: 'warna',
+    tips: [
+      'Tiap warna punya simbol, jadi tetap jelas bagi yang buta warna.',
+      'Main sendiri: kamu memegang dua karakter, tekan TUKAR untuk pindah.',
+      'Macet? Tekan ULANG bersama untuk mengulang tahap.',
+    ],
+  },
+  hantu: {
+    id: 'hantu',
+    title: 'Hantu Tak Terlihat',
+    tagline: 'Hantunya cuma kelihatan saat kena senter.',
+    description:
+      'Rumah gelap, satu pemain diam-diam jadi hantu. Posisinya hanya tampil di peta rahasia di HP-nya, di layar ia tak terlihat kecuali tersorot senter. Penghuni mencari 3 kunci, menyalakan sekring, lalu kabur. HP penghuni berdetak makin cepat saat hantu mendekat. Pilih Rumah Tua atau Kampung Malam, Seram Ringan atau Seram Beneran. Tanpa darah.',
+    minPlayers: 1,
+    maxPlayers: 8,
+    control: 'Joystick, senter, dan lari',
+    orientation: 'Mendatar',
+    category: 'aksi',
     mood: 'heboh',
-    available: false,
-    badge: 'SEGERA',
-    logoColor: '#FFFFFF',
-    howTo: [],
-    tips: [],
+    available: true,
+    wave: 3,
+    badge: 'BARU',
+    logoColor: '#A6F4E6',
+    howTo: [
+      { t: 'Intip peranmu', d: 'Tahan kartu di HP: penghuni atau hantu. Rahasiakan!' },
+      { t: 'Penghuni', d: 'Cari 3 kunci dan nyalakan sekring. Sorot hantu agar silau, lalu kabur.' },
+      { t: 'Hantu', d: 'Lihat peta rahasia di HP, tangkap penghuni, matikan lampu, banting pintu.' },
+    ],
+    track: 'hantu',
+    tips: [
+      'Disorot senter sebentar membuat hantu silau dan melambat.',
+      'Yang tertangkap jadi kunang-kunang dan tetap menerangi jalan teman.',
+      'Main sendiri: lawan hantu komputer.',
+    ],
   },
 };
 
@@ -602,7 +932,18 @@ export const CATALOG: GameId[] = [
   'kata',
   'juragan',
   'dapur',
-  'gambar',
+  'obby',
+  'tali',
+  'bom',
+  'runtuh',
+  'es',
+  'langkah',
+  'nyebrang',
+  'penyusup',
+  'eja',
+  'siluman',
+  'warna',
+  'hantu',
 ];
 export const FEATURED: GameId[] = ['bajaj', 'masak', 'tarik', 'kuis', 'rusun'];
 

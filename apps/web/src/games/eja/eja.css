@@ -1,0 +1,627 @@
+/* Juara Eja main screen: an editorial page of cream paper and ink. Authored on the 1280x720 core;
+   taller stages (16:10, 4:3) give the body more air, wider ones keep the content centred.
+   Animations touch transform and opacity only. */
+
+.ej-root {
+  --ej-paper: #fbf6ec;
+  --ej-paper-2: #f3eadb;
+  --ej-ink: #1c1a17;
+  --ej-ink-2: #5e574c;
+  --ej-ink-3: #8a8176;
+  --ej-rule: #e4d5bc;
+  --ej-orange: #ff5a1f;
+  --ej-green: #2e7d4f;
+  --ej-red: #d93a2f;
+  --ej-serif: Georgia, "Times New Roman", "Noto Serif", serif;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--ej-paper);
+  color: var(--ej-ink);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+/* Faint ruled lines and a red margin line, like a school notebook. */
+.ej-paper {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(90deg, transparent 0 118px, rgba(255, 90, 31, 0.22) 118px 120px, transparent 120px),
+    repeating-linear-gradient(180deg, transparent 0 47px, rgba(228, 213, 188, 0.55) 47px 48px);
+  pointer-events: none;
+}
+
+.ej-noshell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fbf6ec;
+  color: #1c1a17;
+  font: 700 24px var(--font-ui);
+}
+
+/* ---------------------------------------------------------------- header */
+
+.ej-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 40px 0;
+  width: 1280px;
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 112px;
+}
+
+.ej-logo {
+  font-family: var(--ej-serif);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 34px;
+  color: var(--ej-ink);
+  margin-right: 12px;
+}
+
+.ej-chip {
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--ej-ink);
+  color: var(--ej-paper);
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: 0.04em;
+}
+
+.ej-chip.is-tier {
+  background: transparent;
+  color: var(--ej-ink);
+  box-shadow: inset 0 0 0 2px var(--ej-ink);
+}
+
+.ej-chip.is-tier.t2 {
+  color: #b2560f;
+  box-shadow: inset 0 0 0 2px #b2560f;
+}
+
+.ej-chip.is-tier.t3 {
+  color: var(--ej-red);
+  box-shadow: inset 0 0 0 2px var(--ej-red);
+}
+
+.ej-chip.is-double {
+  background: var(--ej-orange);
+  color: #fff;
+}
+
+.ej-head-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.ej-lang {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  background: var(--ej-paper-2);
+  box-shadow: inset 0 0 0 3px var(--ej-ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: 0.04em;
+}
+
+.ej-clock {
+  position: relative;
+  width: 88px;
+  height: 88px;
+}
+
+.ej-clock svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ej-clock-track {
+  fill: #fff;
+  stroke: var(--ej-rule);
+  stroke-width: 10;
+}
+
+.ej-clock-arc {
+  fill: none;
+  stroke: var(--ej-ink);
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition: stroke 0.3s ease;
+}
+
+.ej-clock.is-low .ej-clock-arc {
+  stroke: var(--ej-orange);
+}
+
+.ej-clock.is-idle {
+  opacity: 0.55;
+}
+
+.ej-clock-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 34px;
+}
+
+.ej-clock.is-low .ej-clock-num {
+  color: var(--ej-orange);
+  animation: ej-pulse 1s ease infinite;
+}
+
+/* ---------------------------------------------------------------- body */
+
+.ej-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1280px;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 80px;
+  min-height: 0;
+}
+
+/* ---------------------------------------------------------------- setup */
+
+.ej-setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.ej-setup-title {
+  font-family: var(--ej-serif);
+  font-weight: 700;
+  font-size: 44px;
+  line-height: 1.1;
+}
+
+.ej-setup-tiles {
+  display: flex;
+  gap: 40px;
+}
+
+.ej-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 300px;
+  padding: 12px 12px 14px;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: inset 0 0 0 3px var(--ej-rule);
+  transition: transform 0.25s ease;
+}
+
+.ej-tile img {
+  width: 276px;
+  height: 207px;
+  border-radius: 14px;
+}
+
+.ej-tile.is-on {
+  box-shadow:
+    inset 0 0 0 5px var(--ej-ink),
+    0 12px 0 -4px var(--ej-orange);
+  transform: translateY(-6px);
+}
+
+.ej-tile-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+}
+
+.ej-tile-sub {
+  font-size: 16px;
+  color: var(--ej-ink-2);
+  text-align: center;
+}
+
+.ej-setup-note {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ej-ink-2);
+}
+
+/* ---------------------------------------------------------------- the word */
+
+.ej-word {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  width: 100%;
+  animation: ej-rise 0.5s ease both;
+}
+
+.ej-def {
+  max-width: 1020px;
+  font-family: var(--ej-serif);
+  font-weight: 700;
+  font-size: 50px;
+  line-height: 1.22;
+  text-align: center;
+  color: var(--ej-ink);
+  text-wrap: balance;
+}
+
+.ej-tools {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.ej-replay {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ej-ink);
+  color: var(--ej-paper);
+  font: 800 21px var(--font-ui);
+  cursor: pointer;
+}
+
+.ej-replay.is-speaking {
+  background: var(--ej-orange);
+  animation: ej-pulse 0.9s ease infinite;
+}
+
+.ej-count {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--ej-ink-2);
+  letter-spacing: 0.02em;
+}
+
+.ej-boxes {
+  --box: 82px;
+  display: flex;
+  gap: 10px;
+}
+
+.ej-boxes.is-sm {
+  --box: 68px;
+  gap: 8px;
+}
+
+.ej-boxes.is-xs {
+  --box: 56px;
+  gap: 6px;
+}
+
+.ej-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--box);
+  height: calc(var(--box) * 1.18);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow:
+    inset 0 0 0 3px var(--ej-ink),
+    0 5px 0 var(--ej-rule);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: calc(var(--box) * 0.62);
+  line-height: 1;
+  color: var(--ej-ink);
+}
+
+.ej-box.is-hint {
+  background: #fff4dc;
+  color: var(--ej-orange);
+}
+
+.ej-boxes.is-open .ej-box {
+  animation: ej-flip 0.45s ease both;
+  background: var(--ej-ink);
+  color: var(--ej-paper);
+}
+
+.ej-under {
+  min-height: 28px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ej-ink-3);
+}
+
+.ej-word.is-intro .ej-def {
+  animation: ej-rise 0.7s ease both;
+}
+
+/* ---------------------------------------------------------------- players */
+
+.ej-players {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  padding: 10px 40px 26px;
+  width: 1280px;
+  max-width: 100%;
+  margin: 0 auto;
+  min-height: 150px;
+}
+
+.ej-players.is-dense {
+  gap: 12px;
+}
+
+.ej-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 128px;
+  transition: opacity 0.3s ease;
+}
+
+.ej-players.is-dense .ej-player {
+  width: 120px;
+}
+
+.ej-player.is-away,
+.ej-player.is-watch {
+  opacity: 0.45;
+}
+
+.ej-player-av {
+  position: relative;
+}
+
+.ej-tick {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ej-ink);
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+  animation: ej-pop 0.3s ease both;
+}
+
+.ej-tick.is-good {
+  background: var(--ej-green);
+}
+
+.ej-tick.is-bad {
+  background: var(--ej-red);
+}
+
+.ej-player-name {
+  max-width: 100%;
+  font-weight: 800;
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ej-player-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  color: var(--ej-ink-2);
+}
+
+.ej-player-meta b {
+  color: var(--ej-ink);
+}
+
+.ej-lives {
+  display: flex;
+  gap: 3px;
+}
+
+.ej-lives i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ej-rule);
+}
+
+.ej-lives i.on {
+  background: var(--ej-red);
+}
+
+.ej-practice {
+  padding: 1px 8px;
+  border-radius: 6px;
+  background: var(--ej-paper-2);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ej-ink-2);
+}
+
+.ej-player-gain {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 24px;
+  color: var(--ej-green);
+  animation: ej-pop 0.35s ease 0.9s both;
+}
+
+.ej-player-near {
+  font-size: 14px;
+  font-weight: 800;
+  color: #b2560f;
+  text-align: center;
+  animation: ej-pop 0.35s ease 0.9s both;
+}
+
+/* ---------------------------------------------------------------- final */
+
+.ej-final {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  animation: ej-rise 0.6s ease both;
+}
+
+.ej-final-eyebrow {
+  font-family: var(--ej-serif);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 40px;
+}
+
+.ej-final-big {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 72px;
+  line-height: 1;
+}
+
+.ej-final-rec {
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: var(--ej-paper-2);
+  font-weight: 800;
+  font-size: 22px;
+}
+
+.ej-final-rec.is-new {
+  background: var(--ej-orange);
+  color: #fff;
+  animation: ej-pulse 1.2s ease infinite;
+}
+
+.ej-final-sub {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ej-ink-2);
+}
+
+.ej-final-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 760px;
+}
+
+.ej-final-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 20px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px var(--ej-rule);
+}
+
+.ej-final-row.is-top {
+  box-shadow: inset 0 0 0 4px var(--ej-ink);
+}
+
+.ej-final-rank {
+  width: 32px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+}
+
+.ej-final-name {
+  flex: 1;
+  font-weight: 800;
+  font-size: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ej-final-kamus {
+  font-size: 16px;
+  color: var(--ej-ink-2);
+}
+
+.ej-final-score {
+  min-width: 56px;
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 30px;
+}
+
+/* ---------------------------------------------------------------- animation */
+
+@keyframes ej-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ej-flip {
+  from {
+    transform: rotateX(90deg);
+    opacity: 0.3;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes ej-pop {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes ej-pulse {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}

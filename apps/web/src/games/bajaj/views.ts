@@ -28,6 +28,7 @@ export function modeMenu(isHost: boolean, mode: Mode, hostName: string): Control
     label: STR.modes[m].name,
     sub: STR.modes[m].sub,
     color: MODE_COLORS[m],
+    thumb: `mode-${m}`,
   }));
   const base = {
     kind: 'menu' as const,
@@ -47,6 +48,7 @@ export function mapMenu(isHost: boolean, circuit: CircuitId, hostName: string): 
     label: STR.maps[c].name,
     sub: STR.maps[c].desc,
     color: MAP_COLORS[c],
+    thumb: `map-${c}`,
   }));
   const base = {
     kind: 'menu' as const,

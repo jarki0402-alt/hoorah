@@ -4,6 +4,7 @@
  * to continue from) is shown in front of the typed letters; submitting sends the whole word.
  * A new `turn` remounts the view (see viewKey), which clears the input.
  */
+import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Icon } from '../shared/ui';
 import { Me, Timer, usePress, type V } from './common';
@@ -96,17 +97,38 @@ export function WordView({ v }: { v: V<'word'> }) {
         <Timer deadline={v.deadline} />
       </div>
 
-      <div class="word-title">{v.title}</div>
-
-      <div class={`word-input ${v.error ? 'has-error' : ''}`} aria-live="polite">
-        {prefix && <span class="word-prefix">{prefix}</span>}
-        {typed ? (
-          <span class="word-typed">{typed}</span>
-        ) : (
-          !locked && !prefix && <span class="word-placeholder">{STR.wordPlaceholder}</span>
-        )}
-        {!off && <span class="word-caret" aria-hidden="true" />}
+      <div class="word-title-row">
+        <div class="word-title">{v.title}</div>
+        {v.extra && <ExtraKey label={v.extra.label} id={v.extra.id} />}
       </div>
+
+      {v.slots ? (
+        <div
+          class={`word-slots ${v.error ? 'has-error' : ''} ${max > 10 ? 'is-long' : ''}`}
+          role="status"
+          aria-label={typed}
+          style={{ '--slots': String(max) } as JSX.CSSProperties}
+        >
+          {Array.from({ length: max }, (_, i) => (
+            <span
+              key={i}
+              class={`word-slot ${i < typed.length ? 'is-filled' : ''} ${i === typed.length && !off ? 'is-next' : ''}`}
+            >
+              {typed[i] ?? ''}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div class={`word-input ${v.error ? 'has-error' : ''}`} aria-live="polite">
+          {prefix && <span class="word-prefix">{prefix}</span>}
+          {typed ? (
+            <span class="word-typed">{typed}</span>
+          ) : (
+            !locked && !prefix && <span class="word-placeholder">{STR.wordPlaceholder}</span>
+          )}
+          {!off && <span class="word-caret" aria-hidden="true" />}
+        </div>
+      )}
 
       <div class={`word-note ${v.error ? 'is-error' : ''}`}>
         {sending ? STR.wordSending : (v.error ?? v.hint ?? ' ')}
@@ -124,6 +146,25 @@ export function WordView({ v }: { v: V<'word'> }) {
         <SendKey disabled={off || !typed} onSend={submit} />
       </div>
     </div>
+  );
+}
+
+/** Small secondary button next to the title (e.g. "Dengar lagi"); works even while sending. */
+function ExtraKey({ id, label }: { id: string; label: string }) {
+  const [pressed, fire] = usePress();
+  return (
+    <button
+      type="button"
+      class={`word-extra ${pressed ? 'pressed' : ''}`}
+      onPointerDown={() => {
+        fire();
+        haptic(10);
+        action(id);
+      }}
+    >
+      <Icon name="volume" size={18} stroke={2.6} />
+      {label}
+    </button>
   );
 }
 

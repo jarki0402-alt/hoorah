@@ -1,0 +1,479 @@
+/* Petualangan Warna: HUD over the glowing cave (stage px, 1280x720 core). Dark teal glass panels,
+   the four colours always paired with their symbol. */
+
+.wa-world,
+.wa-hud-host {
+  position: absolute;
+  inset: 0;
+}
+
+.wa-world canvas {
+  display: block;
+}
+
+.wa-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--font-ui);
+  color: #e8fff9;
+}
+
+.wa-top {
+  position: absolute;
+  left: 50%;
+  top: max(6px, calc(50% - 360px - 50px));
+  width: 1256px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wa-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  background: rgba(11, 31, 38, 0.88);
+  box-shadow: inset 0 0 0 2px #1e4a50;
+  white-space: nowrap;
+}
+
+.wa-stage-num {
+  font-size: 13px;
+  font-weight: 800;
+  color: #9ff3e6;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.wa-stage-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+
+.wa-chips {
+  display: flex;
+  gap: 8px;
+}
+
+.wa-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px 0 8px;
+  border-radius: 20px;
+  background: rgba(11, 31, 38, 0.88);
+  box-shadow: inset 0 0 0 2px var(--c);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.wa-chip.done {
+  background: var(--c);
+  color: #111214;
+}
+
+.wa-sym {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  color: #fff;
+  line-height: 1;
+  box-shadow: 0 0 0 2px #111214;
+}
+
+.wa-clock {
+  gap: 14px;
+}
+
+.wa-gems {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffe27a;
+}
+
+.wa-time {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.wa-vote {
+  position: absolute;
+  left: 50%;
+  top: max(54px, calc(50% - 360px + 6px));
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  border-radius: 16px;
+  background: #ffc928;
+  color: #111214;
+  font-weight: 800;
+  font-size: 18px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
+}
+
+.wa-tipbar {
+  position: absolute;
+  left: 50%;
+  bottom: max(6px, calc(50% - 360px - 50px));
+  transform: translateX(-50%);
+  max-width: 980px;
+  padding: 8px 20px;
+  border-radius: 18px;
+  background: rgba(11, 31, 38, 0.9);
+  box-shadow: inset 0 0 0 2px #1e4a50;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  color: #fff;
+  animation: wa-rise 0.4s ease-out both;
+}
+
+/* ------------------------------------------------------------------ centre cards */
+
+.wa-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 18, 22, 0.55);
+}
+
+.wa-center {
+  animation: wa-fade 0.3s ease-out both;
+}
+
+.wa-card-big {
+  width: min(820px, 92%);
+  padding: 26px 34px 28px;
+  border-radius: 28px;
+  background: rgba(11, 31, 38, 0.96);
+  box-shadow:
+    inset 0 0 0 3px #2fd5c5,
+    0 12px 0 rgba(0, 0, 0, 0.3);
+  text-align: center;
+  animation: wa-pop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.wa-eyebrow {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ff3e6;
+}
+
+.wa-big-title {
+  margin: 4px 0 6px;
+  font-family: var(--font-display);
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+
+.wa-tip {
+  margin: 0 auto 16px;
+  max-width: 640px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #e8fff9;
+}
+
+.wa-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.wa-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px 6px 8px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 4px 0 0 var(--c);
+}
+
+.wa-legend-name {
+  width: 86px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.wa-legend-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.wa-legend-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.wa-solo {
+  margin: 14px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #ffe27a;
+}
+
+/* Stage picker */
+.wa-pick {
+  justify-content: center;
+  gap: 18px;
+  background: rgba(6, 18, 22, 0.72);
+  animation: wa-fade 0.3s ease-out both;
+}
+
+.wa-pick-head {
+  text-align: center;
+}
+
+.wa-pick-title {
+  margin: 2px 0 0;
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+
+.wa-pick-sub {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.wa-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 280px);
+  gap: 18px;
+}
+
+.wa-card {
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0b1f26;
+  box-shadow:
+    inset 0 0 0 3px #1e4a50,
+    0 6px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s ease;
+}
+
+.wa-card.on {
+  transform: translateY(-6px) scale(1.04);
+  box-shadow:
+    inset 0 0 0 4px #ffc928,
+    0 10px 0 rgba(0, 0, 0, 0.35);
+}
+
+.wa-card-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+.wa-card-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 10px;
+}
+
+.wa-card-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #1e4a50;
+  font-weight: 800;
+  font-size: 15px;
+  color: #fff;
+}
+
+.wa-card.on .wa-card-num {
+  background: #ffc928;
+  color: #111214;
+}
+
+.wa-card-name {
+  flex: 1;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wa-stars span {
+  color: #3d4047;
+  font-size: 18px;
+}
+
+.wa-stars span.on {
+  color: #ffc928;
+}
+
+.wa-pick-foot {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffe27a;
+}
+
+/* Stage clear */
+.wa-clear-stars {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin: 14px 0 12px;
+}
+
+.wa-clear-star {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 170px;
+  opacity: 0.45;
+}
+
+.wa-clear-star.on {
+  opacity: 1;
+  animation: wa-star 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.wa-clear-glyph {
+  font-size: 72px;
+  line-height: 1;
+  color: #3d4047;
+}
+
+.wa-clear-star.on .wa-clear-glyph {
+  color: #ffc928;
+  text-shadow: 0 0 24px rgba(255, 201, 40, 0.6);
+}
+
+.wa-clear-label {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.wa-clear-facts {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.wa-next {
+  margin-top: 12px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #9ff3e6;
+}
+
+/* Floats */
+.wa-floats {
+  position: absolute;
+  inset: 0;
+}
+
+.wa-float {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-shadow:
+    0 2px 0 #0b1f26,
+    0 0 6px #0b1f26;
+  animation: wa-float 1.2s ease-out forwards;
+}
+
+.wa-paused-veil {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 18, 22, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.wa-paused .wa-paused-veil {
+  opacity: 1;
+}
+
+@keyframes wa-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes wa-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes wa-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+@keyframes wa-star {
+  from {
+    opacity: 0.2;
+    transform: scale(0.3) rotate(-30deg);
+  }
+}
+
+@keyframes wa-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -30%) scale(0.8);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -160%) scale(1);
+  }
+}

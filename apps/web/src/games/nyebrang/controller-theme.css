@@ -1,0 +1,65 @@
+/* Nyebrang phone: the pixel crossing from above. Warm cream panels with dark brown edges over the
+   grass, road and river; the swipe pad is a zebra crossing. Contrast checked for small text on
+   the panels (#fff3dc) and the brown strip (#2b1d14). Imported by the controller app; only
+   active while Nyebrang runs. */
+
+html[data-game="nyebrang"] {
+  --t-bg: #43464e;
+  --text: #2b1d14;
+  --text-2: #3b2a1e;
+  --text-3: #6e5442;
+  --surface: #fff3dc;
+  --surface-2: #f4ead4;
+  --surface-3: #2b1d14;
+  --line: #7c4a28;
+  --t-panel: #fff3dc;
+  --t-panel-edge: #2b1d14;
+  --t-eyebrow: #fff3dc;
+  --t-eyebrow-bg: #2b1d14;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #a8400e;
+  --t-good: #13703a;
+  --t-track: #f4ead4;
+  --t-strip-bg: #2b1d14;
+  --t-strip-text: #fff3dc;
+  --t-strip-btn: #7c4a28;
+  --t-strip-btn-text: #ffffff;
+  --t-crown: #a8400e;
+}
+
+/* Swipe pad: a zebra crossing on asphalt, square pixel corners. */
+html[data-game="nyebrang"] .pad-swipe-zone {
+  border-radius: 8px;
+  background-color: #43464e;
+  background-image: repeating-linear-gradient(0deg, transparent 0 22px, rgba(247, 242, 232, 0.85) 22px 44px);
+  background-size: 64% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow:
+    inset 0 0 0 4px #2b1d14,
+    0 6px 0 #2b1d14;
+}
+
+html[data-game="nyebrang"] .pad-swipe-zone.is-flash {
+  box-shadow:
+    inset 0 0 0 6px var(--pad-color),
+    0 6px 0 #2b1d14;
+}
+
+html[data-game="nyebrang"] .pad-swipe-arrow {
+  color: #ffc928;
+  opacity: 0.85;
+}
+
+html[data-game="nyebrang"] .pad-swipe-arrow.on {
+  color: #fff;
+  opacity: 1;
+}
+
+html[data-game="nyebrang"] .pad-swipe-hint {
+  color: #fff3dc;
+}
+
+html[data-game="nyebrang"] .pad-key {
+  border-radius: 8px;
+}

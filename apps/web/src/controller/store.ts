@@ -25,6 +25,7 @@ import {
 } from '@hoorah/protocol';
 import { batch, computed, signal } from '@preact/signals';
 import { prefs, session, vibrate } from '../shared/device';
+import { primeHaptics } from '../shared/haptics';
 import { Net, type NetStatus } from '../shared/net';
 import { ControllerRtc } from './rtc';
 
@@ -68,6 +69,8 @@ export const screenOnline = signal(true);
 export const netStatus = signal<NetStatus>('connecting');
 export const error = signal<ErrorCode | 'kicked' | null>(null);
 export const vibrationOn = signal(prefs.get('vibrate', true));
+// iPhones: watch fingers from the first touch so a tick without a gesture can wait for the release.
+primeHaptics();
 /** Seats and Hoorah Pass of the room, straight from the server. */
 export const roomSeats = signal<number>(LIMITS.freePlayers);
 export const roomPass = signal<RoomPass | null>(null);
@@ -89,8 +92,12 @@ let taps = 0;
 let held = 0;
 let heldTimer = 0;
 
+/**
+ * Haptic feedback for a touch (Android vibration, iPhone switch ticks, or a flash). Call it from
+ * the pointer/touch handler itself: iPhones only tick inside the user's gesture.
+ */
 export function haptic(pattern: number | number[]): void {
-  if (vibrationOn.value) vibrate(pattern);
+  if (vibrationOn.value && !view.value?.silent) vibrate(pattern);
 }
 
 export function serverNow(): number {
@@ -413,10 +420,11 @@ export function tap(): void {
  * A discrete press that carries extra bits (a d-pad arrow, a swipe direction): one frame with the
  * counter bumped and `bits` added to the held buttons for that frame only.
  */
-export function tapWith(bits: number): void {
+export function tapWith(bits: number): number {
   taps = (taps + 1) & 0xffff;
   seq = (seq + 1) & 0xffff;
   net?.sendBinary(encodeInput({ seq, buttons: (held | bits) & 0xffff, taps, at: serverNow() }));
+  return taps;
 }
 
 /* ------------------------------------------------------------------ joystick (STICK_OP frames) */

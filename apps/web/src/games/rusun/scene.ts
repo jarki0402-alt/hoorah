@@ -17,6 +17,7 @@ import {
   INTRO_MS,
   type RusunEvent,
   type RusunLogic,
+  SWING_AMPLITUDE,
 } from './logic';
 import { FloorTextures, floorKey, TEX_SCALE } from './textures';
 import { WING_W } from './wings';
@@ -25,20 +26,24 @@ const S = 1 / TEX_SCALE;
 /** The camera keeps the tower top around this screen y once the tower is tall. */
 const TOP_SCREEN_Y = 480;
 /**
- * Rig geometry in screen space (relative to the camera top). The trolley never moves: the cable
- * hangs from one point (PIVOT) and the floor swings under it like a pendulum.
+ * Rig geometry in screen space (relative to the camera top). The trolley stays put; the cable
+ * hangs from one point under it (PIVOT) and the floor swings below like a pendulum. The cable is
+ * let out until the floor, at the bottom of its arc, hangs just above the tower top, so the drop
+ * stays short and easy to read even at the ends of the swing.
  */
 const TROLLEY_Y = 44;
 const PIVOT_Y = 58;
-/** Cable length from the pivot to the hook at full reach. */
-const ROPE = 276;
 const SLING_Y = 24;
-/** Pivot to the hanging floor's center: the pendulum length that maps logic x to an angle. */
-const SWING_R = ROPE + SLING_Y + FLOOR_H / 2;
+/** Gap between the hanging floor's bottom and the tower top at the bottom of the arc. */
+const HANG_GAP = 34;
+/** Pivot to the floor's center never shorter than this, so the arc stays gentle. */
+const MIN_SWING_R = SWING_AMPLITUDE * 1.6;
 /** The load lags the cable a little, so it tilts less than the cable does. */
-const FLOOR_TILT = 0.35;
-/** How far the hook is reeled up while the crane fetches the next floor. */
-const LIFT = ROPE - 26;
+const FLOOR_TILT = 0.3;
+/** Cable length with the hook reeled up under the trolley (fetching the next floor). */
+const MIN_ROPE = 26;
+/** Cable length the hook reels toward once the round is over. */
+const IDLE_ROPE = 156;
 const DESCEND_MS = 520;
 const GRAVITY = 1500;
 const RULER_FLOORS = 120;
@@ -114,11 +119,11 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const easeInOut = (k: number) => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
 const easeOutCubic = (k: number) => 1 - (1 - k) ** 3;
+/** Cable angle (radians, + swings right) that puts a load `r` below the pivot at `x`. */
+const swingAngle = (x: number, r: number) => Math.asin(Math.max(-1, Math.min(1, (x - CENTER_X) / r)));
 /** Put a floor sprite (origin at its bottom center) so its body's center is (cx, cy), turned `rot`. */
 const placeFloor = (img: Phaser.GameObjects.Image, cx: number, cy: number, rot: number) =>
   img.setPosition(cx - (FLOOR_H / 2) * Math.sin(rot), cy + (FLOOR_H / 2) * Math.cos(rot)).setRotation(rot);
-/** Cable angle (radians, + swings right) that puts the hanging floor's center at `x`. */
-const ropeAngle = (x: number) => Math.asin(Math.max(-1, Math.min(1, (x - CENTER_X) / SWING_R)));
 /** The outer face of each floor on one side. */
 const wallOf = (floors: readonly { x: number; width: number }[], dir: 1 | -1) =>
   floors.map((f) => f.x + (dir * f.width) / 2);
@@ -152,13 +157,13 @@ export class RusunScene extends Phaser.Scene {
   private padX = 0;
   /** Visual clock (ms of unpaused scene time) for effects. */
   private vis = 0;
-  /** Cable angle (radians, + swings right) and how far the hook is reeled up. */
+  /** Cable angle (radians, + swings right) and cable length (pivot to hook). */
   private angle = 0;
-  private lift = LIFT;
+  private rope = MIN_ROPE;
   private rigIndex = -1;
   private rigFromAngle = 0;
   private rigFromT = 0;
-  private rigFromLift = LIFT;
+  private rigFromRope = MIN_ROPE;
   /** Where the dropped floor let go: top y, center y and tilt. */
   private fallTop0 = 0;
   private fallCY0 = 0;
@@ -200,7 +205,7 @@ export class RusunScene extends Phaser.Scene {
     this.slings = this.add.graphics().setDepth(20);
     this.hangFloor = this.add.image(0, 0, floorKey(1, true)).setOrigin(0.5, 1).setScale(S).setDepth(20);
     const hook = this.add.image(0, 0, 'rs-hook').setScale(S);
-    this.rig = this.add.container(CENTER_X, PIVOT_Y + ROPE - LIFT, [hook]).setDepth(20.5);
+    this.rig = this.add.container(CENTER_X, PIVOT_Y + MIN_ROPE, [hook]).setDepth(20.5);
     this.cable = this.add.rectangle(CENTER_X, PIVOT_Y, 2.5, 1, 0x111214).setOrigin(0.5, 0).setDepth(21);
     this.crane = this.add.image(0, 0, 'rs-crane').setOrigin(0, 0).setScale(S).setDepth(22);
     this.trolley = this.add
@@ -402,7 +407,7 @@ export class RusunScene extends Phaser.Scene {
     this.rigIndex = -1;
     this.rigFromAngle = this.angle;
     this.rigFromT = L.phaseEndsAt - INTRO_MS;
-    this.rigFromLift = this.lift;
+    this.rigFromRope = this.rope;
     this.focus = null;
     this.tex.ensure(1, 4);
   }
@@ -427,10 +432,14 @@ export class RusunScene extends Phaser.Scene {
     this.dust.explode(count, x, y);
   }
 
-  /** Let go exactly where the floor hangs (same x, height and tilt); it then falls straight down. */
+  /**
+   * Let go exactly where the floor hangs (same x, height and tilt); it then falls straight down.
+   * The empty hook swings on smoothly: no bounce.
+   */
   private onDrop(fall: Fall): void {
-    const a = ropeAngle(fall.dropX);
-    this.fallCY0 = this.camY - this.extra + PIVOT_Y + (SWING_R - this.lift) * Math.cos(a);
+    const r = this.rope + SLING_Y + FLOOR_H / 2;
+    const a = swingAngle(fall.dropX, r);
+    this.fallCY0 = this.camY - this.extra + PIVOT_Y + r * Math.cos(a);
     this.fallTop0 = this.fallCY0 - FLOOR_H / 2;
     this.fallRot0 = -a * FLOOR_TILT;
     this.falling.setTexture(this.tex.key(fall.floorIndex, true)).setScale(S).setVisible(true);
@@ -442,7 +451,7 @@ export class RusunScene extends Phaser.Scene {
   private resetRigFrom(t: number): void {
     this.rigFromAngle = this.angle;
     this.rigFromT = t;
-    this.rigFromLift = this.lift;
+    this.rigFromRope = this.rope;
   }
 
   private onLand(fall: Fall, pas: boolean): void {
@@ -649,15 +658,31 @@ export class RusunScene extends Phaser.Scene {
     this.hangFloor.setTexture(this.tex.key(index, true));
   }
 
+  /**
+   * Cable length that hangs the floor HANG_GAP above the tower top at the bottom of its arc
+   * (world space), never so short that the arc gets steep.
+   */
+  private reach(L: RusunLogic): number {
+    const top = GROUND_Y - L.floors.length * FLOOR_H;
+    const pivot = this.camY - this.extra + PIVOT_Y;
+    const fit = top - HANG_GAP - FLOOR_H - SLING_Y - pivot;
+    return Math.max(MIN_ROPE, fit, MIN_SWING_R - SLING_Y - FLOOR_H / 2);
+  }
+
+  /** Cable angle that puts the hanging floor's center at the logic's swing x. */
+  private loadAngle(L: RusunLogic, t: number, rope: number): number {
+    return swingAngle(L.swingX(t), rope + SLING_Y + FLOOR_H / 2);
+  }
+
   private updateRig(L: RusunLogic, t: number): void {
     let angle = this.angle;
-    let lift = this.lift;
+    let rope = this.rope;
     let showFloor = false;
     switch (L.phase) {
-      case 'swing':
+      case 'aim':
       case 'waiting':
-        angle = ropeAngle(L.swingX(t));
-        lift = 0;
+        rope = this.reach(L);
+        angle = this.loadAngle(L, t, rope);
         showFloor = true;
         break;
       case 'intro':
@@ -668,50 +693,47 @@ export class RusunScene extends Phaser.Scene {
         const moveEnd = turnAt - DESCEND_MS;
         if (t < moveEnd) {
           const e = easeInOut(clamp01((t - this.rigFromT) / Math.max(1, moveEnd - this.rigFromT)));
-          angle = lerp(this.rigFromAngle, ropeAngle(L.swingX(moveEnd)), e);
-          lift = lerp(this.rigFromLift, LIFT, e);
+          rope = lerp(this.rigFromRope, MIN_ROPE, e);
+          angle = lerp(this.rigFromAngle, this.loadAngle(L, moveEnd, this.reach(L)), e);
         } else {
-          angle = ropeAngle(L.swingX(t));
-          lift = LIFT * (1 - easeOutCubic(clamp01((t - moveEnd) / DESCEND_MS)));
+          rope = lerp(MIN_ROPE, this.reach(L), easeOutCubic(clamp01((t - moveEnd) / DESCEND_MS)));
+          angle = this.loadAngle(L, t, this.reach(L));
           showFloor = true;
         }
         break;
       }
-      case 'falling': {
-        // The empty hook swings on and bobs up a touch when the load lets go.
-        const f = L.fall;
-        angle = ropeAngle(L.swingX(t));
-        lift = f ? 10 * Math.sin(Math.PI * clamp01((t - f.startAt) / 320)) : 0;
+      case 'falling':
+        // The empty hook swings on at the same height; it does not bob when the load lets go.
+        angle = this.loadAngle(L, t, rope);
         break;
-      }
       default:
         angle = this.angle * 0.96;
-        lift = this.lift + (120 - this.lift) * 0.05;
+        rope = this.rope + (IDLE_ROPE - this.rope) * 0.05;
         break;
     }
     this.angle = angle;
-    this.lift = lift;
+    this.rope = rope;
 
     // Everything hangs from one fixed point under the trolley.
-    const s = Math.sin(angle);
-    const c = Math.cos(angle);
+    const sa = Math.sin(angle);
+    const ca = Math.cos(angle);
     const px = CENTER_X;
     const py = this.camY - this.extra + PIVOT_Y;
-    const r = ROPE - lift;
+    this.trolley.x = px;
     this.cable
       .setPosition(px, py)
       .setRotation(-angle)
-      .setVisible(r > 7);
-    this.cable.scaleY = Math.max(0.01, r - 6);
-    this.rig.setPosition(px + r * s, py + r * c).setRotation(-angle);
+      .setVisible(rope > 7);
+    this.cable.scaleY = Math.max(0.01, rope - 6);
+    this.rig.setPosition(px + rope * sa, py + rope * ca).setRotation(-angle);
     this.hangFloor.setVisible(showFloor);
     this.slings.setVisible(showFloor);
     if (!showFloor) return;
 
     this.setRigFloor(L.floorIndex);
-    const d = r + SLING_Y + FLOOR_H / 2;
-    const cx = px + d * s;
-    const cy = py + d * c;
+    const d = rope + SLING_Y + FLOOR_H / 2;
+    const cx = px + d * sa;
+    const cy = py + d * ca;
     const tilt = -angle * FLOOR_TILT;
     placeFloor(this.hangFloor, cx, cy, tilt);
     // Two slings from the hook to the floor's top corners.
@@ -719,12 +741,14 @@ export class RusunScene extends Phaser.Scene {
     const tc = Math.cos(tilt);
     const ts = Math.sin(tilt);
     const ly = -FLOOR_H / 2;
+    const hx = px + rope * sa;
+    const hy = py + rope * ca;
     this.slings.clear().lineStyle(2.5, 0x111214, 1);
     for (const side of [-1, 1]) {
       const lx = side * half;
       this.slings.lineBetween(
-        px + r * s + side * 3 * c + 5 * s,
-        py + r * c - side * 3 * s + 5 * c,
+        hx + side * 3 * ca + 5 * sa,
+        hy - side * 3 * sa + 5 * ca,
         cx + lx * tc - ly * ts,
         cy + lx * ts + ly * tc,
       );
@@ -900,7 +924,7 @@ export class RusunScene extends Phaser.Scene {
   }
 
   private updateMarker(L: RusunLogic): void {
-    const on = L.phase === 'swing' || L.phase === 'waiting';
+    const on = L.phase === 'aim' || L.phase === 'waiting';
     this.marker.setVisible(on);
     if (!on) return;
     this.marker.x = L.top.x;

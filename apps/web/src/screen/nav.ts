@@ -12,6 +12,11 @@ export interface FocusMap {
   onMenu?: () => void;
   /** Called whenever focus moves (sound, side effects). */
   onMove?: (id: string) => void;
+  /**
+   * Column to land on when moving up/down into `toRow` (e.g. the card a row was left on). Return
+   * undefined for the default: the same relative position as in the row left.
+   */
+  pickCol?: (toRow: number, fromRow: number, fromCol: number) => number | undefined;
 }
 
 export const focused = signal<string>('');
@@ -74,16 +79,16 @@ export function press(key: NavKey): void {
     case 'right':
       move(pos.row, pos.col + 1);
       return;
-    case 'up': {
-      const from = rows[pos.row]?.length ?? 1;
-      const to = rows[pos.row - 1]?.length ?? 1;
-      move(pos.row - 1, Math.round((pos.col / Math.max(1, from - 1)) * Math.max(0, to - 1)));
-      return;
-    }
+    case 'up':
     case 'down': {
+      const target = pos.row + (key === 'up' ? -1 : 1);
+      if (target < 0 || target >= rows.length) return;
       const from = rows[pos.row]?.length ?? 1;
-      const to = rows[pos.row + 1]?.length ?? 1;
-      move(pos.row + 1, Math.round((pos.col / Math.max(1, from - 1)) * Math.max(0, to - 1)));
+      const to = rows[target]?.length ?? 1;
+      const col =
+        map.pickCol?.(target, pos.row, pos.col) ??
+        Math.round((pos.col / Math.max(1, from - 1)) * Math.max(0, to - 1));
+      move(target, col);
       return;
     }
     case 'ok':

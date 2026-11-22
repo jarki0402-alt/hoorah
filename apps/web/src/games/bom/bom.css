@@ -1,0 +1,513 @@
+/* Bom Oper: WebGL canvas + DOM HUD in an inked comic style (heavy display type with a black
+   stroke, chunky panels with hard shadows). Stage px: 1280x720 on 16:9, wider or taller elsewhere;
+   HUD pinned to the edges, cards centred. */
+
+.bo-host {
+  position: absolute;
+  inset: 0;
+  background: #9fd9ff;
+}
+
+.bo-hud {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: #111214;
+  font-family: var(--font-ui);
+}
+
+.bo-hud.is-paused *,
+.bo-hud.is-paused *::before,
+.bo-hud.is-paused *::after {
+  animation-play-state: paused !important;
+}
+
+/* Comic panel: cream paper, black ink edge, hard offset shadow. */
+.bo-brand,
+.bo-banner,
+.bo-card,
+.bo-toast,
+.bo-intro,
+.bo-score {
+  background: #fff7f0;
+  box-shadow:
+    inset 0 0 0 3px #111214,
+    5px 5px 0 #111214;
+}
+
+.bo-brand {
+  position: absolute;
+  left: 24px;
+  top: 20px;
+  padding: 6px 16px 4px;
+  border-radius: 12px;
+  font: 800 26px / 1.1 var(--font-display);
+  letter-spacing: 0.02em;
+  transform: rotate(-2deg);
+}
+
+/* ---------------------------------------------------------------- banner */
+
+.bo-banner {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%) rotate(-1deg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 26px 8px;
+  border-radius: 16px;
+  white-space: nowrap;
+  animation: bo-pop 0.3s var(--ease-pop);
+}
+
+.bo-banner.tone-bomb {
+  background: #ffc928;
+}
+
+.bo-banner.tone-boom {
+  background: #f2453d;
+  color: #fff7f0;
+}
+
+.bo-banner-title {
+  font: 800 34px / 1 var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+.bo-banner-sub {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 800;
+  opacity: 0.8;
+}
+
+@keyframes bo-pop {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.85) rotate(-4deg);
+  }
+}
+
+/* ---------------------------------------------------------------- player cards */
+
+.bo-cards {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 12px;
+  width: min(1240px, calc(100% - 32px));
+}
+
+.bo-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 14px;
+  transition: transform 0.2s var(--ease-pop);
+}
+
+.bo-card.is-bomb {
+  background: #ffc928;
+  transform: translateY(-6px) rotate(-2deg);
+  animation: bo-shake 0.5s ease-in-out infinite;
+}
+
+@keyframes bo-shake {
+  50% {
+    transform: translateY(-6px) rotate(2deg);
+  }
+}
+
+.bo-card.is-out {
+  background: #c9c4bc;
+  opacity: 0.75;
+}
+
+.bo-card.is-off {
+  opacity: 0.6;
+}
+
+.bo-card-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bo-card-name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 800 18px / 1.05 var(--font-display);
+  text-transform: uppercase;
+}
+
+.bo-hearts {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.bo-hearts svg {
+  fill: rgba(17, 18, 20, 0.14);
+  stroke: rgba(17, 18, 20, 0.35);
+  stroke-width: 1.5;
+}
+
+.bo-hearts svg.is-on {
+  fill: #f2453d;
+  stroke: #111214;
+}
+
+.bo-pill {
+  position: absolute;
+  right: -6px;
+  top: -10px;
+  padding: 2px 8px 1px;
+  border-radius: 999px;
+  background: #111214;
+  color: #fff7f0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.bo-pill.is-bomb {
+  background: #f2453d;
+}
+
+.bo-pill.is-immune {
+  background: #fff7f0;
+  color: #111214;
+  box-shadow: inset 0 0 0 2px #111214;
+}
+
+/* ---------------------------------------------------------------- call-outs */
+
+.bo-float {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  font: 800 34px / 1 var(--font-display);
+  white-space: nowrap;
+  -webkit-text-stroke: 6px #111214;
+  paint-order: stroke fill;
+  animation: bo-float 1.3s var(--ease-out) forwards;
+}
+
+.bo-float.tone-good {
+  color: #ffc928;
+}
+
+.bo-float.tone-bad {
+  color: #ff6b5e;
+}
+
+.bo-float.tone-info {
+  color: #fff7f0;
+}
+
+@keyframes bo-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -60%) scale(0.5) rotate(-8deg);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1.15) rotate(-4deg);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -180%) scale(1) rotate(0deg);
+  }
+}
+
+.bo-toasts {
+  position: absolute;
+  right: 24px;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 360px;
+}
+
+.bo-toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px 6px 6px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 800;
+  animation: bo-in 0.3s var(--ease-pop);
+}
+
+@keyframes bo-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.9);
+  }
+}
+
+.bo-big {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%) rotate(-4deg);
+  font: 800 150px / 1 var(--font-display);
+  color: #ffc928;
+  -webkit-text-stroke: 12px #111214;
+  paint-order: stroke fill;
+  white-space: nowrap;
+  animation: bo-big 1.1s var(--ease-out) forwards;
+}
+
+.bo-big.tone-boom {
+  color: #f2453d;
+  font-size: 190px;
+}
+
+.bo-big.tone-end {
+  font-size: 96px;
+  color: #fff7f0;
+  animation-duration: 1.8s;
+}
+
+@keyframes bo-big {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2) rotate(-12deg);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(-4deg);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.92) rotate(-4deg);
+  }
+}
+
+/* ---------------------------------------------------------------- cards */
+
+.bo-intro,
+.bo-score {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  width: min(700px, 84%);
+  padding: 22px 30px 22px;
+  border-radius: 24px;
+  text-align: center;
+  animation: bo-card 0.4s var(--ease-pop);
+}
+
+@keyframes bo-card {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -44%) scale(0.9) rotate(-2deg);
+  }
+}
+
+.bo-intro.is-final {
+  background: #ffc928;
+}
+
+.bo-intro-of {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #c4361f;
+}
+
+.bo-intro-name,
+.bo-score-title {
+  font: 800 64px / 1.05 var(--font-display);
+  text-transform: uppercase;
+}
+
+.bo-intro-line,
+.bo-score-line {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.bo-intro-how {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.bo-how {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(17, 18, 20, 0.06);
+  box-shadow: inset 0 0 0 2px rgba(17, 18, 20, 0.2);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bo-how-key {
+  font: 800 18px / 1.1 var(--font-display);
+  color: #c4361f;
+}
+
+.bo-score-rows {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 14px;
+  margin-top: 14px;
+  text-align: left;
+}
+
+.bo-srow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 12px 4px 6px;
+  border-radius: 14px;
+  background: rgba(17, 18, 20, 0.06);
+}
+
+.bo-srow.is-lost {
+  background: rgba(242, 69, 61, 0.2);
+  box-shadow: inset 0 0 0 2px #f2453d;
+}
+
+.bo-srow.is-out {
+  opacity: 0.55;
+}
+
+.bo-srow-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 800 20px / 1.1 var(--font-display);
+}
+
+.bo-score-sub {
+  margin-top: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+/* ---------------------------------------------------------------- arena picker */
+
+.bo-pick {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #ffc928;
+  text-align: center;
+}
+
+.bo-pick-eyebrow {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #c4361f;
+}
+
+.bo-pick-title {
+  font: 800 64px / 1.05 var(--font-display);
+  text-transform: uppercase;
+  color: #fff7f0;
+  -webkit-text-stroke: 8px #111214;
+  paint-order: stroke fill;
+  transform: rotate(-2deg);
+}
+
+.bo-pick-sub {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.bo-pick-cards {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  margin-top: 26px;
+}
+
+.bo-pick-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 300px;
+  padding: 10px 10px 14px;
+  border-radius: 20px;
+  background: #fff7f0;
+  box-shadow:
+    inset 0 0 0 3px #111214,
+    5px 5px 0 #111214;
+  transition: transform 0.25s var(--ease-pop);
+}
+
+.bo-pick-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 2px #111214;
+}
+
+.bo-pick-name {
+  margin-top: 6px;
+  font: 800 26px / 1.1 var(--font-display);
+  text-transform: uppercase;
+}
+
+.bo-pick-desc {
+  font-size: 15px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.bo-pick-card.is-on {
+  transform: translateY(-8px) rotate(-2deg) scale(1.05);
+  background: #f2453d;
+  color: #fff7f0;
+}
+
+.bo-pick-note {
+  margin-top: 26px;
+  padding: 8px 18px 7px;
+  border-radius: 999px;
+  background: #111214;
+  color: #fff7f0;
+  font-size: 17px;
+  font-weight: 800;
+}

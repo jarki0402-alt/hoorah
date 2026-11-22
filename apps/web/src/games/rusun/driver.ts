@@ -8,6 +8,7 @@ import type { Face } from '../../shared/art/fruits';
 import { floorWidth } from '../../shared/art/rusun';
 import type { Sfx } from '../../shared/audio';
 import { celebrate } from '../../shared/confetti';
+import { CONTROL_TUNING } from '../../shared/controls';
 import { readRecord as readSoloRecord, submitRecord } from '../common/records';
 import type { Banner, HudPlayer, HudStore, PlayerCard } from './hud';
 import {
@@ -38,7 +39,7 @@ const BUBBLE_MS = 2600;
 const SHOUT_MS = 1500;
 /** Records shorter than this are not worth a ruler mark. */
 const MIN_RECORD = 3;
-/** HUD card edges (stage px) the hanging floor can swing behind. */
+/** HUD card edges (stage px) the hanging floor can slide behind. */
 const TURN_CARD_RIGHT = 92 + 300;
 /** Side panel's left edge measured from the stage's right edge (right 24 + width 210). */
 const SIDE_PANEL_INSET = 24 + 210;
@@ -149,7 +150,13 @@ export class RusunDriver implements SceneDriver {
   start(): void {
     const rounds = parseRounds(this.game.settings.rounds);
     this.connected = new Set(this.game.allPlayers.filter((p) => p.connected).map((p) => p.id));
-    this.logicRef = new RusunLogic({ rounds, roster: this.roster(), now: this.clock.now() });
+    // Swing timing comes from the Lab Kontrol settings of this (main screen) browser.
+    this.logicRef = new RusunLogic({
+      rounds,
+      roster: this.roster(),
+      now: this.clock.now(),
+      swing: { ...CONTROL_TUNING.rusun },
+    });
     this.soloStart = this.logicRef.order.length === 1;
     if (this.soloStart) this.recordBefore = readSoloRecord(GAME_ID, String(rounds));
     this.game.on('players', () => this.onPlayers());
@@ -168,7 +175,7 @@ export class RusunDriver implements SceneDriver {
     const now = this.clock.now();
     L.tick(now);
     this.flush();
-    if (L.phase === 'swing') {
+    if (L.phase === 'aim') {
       const rem = L.deadline - now;
       const secs = Math.ceil(rem / 1000);
       if (secs >= 1 && secs <= 3 && secs !== this.lastCount) {
@@ -187,7 +194,7 @@ export class RusunDriver implements SceneDriver {
   frame(camY: number, now: number, _dtMs: number): void {
     const L = this.logicRef;
     if (!L) return;
-    if (L.phase === 'swing') {
+    if (L.phase === 'aim') {
       const rem = Math.max(0, L.deadline - now);
       this.ringFrac = rem / TURN_MS;
       this.ringSecs = Math.ceil(rem / 1000);
@@ -198,7 +205,7 @@ export class RusunDriver implements SceneDriver {
     // Fade a HUD card while the hanging floor swings behind it.
     let fadeLeft = false;
     let fadeRight = false;
-    if (L.phase === 'swing' || L.phase === 'waiting') {
+    if (L.phase === 'aim' || L.phase === 'waiting') {
       const x = L.swingX(now);
       const half = floorWidth(L.floorIndex) / 2 + 6;
       fadeLeft = this.padX + x - half < TURN_CARD_RIGHT;
@@ -553,7 +560,7 @@ export class RusunDriver implements SceneDriver {
     const L = this.logic;
     const phase = L.phase;
     const upcoming = L.upcoming();
-    const showTurn = phase === 'swing' || phase === 'falling' || phase === 'settle' || phase === 'waiting';
+    const showTurn = phase === 'aim' || phase === 'falling' || phase === 'settle' || phase === 'waiting';
     const prev = Math.max(this.recordBase, this.completedBest);
     const recordHint = prev >= MIN_RECORD ? STR.toRecord(prev - L.height - 1, L.height) : '';
     const zone = balanceZone(L.balance);
@@ -625,7 +632,7 @@ export class RusunDriver implements SceneDriver {
         if (next === id) return V.readyView(id);
         return V.watchView(next, this.name(next), L.height, balanceZone(L.balance));
       }
-      case 'swing':
+      case 'aim':
       case 'falling': {
         const cur = L.current;
         if (cur === null) return V.idleView();

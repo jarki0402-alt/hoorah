@@ -1,10 +1,11 @@
-/** Short vibration where supported (Android). iOS Safari has no Vibration API; callers add visual feedback. */
+import { play } from './haptics';
+
+/**
+ * Short vibration: `navigator.vibrate` on Android, system ticks from a hidden switch on iPhone,
+ * a small screen-edge flash where neither exists (see `haptics.ts`). Never throws.
+ */
 export function vibrate(pattern: number | number[]): void {
-  try {
-    navigator.vibrate?.(pattern);
-  } catch {
-    // Some browsers throw when called without a recent user gesture.
-  }
+  play(pattern);
 }
 
 export const isTouchDevice = (): boolean => 'ontouchstart' in window || navigator.maxTouchPoints > 0;

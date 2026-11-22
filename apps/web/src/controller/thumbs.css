@@ -1,0 +1,169 @@
+/* Option pictures in `menu` and `choice` views (see thumbs/index.ts). Loaded with the menu view. */
+
+.menu-check {
+  flex: none;
+  display: flex;
+}
+
+/* A row with a picture: the picture leads, the text follows. */
+.menu-thumb {
+  flex: none;
+  display: block;
+  width: clamp(56px, calc(var(--vh) * 10), 76px);
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 2px var(--line);
+}
+
+.menu-thumb.is-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  background: transparent;
+}
+
+.menu-thumb.is-avatar svg {
+  width: auto;
+  height: 100%;
+  max-height: 64px;
+}
+
+.menu-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+/* Every option has a picture: a grid of tiles, picture on top, label under it. */
+.menu-options.is-tiles {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr));
+  grid-auto-rows: auto;
+  align-content: start;
+  gap: clamp(8px, calc(var(--vh) * 1.4), 12px);
+}
+
+.is-tiles .menu-opt {
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-height: 0;
+  padding: 6px 6px 8px;
+  text-align: center;
+  box-shadow:
+    inset 0 0 0 2px var(--line),
+    0 4px 0 var(--surface-3);
+}
+
+.is-tiles .menu-opt.on {
+  box-shadow:
+    inset 0 0 0 4px var(--opt),
+    0 4px 0 var(--surface-3);
+}
+
+.is-tiles .menu-thumb {
+  width: 100%;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.is-tiles .menu-text {
+  flex: none;
+  align-items: center;
+  gap: 1px;
+  padding: 0 2px;
+}
+
+.is-tiles .menu-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.is-tiles .menu-sub {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.is-tiles .menu-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  max-width: calc(100% - 52px);
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+.is-tiles .menu-check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--opt);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+/* Sideways: the options pane is short, so tiles share its height and the pictures shrink to fit
+   instead of pushing the last row out of view. */
+@media (orientation: landscape) {
+  .menu-options.is-tiles {
+    grid-template-columns: repeat(var(--wide, 2), minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
+    align-content: stretch;
+  }
+
+  .is-tiles .menu-opt {
+    min-height: 0;
+  }
+
+  .is-tiles .menu-sub {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .is-tiles .menu-thumb {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 28px;
+    aspect-ratio: auto;
+  }
+
+  /* Absolutely placed so the picture always fills whatever height the row gives the tile. */
+  .is-tiles .menu-thumb img {
+    position: absolute;
+    inset: 0;
+  }
+}
+
+/* Answer buttons with a picture: the picture takes the letter's place. */
+.answer-thumb {
+  flex: none;
+  width: clamp(48px, calc(var(--vh) * 8), 64px);
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  -webkit-user-drag: none;
+}

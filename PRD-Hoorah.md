@@ -739,7 +739,7 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
   - SDK internal v0.1 (JS) dipakai oleh 5 game bawaan.
   - **Game 1 — "Kuis Nusantara"** (kuis budaya Indonesia, 2–16 pemain, portrait, pilihan ganda A–D): menguji alur soal, data pribadi per pemain, waktu jawab diukur di HP, dan banyak pemain.
   - **Game 2 — "Tarik Tambang"** (lomba 17-an, 2–8 pemain dalam 2 tim, landscape, ketuk cepat + tarikan super berbasis timing): menguji input beruntun berfrekuensi tinggi dan kombo.
-  - **Game 3 — "Rusun"** (susun lantai rumah susun dengan crane berayun, 2–8 pemain bergiliran, portrait, satu tombol JATUHKAN): lantai makin kecil dan ayunan makin cepat seiring tinggi; menara bisa miring; pemain yang merobohkan Rusun kalah. Lantai berayun seperti bandul di satu titik tali dan dilepas tepat di posisi yang terlihat di layar utama saat tombol diterima, lalu jatuh lurus (tanpa pemunduran waktu, supaya tidak loncat ke samping).
+  - **Game 3 — "Rusun"** (susun lantai rumah susun dengan crane, 2–8 pemain bergiliran, portrait, satu tombol JATUHKAN): lantai makin kecil dan gerak crane makin cepat seiring tinggi; menara bisa miring; pemain yang merobohkan Rusun kalah. Lantai digeser lurus kanan-kiri oleh troli di rel crane (keputusan pemilik 2026-11-22, menggantikan bandul), menggantung dekat di atas puncak menara, dan dilepas tepat di posisi yang terlihat di layar utama saat tombol diterima, lalu jatuh lurus (tanpa pemunduran waktu, supaya tidak loncat ke samping).
   - **Game 4 — "Bajaj Rush"** (balap bajaj 3D, 1–8 pemain + bajaj CPU, landscape). Dibuat dengan Three.js; Unity dipertimbangkan lalu ditolak karena ukuran file dan loading di Smart TV.
     - **Kontrol HP:** setir kiri/kanan, pedal GAS dan REM (REM lalu mundur saat berhenti), tombol ITEM. Tanpa ngepot/drift. Setir dibuat tidak sensitif dan bajaj tidak mudah selip.
     - **Item orisinal dari kardus:** Durian (dilempar ke depan, atau ke belakang sambil menahan REM), Petasan (mengejar lawan di depan), Tumpahan Oli, Turbo Kopi, Helm Baja.
@@ -763,8 +763,13 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
     - **Game 16 · "Sambung Kata"** (`kata`, 1–8 pemain, tegak, tampilan HP baru `word` dengan papan ketik sendiri): kata berikutnya diawali suku kata terakhir kata sebelumnya; nyawa 2 atau 3, waktu per giliran makin singkat; daftar kata Indonesia disusun sendiri.
     - **Game 17 · "Juragan Nusantara"** (`juragan`, 1–6 pemain, tegak, tombol di HP): game properti orisinal yang diringkas (permintaan pemilik: cara main seperti game properti klasik, desain diserahkan ke tim). Papan 24 petak kota-kota Nusantara per pulau. Beli kota = langsung berdiri Rumah berwarna pemilik; mendarat di kota sendiri = boleh upgrade Rumah → Toko → Gedung → Hotel (biaya 50/75/100% harga, sewa ×1/3/7/15, satu pulau penuh = sewa ganda); mendarat di kota lawan = bayar sewa lalu boleh **Rebut** seharga 2× nilai kota (kecuali Hotel dan transportasi). Kartu Kabar, jual otomatis ke bank, berakhir setelah sejumlah putaran (14/12/10 sesuai jumlah pemain), terkaya menang. Meja 3D HD (Three.js).
   - **Game 18 · "Dapur Heboh"** (`dapur`, 1–8 pemain, kontroler mendatar: joystick + Ambil/Kerja/Lempar; keputusan pemilik 2026-11-16, desain di kanvas Claude Design "Dapur Heboh"): game masak kerja sama **satu tim tanpa lawan**, tampilan 3/4 (3D yang terbaca seperti 2D). Pilih dapur (Warung Pagi, Dapur Terbelah, Gerobak Kembar, Jam Sibuk) dan tingkat cabai (Santai/Normal/Heboh). Di dapur terbelah pemain dibagi Sisi Persiapan (ceil n/2) dan Sisi Masak; bahan **dilempar tanpa bidik** ke teman terdekat di seberang. Tangan penerima kosong = tertangkap; tangan penuh = barang jatuh dan **baju kotor** (noda kosmetik, terhuyung sebentar). Resep: burger, kentang goreng, nasi goreng telur, salad, soda (mesin soda), paket burger + soda. Penghargaan akhir ronde lucu (Raja Potong, Pelempar Jitu, Paling Belepotan, dll.).
-  - Gelombang berikutnya (rencana): Penyusup, kartu (Cangkulan, Gaple, Kartu Bohong), varian kuis (Tebak Nada), kata/sosial (Ngibul, Kata Terlarang, Kampung Siluman), 17-an (Gendang Ritme), lalu Pacu Jalur, Gambar Kilat, Panjat Pinang.
-  - Ditunda ke Fase 2: Gambar Kilat, Panjat Pinang.
+  - **Gelombang 3** (keputusan pemilik 2026-11-22, menggantikan rencana gelombang lama termasuk Gambar Kilat dan Panjat Pinang yang dihapus dari katalog): 12 game, desain detail di kanvas Claude Design pemilik (halaman "Desain 30 game"), dikerjakan bergelombang.
+    - **Mesin dunia kotak 3D** (Three.js, 3D sederhana bergaya kotak, fisika ditulis sendiri, joystick mengambang ala Roblox): Game 19 · Satu Tali (1–4, kerja sama terikat tali elastis, parkour dengan titik simpan), Game 20 · Obby (1–8, balapan rintangan, kamera mengikuti rombongan), Game 21 · Lantai Runtuh (1–8, sesi ±5 menit, 7 babak aturan berganti, DORONG jeda 3 dtk), Game 22 · Bom Oper (1–8, kejar-kejaran oper bom, 3 nyawa, 2 bom di ronde akhir).
+    - Game 23 · Seluncur Es (1–8, bidik ketapel bersamaan lalu meluncur dengan fisika, HP tegak), Game 24 · Langkah Maut (1–16, 8 babak tombol arah menegangkan), Game 25 · Nyebrang (1–8, pixel 2.5D, 4 map pertama: Kota, Sungai, Rel, Malam; mode Balapan dan Bertahan).
+    - 2D: Game 26 · Juara Eja (1–8, lomba mengeja Indonesia/Inggris, versi sederhana, kata dibacakan suara browser), Game 27 · Petualangan Warna (1–8, teka-teki platform kerja sama berwarna), Game 28 · Hantu Tak Terlihat (1–8, horor tampak atas, satu pemain hantu dengan peta rahasia di HP, map Rumah Tua dan Kampung Malam).
+    - Sosial (butuh Hoorah Pass): Game 29 · Kampung Siluman (5–16, werewolf dengan Mode Tutup Mata: layar memandu lewat bunyi, tanpa suara pemandu), Game 30 · Penyusup (3–16, undercover, petunjuk diucapkan, mode Ketik).
+    - Bersama: setelan kontrol satu sumber + Lab Kontrol (`/lab/`), getar iPhone lewat trik saklar, musik adaptif (lapisan tensi 0–3, bunyi waktu standar detak jam + weker), pemain yang sudah keluar bisa bersorak lewat tombol reaksi platform.
+    - Beranda bertingkat (Pas untuk kalian, baris per suasana, kisi Semua game, label BARU), pilihan bergambar di HP dan layar, joystick pola mengambang (mendatar: separuh kiri + tombol bulat kanan bawah; tegak: tengah bawah), dan **Mode Pesta**: 3 game dengan suasana berbeda berurutan, poin 3/2/1 per game (game terakhir poin ganda, lawan komputer tidak masuk klasemen), klasemen antar game, lalu Juara Pesta dan "Pesta lagi"; keluar game atau kembali ke beranda membatalkan pesta (2026-11-22).
   - Analitik dasar (PostHog), Sentry, dashboard latensi Grafana.
   - Batas gratis 2 pemain + placeholder upsell untuk mengukur minat (belum ada pembayaran).
 - Di luar cakupan: akun, pembayaran, iklan, WebRTC, SDK publik.
@@ -777,7 +782,7 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
 - Iklan antar sesi untuk pengguna gratis (ad network video, frekuensi dibatasi).
 - Fitur sosial: profil pemain ringan, riwayat sesi dan papan skor, undang teman via tautan WhatsApp, reaksi/emote, mode penonton.
 - Teknis: region kedua di Indonesia (Surabaya atau Batam, dipilih dari sebaran pengguna beta), WebRTC DataChannel hybrid, komponen `swipe`, `draw_canvas`, `slider`.
-- Konten: tambah 5 game first-party/partner (total 8), dimulai dari Gambar Kilat dan Panjat Pinang, rotasi katalog gratis.
+- Konten: tambah 5 game first-party/partner (total 8), rotasi katalog gratis.
 - Rilis publik (open beta) di Indonesia.
 
 **Fase 3 — Portal Developer & Rilis Publik Hoorah SDK (Bulan 9–14)**
@@ -815,7 +820,9 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
 | Ular Arena, Lari Terus | 4 lawan |
 | Rebut Wilayah | 3–5 lawan (bertambah seiring kemampuan yang diingat) |
 | Dapur Heboh | 1 asisten komputer di Sisi Masak (kerja sama, bukan lawan) |
-| Kompak Gak?, Gambar Kilat | Tetap minimal 2–3 orang (inti gamenya menyamakan atau menebak jawaban orang lain) |
+| Satu Tali | Karung pemberat yang diseret dan dilempar (keputusan pemilik 2026-11-22) |
+| Kompak Gak? | Tetap minimal 2 orang (inti gamenya menyamakan jawaban orang lain) |
+| Kampung Siluman, Penyusup | Tidak bisa main sendiri: minimal 5 / 3 orang, butuh Hoorah Pass (keputusan pemilik 2026-11-22) |
 
 - **Pemain terputus:** otak lawan yang sama mengambil alih kursi pemain yang HP-nya putus di tengah game, sampai tersambung lagi.
 - **Paket gratis:** lawan komputer hanya ada saat main sendiri, jadi tidak bersinggungan dengan batas 2 pemain gratis.

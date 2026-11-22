@@ -1,0 +1,66 @@
+/* Lantai Runtuh phone: the quiz stage at night. Light text on the dark backdrop, panels edged in
+   marquee yellow, the stick base is a lit stage tile and DORONG a big orange show button.
+   Imported by the controller app; only active while Lantai Runtuh runs. */
+
+html[data-game="runtuh"] {
+  --t-bg: #12141b;
+  --surface: #1e2028;
+  --surface-2: #2a2d36;
+  --surface-3: #0c0d12;
+  --line: #3a3d48;
+  --t-panel: rgba(24, 26, 33, 0.94);
+  --t-panel-edge: #ffc928;
+  --t-eyebrow: #111214;
+  --t-eyebrow-bg: #ffc928;
+  --t-eyebrow-pad: 3px 8px 2px;
+  --t-accent-text: #ffc928;
+  --t-good: #5be08f;
+  --t-track: #2a2d36;
+  --t-strip-bg: rgba(24, 26, 33, 0.96);
+  --t-strip-text: #e4e6ec;
+  --t-strip-btn: #2a2d36;
+  --t-strip-btn-text: #ffffff;
+  --t-strip-edge-h: 10px;
+  --t-crown: #ffc928;
+}
+
+/* The stage tiles along the bottom edge are part of the scene: keep the controls above them. */
+html[data-game="runtuh"] .ctrl {
+  padding-bottom: max(calc(var(--pad-y) + min(30px, calc(var(--vh) * 4))), env(safe-area-inset-bottom));
+}
+
+html[data-game="runtuh"] .pad-stick-zone {
+  background-color: rgba(24, 26, 33, 0.9);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 201, 40, 0.55),
+    0 6px 0 #0c0d12;
+}
+
+/* Stick base: a lit stage tile seen from above. */
+html[data-game="runtuh"] .pad-stick {
+  border-radius: 22%;
+  background: #2a2d36;
+  box-shadow:
+    inset 0 0 0 4px #ffc928,
+    inset 0 0 26px rgba(255, 201, 40, 0.28),
+    0 6px 0 #0c0d12;
+}
+
+html[data-game="runtuh"] .pad-stick-tick {
+  color: #ffc928;
+  opacity: 0.6;
+}
+
+html[data-game="runtuh"] .pad-stick-knob {
+  box-shadow:
+    inset 0 -7px 0 rgba(17, 18, 20, 0.3),
+    inset 0 4px 0 rgba(255, 255, 255, 0.3),
+    0 6px 0 #0c0d12;
+}
+
+html[data-game="runtuh"] .pad-btn.tone-orange {
+  box-shadow:
+    inset 0 -6px 0 rgba(0, 0, 0, 0.18),
+    0 0 0 4px rgba(255, 201, 40, 0.35),
+    0 7px 0 var(--orange-dark);
+}

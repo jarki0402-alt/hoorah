@@ -10,6 +10,7 @@
  * tremolo, pan, reverb and delay sends) that lives as long as its song plays.
  */
 
+import { layerScheduled, TIER_FADE_TAU, type Tier } from './adaptive';
 import type { NoteEvent, ScoreInst, SongScore } from './score';
 import { midiToFreq } from './theory';
 
@@ -75,6 +76,11 @@ export interface Mix {
   human?: number;
   /** Peak gain of one note at full velocity (default 1). */
   vol?: number;
+  /**
+   * Adaptive layer: the channel sounds while tier <= the game's music intensity (see
+   * ./adaptive). Default 0 = always on.
+   */
+  tier?: Tier;
 }
 
 export interface ToneDef extends ScoreInst, Mix {
@@ -385,10 +391,15 @@ export class Channel {
   private readonly strip: AudioNode[] = [];
   private readonly lfos: OscillatorNode[] = [];
   private ends: number[] = [];
+  /** Layer fader (only for channels with a tier above 0). */
+  private readonly layer: GainNode | null = null;
+  private on: boolean;
+  private offAt = Number.NEGATIVE_INFINITY;
 
   constructor(
     readonly def: InstDef,
     private readonly bus: Bus,
+    audible = true,
   ) {
     const ctx = bus.ctx;
     // Notes arrive at their own level (velocity × vol); the saturator sees that level, so
@@ -424,6 +435,11 @@ export class Channel {
       this.bus.stats.nodes++;
       chain(p);
     }
+    this.on = audible;
+    if (def.tier) {
+      this.layer = this.gain(audible ? 1 : 0);
+      chain(this.layer);
+    }
     node.connect(bus.dry);
     for (const [amount, dest] of [
       [def.rev, bus.rev],
@@ -434,6 +450,22 @@ export class Channel {
       node.connect(send).connect(dest);
       this.strip.push(send);
     }
+  }
+
+  /** Fades this layer in or out from context time `at`; the song keeps playing. */
+  setAudible(on: boolean, at: number): void {
+    if (on === this.on) return;
+    this.on = on;
+    if (!on) this.offAt = at;
+    const g = this.layer?.gain;
+    if (!g) return;
+    g.cancelScheduledValues(at);
+    g.setTargetAtTime(on ? 1 : 0, at, TIER_FADE_TAU);
+  }
+
+  /** Whether notes starting at `t` are worth scheduling (silent layers cost nothing). */
+  scheduledAt(t: number): boolean {
+    return layerScheduled(this.on, this.offAt, t);
   }
 
   /** Disconnects the channel strip; notes already scheduled simply end into nothing. */

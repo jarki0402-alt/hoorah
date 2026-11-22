@@ -12,7 +12,7 @@ const REACTIONS: ViewAction[] = [
 const AGAIN: ViewAction[] = [{ id: 'rematch', label: STR.phoneAgain, style: 'primary' }];
 const REMATCH: ViewAction[] = [{ id: 'rematch', label: STR.phoneRematch, style: 'primary' }];
 
-/** Deadline is server ms. No swing indicator: players watch the crane on the TV. */
+/** Deadline is server ms. No position indicator: players watch the crane on the main screen. */
 export function turnView(floorNumber: number, deadline: number): ControllerView {
   return {
     kind: 'button',

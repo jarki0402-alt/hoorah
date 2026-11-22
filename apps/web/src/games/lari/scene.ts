@@ -17,7 +17,7 @@ import type { GfxTier } from '../common/gfx';
 import type { LariAssets } from './assets';
 import { ObstacleField } from './field';
 import { Effects } from './fx';
-import type { LariEvent, LariRun, Runner } from './logic';
+import { LANE_EASE_SLOPE, type LariEvent, type LariRun, type Runner } from './logic';
 import { setLowDetailMaterials } from './materials';
 import { type PoseState, RUNNER_SCALE, RunnerModel, TAG_HEIGHT } from './runner3d';
 import { SKY, World } from './world';
@@ -251,6 +251,10 @@ export class LariScene {
     let trail = Number.POSITIVE_INFINITY;
     let sumX = 0;
     let nAlive = 0;
+    // Fastest honest sideways move this frame (the lane ease at its steepest): anything beyond it
+    // is a jump in the rules and is eased; a real lane change is shown exactly, never held back.
+    const T = run.tuning;
+    const xJump = Math.max(0.4, ((LANE_EASE_SLOPE * T.laneW) / T.laneTime) * dt * 1.25);
     for (const r of run.runners) {
       const d = this.disp.get(r.id);
       if (!d) continue;
@@ -259,9 +263,9 @@ export class LariScene {
       const py = r.prevY + (r.y - r.prevY) * alpha;
       const k = dt > 0 ? 1 - Math.exp(-dt * 28) : 1;
       const oldX = d.x;
-      // A jump applied as of the phone press starts partway up its arc: ease the visible body to
-      // it (lane changes already ease across in the rules, so x only follows here).
-      d.x = Math.abs(px - d.x) > 0.4 ? d.x + (px - d.x) * k : px;
+      // Lagged jumps catch up smoothly in the rules (lagCatch) and lane changes ease there too;
+      // this only softens what still jumps (lagCatch 0 from the Lab, a bounce off a block).
+      d.x = Math.abs(px - d.x) > xJump ? d.x + (px - d.x) * k : px;
       d.y = Math.abs(py - d.y) > 0.3 && r.fallT <= 0 && r.climbT <= 0 ? d.y + (py - d.y) * k : py;
       d.d = pd;
       d.side = dt > 0 ? (d.x - oldX) / dt : 0;
@@ -334,12 +338,13 @@ export class LariScene {
       } else if (r.air) state = 'air';
       else if (r.slideT > 0) state = 'slide';
       let vy = r.vy;
-      if (this.forcePose === 'air') vy = 6.6 * Math.cos(this.time * 4.5);
+      if (this.forcePose === 'air') vy = T.jumpV * Math.cos(this.time * 4.5);
       else if (this.forcePose === 'stumble') t = (this.time * 0.8) % 1;
       m.animate(dt, {
         state,
         speed: this.forcePose === 'run' ? 14 : r.speed,
         vy,
+        jumpV: T.jumpV,
         t,
         kind: r.stumbleKind,
         side: d.side,

@@ -130,7 +130,7 @@ Jangan buat aturan untuk `tcp:8790` atau `tcp:1010`: server Hoorah hanya didenga
 ### Cek dari Mac (setelah langkah 4 selesai, server Hoorah harus sudah jalan)
 ```bash
 cd ~/Documents/vibe/game
-node scripts/stun-check.mjs 35.212.247.252          # OK: STUN di ...:3478 menjawab ...
+node scripts/stun-check.mjs 35.212.156.209          # OK: STUN di ...:3478 menjawab ...
 ```
 `TIDAK ADA JAWABAN` berarti aturan belum aktif, nama jaringannya salah, atau server Hoorah belum jalan.
 
@@ -176,11 +176,11 @@ Cloudflare dashboard → **Zero Trust** → **Networks** → **Tunnels** → tun
 ### 5b. DNS ke VM, awan abu-abu
 Cloudflare → domain `fajarrizky.my.id` → **DNS** → **Records**:
 1. Hapus record `hoorah` yang lama (CNAME ke `...cfargotunnel.com`).
-2. **Add record**: Type **A**, Name `hoorah`, IPv4 `35.212.247.252`, Proxy status **DNS only** (awan **abu-abu**), TTL Auto → **Save**.
+2. **Add record**: Type **A**, Name `hoorah`, IPv4 `35.212.156.209`, Proxy status **DNS only** (awan **abu-abu**), TTL Auto → **Save**.
 
 Kenapa abu-abu: lewat proxy Cloudflare, dari ISP Indonesia tiap permintaan ±0,4–0,9 detik (langsung ±0,19 detik), dan data yang lewat proxy ditagih Google (diukur saat memindahkan Suwwara).
 
-**Mac** (tunggu 1–2 menit): `dig +short hoorah.fajarrizky.my.id` → `35.212.247.252`.
+**Mac** (tunggu 1–2 menit): `dig +short hoorah.fajarrizky.my.id` → `35.212.156.209`.
 
 ### 5c. Sertifikat HTTPS
 **VM**

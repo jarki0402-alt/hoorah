@@ -179,6 +179,8 @@ export interface RenovateChoice {
   /** Level names now and after the free upgrade. */
   from: string;
   to: string;
+  /** Building level after the free upgrade (1..4), drawn as the option's picture. */
+  toLevel: number;
   rentNow: number;
   rentNext: number;
   /** Island colour of the city. */
@@ -198,6 +200,7 @@ export function renovateView(choices: readonly RenovateChoice[], picked: number)
       label: c.place,
       sub: STR.phoneRenovateSub(c.from, c.to, rp(c.rentNow), rp(c.rentNext)),
       color: c.color,
+      thumb: `lvl-${Math.max(1, Math.min(4, c.toLevel))}`,
     })),
     selected: String(picked),
     confirm: { id: 'renovate', label: STR.phoneRenovateConfirm, style: 'primary' },

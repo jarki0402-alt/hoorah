@@ -1,0 +1,41 @@
+/* ---------------------------------------------------------------- siluman: woodcut night
+   Deep blue night like the main screen, kept dark so a lit phone shows nothing bright. The role
+   card is cream with a moon-yellow edge; its back is night blue with a pale question mark.
+   Contrast checked for small text on the night (#0a1327) and on panels (#16213a). */
+
+html[data-game="siluman"] {
+  --t-bg: #0a1327;
+  --surface: #16213a;
+  --surface-2: #1e2b47;
+  --surface-3: #050a16;
+  --line: #34446a;
+  --text-2: #dde3f0;
+  --text-3: #a3adc4;
+  --t-panel: #16213a;
+  --t-panel-edge: #2c3b5e;
+  --t-eyebrow: #ffe7a3;
+  --t-accent-text: #ffe7a3;
+  --t-good: #4ed98a;
+  --t-track: #1e2b47;
+  --t-strip-bg: #ffe7a3;
+  --t-strip-text: #0a1327;
+  --t-strip-btn: #0a1327;
+  --t-strip-btn-text: #ffffff;
+  --t-crown: #ffc928;
+  --t-peek-back: #13203a;
+  --t-peek-edge: #ffe7a3;
+  --t-peek-mark: #ffe7a3;
+  --t-peek-face: #fbf1dc;
+  --t-peek-face-edge: #ff8a1f;
+  --t-peek-blank: #ff8a1f;
+}
+
+html[data-game="siluman"] .peek-caption {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+/* Choosing a player at night: avatars on dark tiles, the pick lit in moon yellow. */
+html[data-game="siluman"] .menu-opt.on {
+  box-shadow: inset 0 0 0 3px #ffe7a3;
+}

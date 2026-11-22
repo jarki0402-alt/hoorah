@@ -6,12 +6,15 @@
  *
  * Latency (PRD 5.3): the relay may add about 200 ms, so the main screen judges generously.
  *  - Phone input is applied as of the moment it was pressed (`lag`, capped): a jump that left the
- *    finger 150 ms ago starts 150 ms into its arc. A lane change always eases the body across in
- *    full (never a teleport); where it stands across the roof is judged as of the press instead
- *    (`judgedX`).
+ *    finger 150 ms ago is owed 150 ms of its arc, which it catches up by playing the arc faster
+ *    for a moment (`lagCatch`), so the body never pops up. A lane change always eases the body
+ *    across in full (never a teleport); where it stands across the roof is judged as of the press
+ *    instead (`judgedX`).
  *  - A person's runner that touches an obstacle is not tripped at once: the hit waits `hitGrace`
  *    and is forgiven when the right move (pressed no later than just after the touch) clears it.
- *  - Jumps are long and high, and the first rows come after a calm start.
+ *  - Jumps are long and high (about 0.75 s: a quick rise, a short float at the top, a slightly
+ *    faster fall), the hit box is a little smaller than the body, and the first rows come after a
+ *    calm start.
  *
  * Lane changes work like a classic three-lane runner: one lateral move is exactly one lane. A
  * move made during a change waits its turn (at most `LANE_QUEUE` wait), a move back cancels the
@@ -19,6 +22,7 @@
  * bumps.
  */
 import { PAD_ACTION, PAD_DOWN, PAD_LEFT, PAD_RIGHT, PAD_UP, u16Delta } from '@hoorah/protocol';
+import { CONTROL_DEFAULTS } from '../../shared/controls';
 import { lowerBound, type Obstacle, type ObstacleKind, Track } from './track';
 
 export type Mode = 'sprint' | 'survive';
@@ -32,10 +36,16 @@ export function parseMode(rounds: unknown): Mode {
 export const TUNING = {
   /** Distance between lane centres (m). */
   laneW: 1.9,
-  /** Seconds for one lane change (eased; the same at every speed). */
-  laneTime: 0.2,
-  jumpV: 6.6,
-  gravity: 19,
+  /** Seconds for one lane change (sharp ease-out; the same at every speed). Lab: controls.ts. */
+  laneTime: CONTROL_DEFAULTS.runner.laneTime,
+  /** Take-off speed and rising gravity (Lab: controls.ts). */
+  jumpV: CONTROL_DEFAULTS.runner.jumpV,
+  gravity: CONTROL_DEFAULTS.runner.gravity,
+  /** Falling gravity as a multiple of the rising one, and the float at the apex (s). */
+  fallMul: CONTROL_DEFAULTS.runner.fallMul,
+  hang: CONTROL_DEFAULTS.runner.hang,
+  /** Extra arc seconds played per second until a lagged jump has caught up (Lab: controls.ts). */
+  lagCatch: CONTROL_DEFAULTS.runner.lagCatch,
   /** Downward speed of a slide pressed in the air (m/s). */
   fastFall: 16,
   slideTime: 0.75,
@@ -46,7 +56,7 @@ export const TUNING = {
   /** Seconds a runner cannot be tripped again after a stumble (blinks). */
   safeTime: 1.2,
   /** People's runners: seconds a touch waits for the move that clears it. */
-  hitGrace: 0.22,
+  hitGrace: 0.25,
   /** A clearing move may start this long after the touch and still count. */
   lateOk: 0.1,
   /** Phone lag compensated at most (s). */
@@ -54,11 +64,11 @@ export const TUNING = {
   /** Seconds a runner may run on air past a roof edge before it counts as a fall. */
   coyote: 0.1,
   /** Feet height that clears a low barrier (m). */
-  lowClear: 0.4,
+  lowClear: 0.34,
   /** Lateral distance (runner to obstacle centre) below which they touch (m). */
-  hitHalfW: 0.92,
-  /** Half depth of a runner along the run (m). */
-  bodyHalf: 0.28,
+  hitHalfW: 0.88,
+  /** Half depth of a runner along the run (m), a little under the body: grazes are forgiven. */
+  bodyHalf: 0.22,
   /** Runners behind the leader run a little faster, up to this share. */
   catchUp: 0.07,
   /** ...from this far behind (m). */
@@ -78,9 +88,53 @@ export const TUNING = {
 
 export type Tuning = { -readonly [K in keyof typeof TUNING]: number };
 
+/** Share of the rising gravity felt around the apex (the float). */
+const HANG_SHARE = 0.3;
+
+type JumpParams = Pick<Tuning, 'jumpV' | 'gravity' | 'fallMul' | 'hang'>;
+
+/** Upward speed (m/s) below which the runner floats: the float lasts `hang` seconds. */
+function hangSpeed(t: JumpParams): number {
+  return Math.min(t.jumpV, (t.hang * t.gravity * HANG_SHARE) / 2);
+}
+
+/**
+ * Gravity (m/s², positive = down) at upward speed `vy` during a jump: full on the way up, gentle
+ * around the apex, `fallMul` times stronger on the way down.
+ */
+export function jumpGravity(vy: number, t: JumpParams): number {
+  const h = hangSpeed(t);
+  if (vy > h) return t.gravity;
+  if (vy >= -h) return t.gravity * HANG_SHARE;
+  return t.gravity * t.fallMul;
+}
+
+/** Height and upward speed `at` seconds after take-off (exact, phase by phase; may go below 0). */
+export function jumpArc(at: number, t: JumpParams): { y: number; vy: number } {
+  const h = hangSpeed(t);
+  const g = t.gravity;
+  const gh = g * HANG_SHARE;
+  const gf = g * t.fallMul;
+  const t1 = (t.jumpV - h) / g;
+  if (at <= t1) return { y: t.jumpV * at - 0.5 * g * at * at, vy: t.jumpV - g * at };
+  const y1 = t.jumpV * t1 - 0.5 * g * t1 * t1;
+  const t2 = h > 0 ? (2 * h) / gh : 0;
+  const a2 = at - t1;
+  if (a2 <= t2) return { y: y1 + h * a2 - 0.5 * gh * a2 * a2, vy: h - gh * a2 };
+  const a3 = a2 - t2;
+  return { y: y1 - h * a3 - 0.5 * gf * a3 * a3, vy: -h - gf * a3 };
+}
+
 /** Seconds a jump stays airborne and the apex height of the feet. */
-export function jumpShape(t: Tuning = TUNING): { airTime: number; peak: number } {
-  return { airTime: (2 * t.jumpV) / t.gravity, peak: (t.jumpV * t.jumpV) / (2 * t.gravity) };
+export function jumpShape(t: JumpParams = TUNING): { airTime: number; peak: number } {
+  const h = hangSpeed(t);
+  const g = t.gravity;
+  const gf = g * t.fallMul;
+  const t1 = (t.jumpV - h) / g;
+  const y1 = (t.jumpV * t.jumpV - h * h) / (2 * g);
+  const t2 = h > 0 ? (2 * h) / (g * HANG_SHARE) : 0;
+  const t3 = (-h + Math.sqrt(h * h + 2 * gf * y1)) / gf;
+  return { airTime: t1 + t2 + t3, peak: y1 + (h * h) / (2 * g * HANG_SHARE) };
 }
 
 /* ------------------------------------------------------------------ pack speed */
@@ -182,6 +236,8 @@ export interface Runner {
   slideT: number;
   slideQueued: boolean;
   jumpBuffer: number;
+  /** Seconds of jump arc still owed to phone lag, caught up at `lagCatch` (no visual pop). */
+  arcOwed: number;
   coyoteT: number;
   /** Remaining stumble (slow + recover), seconds. */
   stumbleT: number;
@@ -239,7 +295,10 @@ export interface RunOptions {
 const AHEAD = 320;
 const BEHIND = 60;
 
-const ease = (t: number) => t * t * (3 - 2 * t);
+/** Lane change easing: sharp ease-out (cubic), so the body leaves at once and settles softly. */
+export const laneEase = (t: number): number => 1 - (1 - t) ** 3;
+/** Steepest slope of `laneEase` (at the start), for render smoothing and tests. */
+export const LANE_EASE_SLOPE = 3;
 const byDistance = (a: Runner, b: Runner) => a.d - b.d;
 
 export class LariRun {
@@ -300,6 +359,7 @@ export class LariRun {
         slideT: 0,
         slideQueued: false,
         jumpBuffer: 0,
+        arcOwed: 0,
         coyoteT: 0,
         stumbleT: 0,
         stumbleKind: null,
@@ -437,6 +497,7 @@ export class LariRun {
       }
       case 'slide': {
         if (r.air && r.y > 0.05) {
+          r.arcOwed = 0;
           r.vy = Math.min(r.vy, -T.fastFall);
           r.slideQueued = true;
           r.slideAt = this.t - L;
@@ -501,14 +562,26 @@ export class LariRun {
     if (r.laneT >= 1) return r.x;
     const T = this.tuning;
     const k = Math.max(r.laneT, Math.min(1, (this.t - r.laneAt) / T.laneTime));
-    return r.laneFrom + (r.lane * T.laneW - r.laneFrom) * ease(k);
+    return r.laneFrom + (r.lane * T.laneW - r.laneFrom) * laneEase(k);
   }
 
+  /**
+   * Take off now. A press `L` seconds old is owed `L` of arc: with `lagCatch` > 0 it is played
+   * faster from the ground up (smooth); with 0 the body starts that far up its arc at once.
+   */
   private startJump(r: Runner, L: number): void {
     const T = this.tuning;
     r.air = true;
-    r.vy = T.jumpV - T.gravity * L;
-    r.y = Math.max(0.001, T.jumpV * L - 0.5 * T.gravity * L * L);
+    if (T.lagCatch > 0) {
+      r.vy = T.jumpV;
+      r.y = 0.001;
+      r.arcOwed = L;
+    } else {
+      const arc = jumpArc(L, T);
+      r.vy = arc.vy;
+      r.y = Math.max(0.001, arc.y);
+      r.arcOwed = 0;
+    }
     r.slideT = 0;
     r.slideQueued = false;
     r.jumpBuffer = 0;
@@ -581,7 +654,7 @@ export class LariRun {
     // Lane change, then the next waiting one: never more than one lane at a time.
     if (r.laneT < 1) {
       r.laneT = Math.min(1, r.laneT + dt / T.laneTime);
-      r.x = r.laneFrom + (r.lane * T.laneW - r.laneFrom) * ease(r.laneT);
+      r.x = r.laneFrom + (r.lane * T.laneW - r.laneFrom) * laneEase(r.laneT);
       if (r.laneT >= 1) {
         r.x = r.lane * T.laneW;
         const next = r.laneQueue.shift();
@@ -605,9 +678,14 @@ export class LariRun {
     if (r.slideT > 0) r.slideT = Math.max(0, r.slideT - dt);
     const gap = this.track.gapAt(r.d);
     if (r.air) {
-      r.vy -= T.gravity * dt;
-      r.y += r.vy * dt;
+      // A lagged jump runs its arc a little faster until it is where the press put it.
+      const extra = r.arcOwed > 0 ? Math.min(r.arcOwed, dt * T.lagCatch) : 0;
+      r.arcOwed -= extra;
+      const adt = dt + extra;
+      r.vy -= jumpGravity(r.vy, T) * adt;
+      r.y += r.vy * adt;
       if (r.y <= 0) {
+        r.arcOwed = 0;
         if (!gap) {
           r.y = 0;
           r.vy = 0;
@@ -744,6 +822,7 @@ export class LariRun {
 
   private fall(r: Runner): void {
     r.pending = null;
+    r.arcOwed = 0;
     r.laneQueue.length = 0;
     r.air = false;
     r.slideT = 0;
