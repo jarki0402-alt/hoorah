@@ -11,7 +11,10 @@ import { svgDoc } from './svg';
  */
 export function silumanSvg(): string {
   // The 1600x960 kampung, scaled to the width and anchored to the bottom.
-  const scene = kampungSvg('night').replace('<svg ', '<svg x="0" y="-24" width="640" height="384" ');
+  // The scene's own width/height are dropped first: a duplicate attribute makes the SVG invalid.
+  const scene = kampungSvg('night')
+    .replace(/^<svg([^>]*?) width="[^"]*" height="[^"]*"/, '<svg$1')
+    .replace('<svg ', '<svg x="0" y="-24" width="640" height="384" ');
   const fruits: [Fruit, number, 'happy' | 'wow' | 'effort'][] = [
     ['jeruk', 150, 'wow'],
     ['nanas', 260, 'happy'],

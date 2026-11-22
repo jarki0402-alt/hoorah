@@ -66,6 +66,14 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-22 · Perbaikan gambar Kampung Siluman di beranda
+
+**Apa yang diubah:** key art Kampung Siluman tampil sebagai gambar rusak karena SVG kampung yang disisipkan punya atribut `width`/`height` ganda (XML tidak sah). Atribut bawaan adegan dibuang dulu sebelum ukuran baru dipasang.
+**Alasan:** laporan pemilik (tangkapan layar beranda).
+**File:** `apps/web/src/shared/art/siluman.ts`, `PROGRESS.md`.
+**Verifikasi:** semua 30 key art di-render lalu dicek `xmllint`: 30/30 sah. `npx biome check` + `npx tsc --noEmit -p apps/web` lulus. `npm run docker:up` exit 0, `/health` `{"ok":true}`. `npm run check` penuh tidak dijalankan ulang (perubahan satu baris di generator SVG).
+**Berikutnya:** push ke GitHub dijalankan pemilik (Git di sesi ini tidak bisa meminta kata sandi). `docker/.env.example` sengaja tidak ikut commit karena isinya belum diperiksa.
+
 ### 2026-11-22 · Gelombang B selesai + joystick pola Roblox, beranda bertingkat, pilihan bergambar, Mode Pesta
 
 **Apa yang diubah:** joystick pola Roblox di semua game joystick (tanpa panel; mendatar: separuh kiri + tombol bulat kanan bawah; tegak: tengah bawah + baris tombol di atas), Lari Terus tanpa tombol (usap + ketuk = lompat, lompat 0,75 dtk, tabrakan memaafkan), Rusun kembali berayun (3400 ms, 1,5%/lantai, min 2400 ms, tab Rusun di Lab), beranda bertingkat (Pas untuk kalian, baris suasana, kisi Semua game, label BARU via `wave: 3`), pilihan bergambar (`MenuOption.thumb`, `controller/thumbs/*`), **Mode Pesta** (3 game, poin 3/2/1, game terakhir ganda; fitur baru, belum dicatat di PRD), game baru **Satu Tali, Bom Oper, Seluncur Es (tampilan HP `sling`), Langkah Maut (tekanan arah juga lewat kanal andal), Juara Eja, Kampung Siluman** (view `silent`, pesan `dark`).
