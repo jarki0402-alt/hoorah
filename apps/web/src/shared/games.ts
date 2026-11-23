@@ -337,7 +337,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     title: 'Ludo',
     tagline: 'Keluarkan bidak, makan lawan, pulang duluan!',
     description:
-      'Permainan papan favorit sejuta umat. Lempar dadu dan pilih bidak dari HP, makan bidak lawan untuk mengirimnya pulang, lalu bawa keempat bidakmu ke tengah. Lebih dari empat pemain? Main beregu.',
+      'Permainan papan favorit sejuta umat. Lempar dadu dan pilih bidak dari HP, makan bidak lawan untuk mengirimnya pulang, lalu bawa semua bidakmu ke tengah. Lima sampai delapan pemain? Papannya jadi segi lima sampai segi delapan, setiap orang punya warna sendiri.',
     minPlayers: 1,
     maxPlayers: 8,
     control: 'Dadu & pilih bidak',

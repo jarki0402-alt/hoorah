@@ -211,7 +211,7 @@
   padding: 0 8px 0 5px;
   border-radius: 12px;
   background: rgba(17, 18, 20, 0.86);
-  box-shadow: inset 4px 0 0 var(--c);
+  box-shadow: inset 0 0 0 2px var(--c);
   transition: top 0.4s var(--ease-out);
 }
 

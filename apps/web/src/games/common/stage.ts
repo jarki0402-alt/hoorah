@@ -66,6 +66,26 @@ export function mountStage(root: HTMLElement): Stage {
   };
 }
 
+/**
+ * Device px per CSS px of this game page, including the main screen's own scaling: the game runs
+ * in an iframe inside a stage the shell enlarges with a CSS transform (1280 px base), so a canvas
+ * sized from devicePixelRatio alone is stretched, soft and pixelated, on any screen bigger than
+ * that base. The iframe is same-origin, so its on-screen box tells the extra factor.
+ */
+export function deviceScale(): number {
+  const dpr =
+    Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+  let outer = 1;
+  try {
+    const frame = window.frameElement;
+    const w = frame ? frame.getBoundingClientRect().width : 0;
+    if (w > 0 && window.innerWidth > 0) outer = w / window.innerWidth;
+  } catch {
+    // Not same-origin (or no parent): only the pixel ratio is known.
+  }
+  return dpr * outer;
+}
+
 /** Wait for the brand fonts so canvas/Phaser text renders with the right face. */
 export async function fontsReady(): Promise<void> {
   try {

@@ -550,6 +550,11 @@
   will-change: transform;
 }
 
+/* Letting go: the knob springs back to the middle. */
+.pad-stick.is-rest .pad-stick-knob {
+  transition: transform 180ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
 .pad-stick.on .pad-stick-knob {
   box-shadow:
     inset 0 -4px 0 rgba(17, 18, 20, 0.28),
@@ -575,8 +580,6 @@
    arc above and left of it, centre to centre --arc away. Offsets are cos/sin of the arc angles. */
 
 .pad-buttons {
-  --main: clamp(84px, calc(var(--vh) * 13), 96px);
-  --small: clamp(58px, calc(var(--vh) * 9.5), 66px);
   --arc: calc(var(--main) / 2 + var(--small) / 2 + 14px);
   position: absolute;
   z-index: 2;
@@ -633,13 +636,13 @@
 }
 
 .pad-btn-label {
-  font-size: 13px;
+  font-size: clamp(13px, calc(var(--small) * 0.18), 18px);
   line-height: 1;
   letter-spacing: 0.01em;
 }
 
 .pad-btn.is-big .pad-btn-label {
-  font-size: clamp(17px, calc(var(--main) * 0.2), 19px);
+  font-size: clamp(17px, calc(var(--main) * 0.18), 26px);
 }
 
 .pad-btn-sub {
@@ -651,7 +654,7 @@
 }
 
 .pad-btn.is-big .pad-btn-sub {
-  font-size: 10px;
+  font-size: clamp(10px, calc(var(--main) * 0.095), 13px);
 }
 
 .pad-btn.tone-yellow {
@@ -819,8 +822,6 @@
 /* Phones held sideways: the same corners, a little tighter so the arc fits the short height. */
 @media (orientation: landscape) and (max-height: 540px) {
   .pad-buttons {
-    --main: 84px;
-    --small: 58px;
     bottom: 8px;
   }
 
@@ -838,7 +839,7 @@
   }
 
   .pad-view.is-stick .has-buttons .pad-stick-zone {
-    top: calc(var(--main, 96px) + 28px);
+    top: calc(var(--main) + 28px);
   }
 
   .pad-stick.is-rest {
@@ -872,5 +873,248 @@
   .n-3 .pad-btn.slot-2 {
     --ox: var(--arc);
     --oy: 0px;
+  }
+}
+
+/* ---------------------------------------------------------------- button sizes (owner 2026-11-22)
+   Sized to the phone and to how many buttons share the corner: one button gets the corner to
+   itself, two or three stay as large as the arc allows. Landscape follows the screen height,
+   upright follows the width. Set on the wrap so the upright stick zone starts below them. */
+.pad-stick-wrap {
+  --main: clamp(84px, calc(var(--vh) * 13), 96px);
+  --small: clamp(58px, calc(var(--vh) * 9.5), 66px);
+}
+
+.pad-stick-wrap.bn-1 {
+  --main: clamp(104px, calc(var(--vh) * 30), 150px);
+}
+
+.pad-stick-wrap.bn-2 {
+  --main: clamp(92px, calc(var(--vh) * 25), 132px);
+  --small: clamp(74px, calc(var(--vh) * 20), 104px);
+}
+
+.pad-stick-wrap.bn-3 {
+  --main: clamp(86px, calc(var(--vh) * 22), 120px);
+  --small: clamp(66px, calc(var(--vh) * 17), 92px);
+}
+
+@media (orientation: portrait) {
+  .pad-stick-wrap.bn-1 {
+    --main: clamp(100px, 28vw, 140px);
+  }
+
+  .pad-stick-wrap.bn-2 {
+    --main: clamp(88px, 23vw, 124px);
+    --small: clamp(72px, 19vw, 100px);
+  }
+
+  .pad-stick-wrap.bn-3 {
+    --main: clamp(80px, 21vw, 112px);
+    --small: clamp(64px, 16vw, 88px);
+  }
+}
+
+/* ---------------------------------------------------------------- jump zone (`jumpZone`)
+   Owner 2026-11-22, after Roblox: the whole right half holds the main button. The button is
+   drawn 128 px in the corner as a guide; small pills for the other buttons sit top right. */
+.pad-view.is-stick .has-jump-zone .pad-stick-zone {
+  left: 0;
+  top: 0;
+  width: 50%;
+}
+
+.pad-jump-zone {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  right: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overflow: hidden;
+}
+
+.pad-jump-zone::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 2px dashed rgba(255, 255, 255, 0.16);
+  pointer-events: none;
+  transition: background 80ms;
+}
+
+.pad-jump-zone.pressed::before {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.pad-jump-btn {
+  position: absolute;
+  right: calc(max(18px, env(safe-area-inset-right)) + 4px);
+  bottom: 12px;
+  width: clamp(104px, calc(var(--vh) * 34), 128px);
+  height: clamp(104px, calc(var(--vh) * 34), 128px);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  pointer-events: none;
+  transition: transform 60ms;
+}
+
+.pad-jump-btn.tone-yellow {
+  background: var(--yellow);
+  color: var(--ink);
+  box-shadow: 0 6px 0 var(--yellow-dark);
+}
+
+.pad-jump-btn.tone-orange {
+  background: var(--orange);
+  color: #fff;
+  box-shadow: 0 6px 0 var(--orange-dark);
+}
+
+.pad-jump-btn.tone-cream {
+  background: var(--cream);
+  color: var(--ink);
+  box-shadow: 0 6px 0 #c9bba9;
+}
+
+.pad-jump-zone.pressed .pad-jump-btn {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.pad-jump-label {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.pad-jump-help {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 64px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.pad-jump-ripple {
+  position: absolute;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+  animation: pad-jump-ripple 450ms ease-out forwards;
+}
+
+@keyframes pad-jump-ripple {
+  from {
+    transform: scale(0.35);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+.pad-minis {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  right: calc(max(18px, env(safe-area-inset-right)) + 4px);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 48%;
+}
+
+.pad-mini {
+  min-width: 56px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pad-mini.tone-yellow {
+  background: var(--yellow);
+  color: var(--ink);
+  box-shadow: 0 4px 0 var(--yellow-dark);
+}
+
+.pad-mini.tone-orange {
+  background: var(--orange);
+  color: #fff;
+  box-shadow: 0 4px 0 var(--orange-dark);
+}
+
+.pad-mini.tone-cream {
+  background: var(--cream);
+  color: var(--ink);
+  box-shadow: 0 4px 0 #c9bba9;
+}
+
+.pad-mini.pressed {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+.pad-mini:disabled {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pad-mini.is-pulse {
+    animation: pad-mini-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes pad-mini-pulse {
+  50% {
+    box-shadow:
+      0 4px 0 var(--yellow-dark),
+      0 0 0 8px rgba(255, 201, 40, 0.35);
+  }
+}
+
+@media (orientation: portrait) {
+  .pad-view.is-stick .has-jump-zone .pad-stick-zone {
+    top: 0;
+    width: 50%;
+  }
+
+  .pad-stick-wrap.has-jump-zone .pad-stick.is-rest {
+    left: calc(max(18px, env(safe-area-inset-left)) + var(--ring) / 2 + 2px);
+  }
+
+  .pad-minis {
+    max-width: 50%;
   }
 }

@@ -13,13 +13,6 @@ interface AwardDef {
 
 const AWARDS: readonly AwardDef[] = [
   {
-    title: STR.awardPillar,
-    icon: 'build',
-    metric: (t) => Math.round(t.carried),
-    min: 2,
-    desc: STR.awardPillarDesc,
-  },
-  {
     title: STR.awardPusher,
     icon: 'zap',
     metric: (t) => Math.round(t.pushed),

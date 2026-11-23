@@ -1,8 +1,9 @@
 /**
- * DOM HUD over the cave: stage name and clock on top, one chip per colour (symbol + how many of
- * that colour stand at their door), the stage tip at the bottom, and the centre cards (stage
- * picker mirrored from the Host's phone, stage intro with the colour legend, stage clear with
- * stars). State arrives through a signal at ~10 Hz; floating texts are short-lived elements.
+ * DOM HUD over the stage: world, level and clock on top, one chip per colour (symbol + how many
+ * of that colour stand at their door), the tip or hint at the bottom, and the centre cards
+ * (world cards and the journey map of 30 stages mirrored from the Host's phone, stage intro with
+ * the goal and the colour legend, stage clear with stars). State arrives through a signal at
+ * ~10 Hz; floating texts are short-lived elements.
  */
 import type { Fruit } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
@@ -10,8 +11,8 @@ import { render } from 'preact';
 import { THUMBS } from '../../controller/thumbs/warna';
 import { svgUrl } from '../../shared/art/svg';
 import { Avatar } from '../../shared/ui';
-import { LEVELS, type Slot } from './levels';
-import { levelName, SLOT_NAME, SLOT_SYMBOL, STR } from './strings';
+import type { BiomeId, Slot } from './levels';
+import { SLOT_NAME, SLOT_SYMBOL, STR } from './strings';
 import { SLOT_CSS } from './textures';
 
 export interface ColorChip {
@@ -30,11 +31,46 @@ export interface StarLine {
   on: boolean;
 }
 
+export interface WorldCard {
+  id: BiomeId;
+  name: string;
+  sub: string;
+  ready: boolean;
+  got: number;
+  of: number;
+}
+
+export interface JourneyNode {
+  id: string;
+  number: number;
+  name: string;
+  stars: number;
+  done: boolean;
+  open: boolean;
+}
+
 export type Overlay =
   | { kind: 'none' }
-  | { kind: 'pick'; selected: string; best: Record<string, number>; host: string; stages: number }
-  | { kind: 'intro'; eyebrow: string; name: string; tip: string; legend: LegendRow[]; solo: boolean }
-  | { kind: 'clear'; eyebrow: string; stars: StarLine[]; time: string; gems: string; next: string };
+  | { kind: 'worlds'; selected: BiomeId; worlds: WorldCard[]; host: string; stages: number }
+  | { kind: 'journey'; world: BiomeId; title: string; selected: string; nodes: JourneyNode[]; host: string }
+  | {
+      kind: 'intro';
+      eyebrow: string;
+      name: string;
+      tip: string;
+      goal: string;
+      legend: LegendRow[];
+      solo: boolean;
+    }
+  | {
+      kind: 'clear';
+      eyebrow: string;
+      title: string;
+      stars: StarLine[];
+      time: string;
+      gems: string;
+      next: string;
+    };
 
 export interface HudState {
   show: boolean;
@@ -44,6 +80,8 @@ export interface HudState {
   gems: string;
   chips: ColorChip[];
   tip: string;
+  /** The tip line is a hint (drawn brighter). */
+  hint: boolean;
   vote: string;
   overlay: Overlay;
 }
@@ -56,15 +94,77 @@ const INITIAL: HudState = {
   gems: '',
   chips: [],
   tip: '',
+  hint: false,
   vote: '',
   overlay: { kind: 'none' },
 };
 
 /** The same picture the phones show on the option (controller/thumbs/warna.ts). */
-function Thumb({ id }: { id: string }) {
-  const build = THUMBS[`lvl-${id}`];
+function Thumb({ thumb }: { thumb: string }) {
+  const build = THUMBS[thumb];
   if (!build) return null;
-  return <img class="wa-card-img" src={svgUrl(`wa-thumb:${id}`, build)} alt="" draggable={false} />;
+  return <img class="wa-card-img" src={svgUrl(`wa-thumb:${thumb}`, build)} alt="" draggable={false} />;
+}
+
+/**
+ * The 30 stages of a world as a winding path (three rows of ten, snaking), finished stages with
+ * their stars, the picked one ringed, locked ones dimmed.
+ */
+function Journey({ o }: { o: Extract<Overlay, { kind: 'journey' }> }) {
+  const W = 1000;
+  const H = 360;
+  const pos = (i: number) => {
+    const row = Math.floor(i / 10);
+    const col = row % 2 === 0 ? i % 10 : 9 - (i % 10);
+    return { x: 60 + col * 97, y: 60 + row * 120 };
+  };
+  const path = o.nodes.map((_, i) => pos(i));
+  let d = '';
+  path.forEach((p, i) => {
+    if (i === 0) d = `M${p.x} ${p.y}`;
+    else {
+      const a = path[i - 1]!;
+      d +=
+        a.y === p.y
+          ? ` L${p.x} ${p.y}`
+          : ` C${a.x + (a.x > W / 2 ? 70 : -70)} ${a.y} ${p.x + (p.x > W / 2 ? 70 : -70)} ${p.y} ${p.x} ${p.y}`;
+    }
+  });
+  return (
+    <svg class="wa-journey" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={o.title}>
+      <path d={d} class="wa-journey-road" />
+      <path d={d} class="wa-journey-dash" />
+      {o.nodes.map((n, i) => {
+        const p = path[i]!;
+        const on = n.id === o.selected;
+        return (
+          <g
+            key={n.id}
+            class={`wa-node ${n.done ? 'done' : ''} ${n.open ? 'open' : 'locked'} ${on ? 'on' : ''}`}
+          >
+            {on && <circle cx={p.x} cy={p.y} r={34} class="wa-node-ring" />}
+            <circle cx={p.x} cy={p.y} r={24} class="wa-node-disc" />
+            {n.open ? (
+              <text x={p.x} y={p.y + 8} class="wa-node-num">
+                {n.number}
+              </text>
+            ) : (
+              <path
+                class="wa-node-lock"
+                d={`M${p.x - 8} ${p.y - 1}h16v12h-16Z M${p.x - 5} ${p.y - 1}v-4a5 5 0 0 1 10 0v4`}
+              />
+            )}
+            {n.done && (
+              <text x={p.x} y={p.y + 46} class="wa-node-stars">
+                {'★'.repeat(n.stars)}
+                <tspan class="off">{'★'.repeat(3 - n.stars)}</tspan>
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
 }
 
 function SlotMark({ slot, size = 22 }: { slot: Slot; size?: number }) {
@@ -83,20 +183,8 @@ function SlotMark({ slot, size = 22 }: { slot: Slot; size?: number }) {
   );
 }
 
-function Stars({ n }: { n: number }) {
-  return (
-    <span class="wa-stars">
-      {[0, 1, 2].map((i) => (
-        <span key={i} class={i < n ? 'on' : ''}>
-          ★
-        </span>
-      ))}
-    </span>
-  );
-}
-
 function OverlayView({ o }: { o: Overlay }) {
-  if (o.kind === 'pick') {
+  if (o.kind === 'worlds') {
     return (
       <div class="wa-overlay wa-pick">
         <div class="wa-pick-head">
@@ -104,18 +192,40 @@ function OverlayView({ o }: { o: Overlay }) {
           <h1 class="wa-pick-title">{STR.screenPickTitle}</h1>
           <div class="wa-pick-sub">{STR.pickHint(o.stages)}</div>
         </div>
-        <div class="wa-grid">
-          {LEVELS.map((lv, i) => (
-            <div key={lv.id} class={`wa-card ${o.selected === lv.id ? 'on' : ''}`}>
-              <Thumb id={lv.id} />
-              <div class="wa-card-text">
-                <span class="wa-card-num">{i + 1}</span>
-                <span class="wa-card-name">{levelName(lv.id)}</span>
-                <Stars n={o.best[lv.id] ?? 0} />
+        <div class="wa-worlds">
+          {o.worlds.map((w) => (
+            <div key={w.id} class={`wa-wcard ${o.selected === w.id ? 'on' : ''} ${w.ready ? '' : 'soon'}`}>
+              <Thumb thumb={`biome-${w.id}`} />
+              <div class="wa-wcard-text">
+                <span class="wa-wcard-name">{w.name}</span>
+                <span class="wa-wcard-sub">{w.sub}</span>
+                {w.ready && (
+                  <span class="wa-wcard-stars">
+                    ★ {w.got}/{w.of}
+                  </span>
+                )}
               </div>
             </div>
           ))}
         </div>
+        <div class="wa-pick-foot">{STR.pickHostPicks(o.host)}</div>
+      </div>
+    );
+  }
+  if (o.kind === 'journey') {
+    const sel = o.nodes.find((n) => n.id === o.selected);
+    return (
+      <div class={`wa-overlay wa-pick wa-journey-wrap world-${o.world}`}>
+        <div class="wa-pick-head">
+          <div class="wa-eyebrow">{STR.levelTitle.toUpperCase()}</div>
+          <h1 class="wa-pick-title">{o.title}</h1>
+          {sel && (
+            <div class="wa-pick-sub">
+              {STR.levelLabel(sel.number)} · {sel.name}
+            </div>
+          )}
+        </div>
+        <Journey o={o} />
         <div class="wa-pick-foot">{STR.pickHostPicks(o.host)}</div>
       </div>
     );
@@ -126,6 +236,7 @@ function OverlayView({ o }: { o: Overlay }) {
         <div class="wa-card-big">
           <div class="wa-eyebrow">{o.eyebrow}</div>
           <h1 class="wa-big-title">{o.name}</h1>
+          <p class="wa-goal">{o.goal}</p>
           <p class="wa-tip">{o.tip}</p>
           <div class="wa-legend">
             {o.legend.map((row) => (
@@ -153,7 +264,7 @@ function OverlayView({ o }: { o: Overlay }) {
       <div class="wa-overlay wa-center">
         <div class="wa-card-big wa-clear">
           <div class="wa-eyebrow">{o.eyebrow}</div>
-          <h1 class="wa-big-title">{STR.clearTitle}</h1>
+          <h1 class="wa-big-title">{o.title}</h1>
           <div class="wa-clear-stars">
             {o.stars.map((s, i) => (
               <div
@@ -168,7 +279,7 @@ function OverlayView({ o }: { o: Overlay }) {
           </div>
           <div class="wa-clear-facts">
             <span>{o.time}</span>
-            <span>{o.gems}</span>
+            {o.gems && <span>{o.gems}</span>}
           </div>
           <div class="wa-next">{o.next}</div>
         </div>
@@ -209,7 +320,7 @@ function HudView({ hud }: { hud: Hud }) {
         </div>
       )}
       {s.show && s.vote && <div class="wa-vote">{s.vote}</div>}
-      {s.show && s.tip && <div class="wa-tipbar">{s.tip}</div>}
+      {s.show && s.tip && <div class={`wa-tipbar ${s.hint ? 'is-hint' : ''}`}>{s.tip}</div>}
       <OverlayView o={s.overlay} />
       <div class="wa-floats" ref={hud.refs.floats} />
       <div class="wa-paused-veil" />

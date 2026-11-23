@@ -1,18 +1,19 @@
 /**
- * Home of the main screen: the Mode Pesta and Acak! posters on top, then rows stacked downwards
- * ("Pas untuk kalian", one per mood) and the full catalog as a 5-column grid with category tabs.
- * Up/down moves between rows (each row remembers its card), left/right along a row; the page
- * glides so the focused row stays in view. The same groups are in the Host's phone picker.
+ * Home of the main screen, one calm screen instead of a long scroll (owner 2026-11-22): the focused
+ * game up top (big art, name, players, one line), the Mode Pesta and Acak quick starts under it,
+ * one row of shelf tabs (the same groups as the Host's phone picker) and one grid of cards, two
+ * rows of five in view. Down/up moves top bar → quick starts → shelves → grid; a shelf follows the
+ * tab in focus at once, and a long shelf glides one card row at a time.
  */
 import type { JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { CATEGORIES, GAMES, type GameId, gamesForTab, MOODS } from '../../shared/games';
-import { cardTag, GRID_TABS, type GridTab, gridGames, type HomeRow, homeRows } from '../../shared/homeRows';
+import { GAMES, type GameId, gamesForTab, MOODS } from '../../shared/games';
+import { cardTag, catalogByCategory, type HomeRow, type HomeSection, homeRows } from '../../shared/homeRows';
 import { KeyArt } from '../../shared/keyart';
 import { Icon } from '../../shared/ui';
 import { FocusButton, InvitePanel, TopBar } from '../components';
-import { type CardRow, cardFocusId, cardGame, gridTabId, PARTY_ID, RANDOM_ID } from '../homeFocus';
-import { focus, focused, press, setFocusMap } from '../nav';
+import { cardFocusId, cardGame, PARTY_ID, RANDOM_ID, shelfId, shelfOf } from '../homeFocus';
+import { focus, focused, focusFromPointer, press, setFocusMap } from '../nav';
 import {
   connected,
   goJoin,
@@ -33,14 +34,14 @@ import { HOME } from '../strings';
 import './home.css';
 
 const CARD_W = 224;
-const CARD_GAP = 16;
 const GRID_COLS = 5;
-/** Space kept above the focused row when the page glides to it. */
-const ROW_PAD = 6;
-const GRID_ROW_PAD = 10;
+/** Card rows in view at once; a longer shelf glides. */
+const ROWS_IN_VIEW = 2;
 
 /** Where focus was when home was left; restored on return while that item is still there. */
 let lastFocus = '';
+/** Shelf shown when home was left. */
+let lastShelf: HomeSection = homeTab.peek();
 /** Last phone jump handled, so returning home does not replay an old one. */
 let seenJump = homeJump.peek();
 
@@ -55,44 +56,53 @@ function chunk<T>(list: readonly T[], size: number): T[][] {
   return out;
 }
 
-const gridLabel = (t: GridTab): string =>
-  t === 'all' ? HOME.allTab : (CATEGORIES.find((c) => c.id === t)?.label ?? t);
+/** Games on a shelf: a home row, or the whole catalog grouped like the phone's "Semua". */
+function shelfGames(shelf: HomeSection, rows: readonly HomeRow[]): GameId[] {
+  if (shelf === 'all') return catalogByCategory();
+  return rows.find((r) => r.id === shelf)?.games ?? [];
+}
+
+const shelfLabel = (s: HomeSection): string =>
+  s === 'fit' ? HOME.shelfFit : s === 'all' ? HOME.allTab : MOODS[s].label;
 
 type Spin = { phase: 'idle' } | { phase: 'spin' | 'done'; shown: GameId };
 
 export function HomePage() {
   const n = connected.value.length;
-  const recentNow = recent.value;
-  const rows = homeRows(n, recentNow).filter((r) => r.games.length > 0);
-  const [gridTab, setGridTab] = useState<GridTab>('all');
-  const grid = gridGames(gridTab);
-  const gridRows = chunk(grid, GRID_COLS);
+  const rows = homeRows(n, recent.value).filter((r) => r.games.length > 0);
+  const shelves: HomeSection[] = [...rows.map((r) => r.id), 'all'];
+  const [shelfState, setShelf] = useState<HomeSection>(lastShelf);
+  const shelf = shelves.includes(shelfState) ? shelfState : 'fit';
+  lastShelf = shelf;
+  const games = shelfGames(shelf, rows);
+  const gridRows = chunk(games, GRID_COLS);
   const invitingNow = inviting.value;
   const fid = focused.value;
   const jump = homeJump.value;
 
   const nav: NavRow[] = [
     { key: 'top', ids: ['invite', ...TOP_BAR_IDS] },
-    { key: 'posters', ids: [PARTY_ID, RANDOM_ID] },
-    ...rows.map((r) => ({ key: r.id, ids: r.games.map((g) => cardFocusId(g, r.id)) })),
-    { key: 'gtabs', ids: GRID_TABS.map(gridTabId) },
-    ...gridRows.map((c, i) => ({ key: `grid${i}`, ids: c.map((g) => cardFocusId(g, 'all')) })),
+    { key: 'quick', ids: [PARTY_ID, RANDOM_ID] },
+    { key: 'shelves', ids: shelves.map(shelfId) },
+    ...gridRows.map((c, i) => ({ key: `grid${i}`, ids: c.map((g) => cardFocusId(g, shelf)) })),
   ];
   const navKey = nav.map((r) => r.ids.join(',')).join('|');
   const navRef = useRef(nav);
   navRef.current = nav;
-  const gridTabRef = useRef(gridTab);
-  gridTabRef.current = gridTab;
-  /** Card each row was left on, so coming back lands where you were. */
+  const shelvesRef = useRef(shelves);
+  shelvesRef.current = shelves;
+  const shelfRef = useRef(shelf);
+  shelfRef.current = shelf;
+  /** Column each row was left on, so coming back lands where you were. */
   const memory = useRef<Record<string, number>>({});
 
-  // The party lineup is shown on the poster before it starts; a new one when the room changes.
+  // The party lineup is shown up top before it starts; a new one when the room changes.
   const [lineup, setLineup] = useState<GameId[]>(() => partyLineup());
   useEffect(() => setLineup(partyLineup()), [n]);
   const lineupRef = useRef(lineup);
   lineupRef.current = lineup;
 
-  /* ------------------------------------------------------------ Acak! */
+  /* ------------------------------------------------------------ Acak */
   const [spin, setSpin] = useState<Spin>({ phase: 'idle' });
   const spinning = useRef(false);
   const timers = useRef<number[]>([]);
@@ -137,11 +147,10 @@ export function HomePage() {
   };
 
   /* ------------------------------------------------------------ focus map */
-  const jumpTo = (section: string) => {
-    if (section === 'all') return focus(gridTabId(gridTabRef.current));
-    const row = navRef.current.find((r) => r.key === section);
-    const id = row?.ids[memory.current[section] ?? 0] ?? row?.ids[0];
-    if (id) focus(id);
+  const jumpTo = (section: HomeSection) => {
+    const target = shelvesRef.current.includes(section) ? section : 'all';
+    setShelf(target);
+    focus(shelfId(target));
   };
 
   useEffect(() => {
@@ -149,13 +158,7 @@ export function HomePage() {
     if (invitingNow) return;
     const all = nav.flatMap((r) => r.ids);
     const current = focused.peek();
-    // A card that left its row (a new game played, another tab) hands over to that row's first card.
-    const sameRow = (id: string) => {
-      const at = id.indexOf('@');
-      if (!id.startsWith('card-') || at < 0) return undefined;
-      const row = id.slice(at + 1);
-      return nav.find((r) => r.key === row || (row === 'all' && r.key === 'grid0'))?.ids[0];
-    };
+    // A card that left the grid (other shelf, a new game played) hands over to the shelf tab.
     const initial =
       current === 'close'
         ? 'invite'
@@ -163,7 +166,9 @@ export function HomePage() {
           ? current
           : all.includes(lastFocus)
             ? lastFocus
-            : (sameRow(current) ?? sameRow(lastFocus) ?? PARTY_ID);
+            : cardGame(current) || cardGame(lastFocus)
+              ? shelfId(shelfRef.current)
+              : PARTY_ID;
     const dispose = setFocusMap(
       {
         rows: nav.map((r) => r.ids),
@@ -172,7 +177,8 @@ export function HomePage() {
           if (id === 'invite') return setInviting(true);
           if (id === PARTY_ID) return startParty(lineupRef.current);
           if (id === RANDOM_ID) return spinRef.current();
-          if (id.startsWith('gtab-')) return;
+          // OK on a shelf tab steps into its grid.
+          if (shelfOf(id)) return press('down');
           const g = cardGame(id);
           if (g) openDetail(g);
         },
@@ -185,10 +191,10 @@ export function HomePage() {
           const toKey = navRef.current[to]?.key ?? '';
           const fromKey = navRef.current[from]?.key ?? '';
           if (toKey === 'top') return undefined;
-          // Down the grid: same column. Onto the tabs: the tab in use.
+          // Up and down the grid: same column. Onto the tabs: the shelf in use.
           if (toKey.startsWith('grid') && fromKey.startsWith('grid')) return col;
-          if (toKey === 'gtabs') return GRID_TABS.indexOf(gridTabRef.current);
-          return memory.current[toKey] ?? 0;
+          if (toKey === 'shelves') return shelvesRef.current.indexOf(shelfRef.current);
+          return memory.current[toKey.startsWith('grid') ? 'grid' : toKey] ?? 0;
         },
       },
       initial,
@@ -200,18 +206,16 @@ export function HomePage() {
     return dispose;
   }, [navKey, invitingNow]);
 
-  // A group tapped in the Host's phone picker: jump to that row (or the grid).
+  // A group tapped in the Host's phone picker: show that shelf with its tab in focus.
   useEffect(() => {
     if (seenJump === jump || invitingNow) return;
     seenJump = jump;
     jumpTo(homeTab.peek());
   }, [jump]);
 
-  /* ------------------------------------------------------------ glide to the focused row */
-  const viewport = useRef<HTMLDivElement>(null);
+  /* ------------------------------------------------------------ follow the focus */
   const scroller = useRef<HTMLDivElement>(null);
-  const [scrollY, setScrollY] = useState(0);
-  const [shifts, setShifts] = useState<Record<string, number>>({});
+  const [topRow, setTopRow] = useState(0);
   const [pinned, setPinned] = useState<GameId | null>(null);
 
   useEffect(() => {
@@ -219,46 +223,34 @@ export function HomePage() {
     if (at < 0) return;
     const row = nav[at]!;
     const col = row.ids.indexOf(fid);
-    memory.current[row.key] = col;
+    const isGrid = row.key.startsWith('grid');
+    memory.current[isGrid ? 'grid' : row.key] = col;
     lastFocus = fid;
     const game = cardGame(fid);
     if (game) setPinned(game);
-    // The grid follows the tab in focus at once (no OK needed on a remote).
-    if (row.key === 'gtabs') {
-      const t = GRID_TABS[col]!;
-      if (t !== gridTabRef.current) setGridTab(t);
+    // The grid follows the shelf tab in focus at once (no OK needed on a remote).
+    if (row.key === 'shelves') {
+      const next = shelvesRef.current[col]!;
+      if (next !== shelfRef.current) {
+        setShelf(next);
+        memory.current.grid = 0;
+      }
     }
-
-    const box = scroller.current;
-    const view = viewport.current;
-    if (!box || !view) return;
-    // Vertical: the posters keep the page at the top; any other row slides up under the top bar.
-    let y = 0;
-    if (row.key !== 'top' && row.key !== 'posters') {
-      const el = box.querySelector<HTMLElement>(`[data-nav="${row.key}"]`);
-      const pad = row.key.startsWith('grid') && row.key !== 'grid0' ? GRID_ROW_PAD : ROW_PAD;
-      const target = row.key === 'grid0' ? box.querySelector<HTMLElement>('[data-nav="gtabs"]') : el;
-      if (target) y = target.offsetTop - pad;
-    }
-    const max = Math.max(0, box.scrollHeight - view.clientHeight);
-    setScrollY(Math.round(Math.max(0, Math.min(max, y))));
-
-    // Horizontal: a row wider than the screen slides to keep the focused card in view.
-    const strip = box.querySelector<HTMLElement>(`[data-nav="${row.key}"] .cards-viewport`);
-    if (strip) {
-      // The strip bleeds 48px past the left margin; keep a 36px margin on the right.
-      const visible = strip.clientWidth - 84;
-      const left = col * (CARD_W + CARD_GAP);
-      const right = left + CARD_W;
-      setShifts((s) => {
-        const cur = s[row.key] ?? 0;
-        const next = Math.max(0, Math.min(left, Math.max(cur, right - visible)));
-        return next === cur ? s : { ...s, [row.key]: next };
-      });
+    // A long shelf glides so the focused card row is in view. A mouse hover never slides it.
+    if (isGrid && !focusFromPointer()) {
+      const i = Number(row.key.slice(4));
+      setTopRow((top) => (i < top ? i : i > top + ROWS_IN_VIEW - 1 ? i - ROWS_IN_VIEW + 1 : top));
     }
   }, [fid, navKey]);
-  // A changed row (new recent game, other tab) starts from its left end again.
-  useEffect(() => setShifts({}), [navKey]);
+  // Another shelf starts from its first row.
+  useEffect(() => setTopRow(0), [shelf]);
+
+  const top = Math.min(topRow, Math.max(0, gridRows.length - ROWS_IN_VIEW));
+  const [offset, setOffset] = useState(0);
+  useEffect(() => {
+    const el = scroller.current?.querySelector<HTMLElement>(`[data-nav="grid${top}"]`);
+    setOffset(el ? el.offsetTop : 0);
+  }, [top, navKey]);
 
   // Mouse wheel and trackpads step through the rows like the arrow keys.
   const lastWheel = useRef(0);
@@ -271,15 +263,21 @@ export function HomePage() {
 
   /* ------------------------------------------------------------ render */
   const fidGame = cardGame(fid);
+  const spinShown = fid === RANDOM_ID && spin.phase !== 'idle' ? spin.shown : null;
   const featured: GameId =
     fidGame ??
-    (fid === RANDOM_ID && spin.phase !== 'idle' ? spin.shown : null) ??
+    spinShown ??
     (fid === PARTY_ID ? lineup[0] : null) ??
     pinned ??
+    games[0] ??
     lineup[0] ??
-    rows[0]?.games[0] ??
     'bajaj';
-  const rowOf = (key: string) => nav.find((r) => r.ids.includes(fid))?.key === key;
+  const hint =
+    gridRows.length > ROWS_IN_VIEW
+      ? HOME.hintRows(top + 1, top + ROWS_IN_VIEW, gridRows.length)
+      : shelf === 'fit'
+        ? HOME.hintFit(n)
+        : HOME.hintCount(games.length);
 
   return (
     <div class="page home">
@@ -288,53 +286,71 @@ export function HomePage() {
       </div>
       <div class="scrim-left" />
       <div class="scrim-bottom" />
-      <div class={`home-dim ${scrollY > 0 ? 'deep' : ''}`} />
       <TopBar />
 
-      <div class="home-viewport" ref={viewport} onWheel={onWheel}>
-        <div class="home-scroll" ref={scroller} style={{ transform: `translateY(${-scrollY}px)` }}>
-          <section class="home-posters" data-nav="posters">
-            <PartyPoster lineup={lineup} />
-            <RandomPoster spin={spin} />
-          </section>
+      <div class="home-body">
+        <section class="home-hero">
+          {fid === PARTY_ID ? (
+            <HeroText
+              eyebrow={HOME.partyEyebrow}
+              title={HOME.partyTitle(lineup.length)}
+              line={lineup.map((id) => GAMES[id].title).join(' · ')}
+              sub={HOME.partyText}
+            />
+          ) : fid === RANDOM_ID ? (
+            <HeroText
+              eyebrow={
+                spin.phase === 'idle'
+                  ? HOME.randomEyebrow
+                  : spin.phase === 'done'
+                    ? HOME.randomPicked
+                    : HOME.randomSpinning
+              }
+              title={spinShown ? GAMES[spinShown].title : HOME.randomTitle}
+              line={spinShown ? GAMES[spinShown].tagline : HOME.randomText}
+            />
+          ) : (
+            <GameHero id={featured} n={n} />
+          )}
+          <div class="home-quick">
+            <FocusButton id={PARTY_ID} class="quick quick-party">
+              <Icon name="play" size={16} color="#111214" />
+              {HOME.partyButton}
+              <span class="quick-count">{lineup.length}</span>
+            </FocusButton>
+            <FocusButton id={RANDOM_ID} class={`quick quick-random is-${spin.phase}`}>
+              <Die />
+              {spin.phase === 'spin' ? HOME.randomSpinning : HOME.randomButton}
+            </FocusButton>
+          </div>
+        </section>
 
-          {rows.map((r) => (
-            <section class="home-row" data-nav={r.id} key={r.id}>
-              <RowHead row={r} n={n} focusGame={rowOf(r.id) ? fidGame : null} />
-              <div class="cards-viewport">
-                <div class="cards" style={{ transform: `translateX(${-(shifts[r.id] ?? 0)}px)` }}>
-                  {r.games.map((id) => (
-                    <GameCard key={id} id={id} row={r.id} n={n} on={fid === cardFocusId(id, r.id)} />
-                  ))}
-                </div>
-              </div>
-            </section>
+        <nav class="home-shelf" aria-label={HOME.shelvesLabel}>
+          {shelves.map((s) => (
+            <FocusButton key={s} id={shelfId(s)} class={`home-shelf-tab ${shelf === s ? 'on' : ''}`}>
+              {s !== 'fit' && s !== 'all' && <Icon name={MOODS[s].icon} size={16} stroke={2.6} />}
+              <span class="home-shelf-label">{shelfLabel(s)}</span>
+              <span class="home-shelf-count">{shelfGames(s, rows).length}</span>
+            </FocusButton>
           ))}
+          <span class="home-shelf-hint">{hint}</span>
+        </nav>
 
-          <section class="home-all" data-nav="gtabs">
-            <div class="home-row-head">
-              <h2 class="home-row-title">{HOME.allTitle}</h2>
-              <nav class="home-gtabs" aria-label={HOME.allTitle}>
-                {GRID_TABS.map((t) => (
-                  <FocusButton key={t} id={gridTabId(t)} class={`home-gtab ${gridTab === t ? 'on' : ''}`}>
-                    <span class="home-gtab-label">{gridLabel(t)}</span>
-                    <span class="home-gtab-count">{gridGames(t).length}</span>
-                  </FocusButton>
+        <div class="home-grid-viewport" onWheel={onWheel}>
+          <div class="home-scroll" ref={scroller} style={{ transform: `translateY(${-offset}px)` }}>
+            {games.length === 0 && <div class="cards-empty">{HOME.empty}</div>}
+            {gridRows.map((c, i) => (
+              <div
+                class={`home-grid-row ${i < top || i >= top + ROWS_IN_VIEW ? 'off' : ''}`}
+                data-nav={`grid${i}`}
+                key={`${shelf}-${i}`}
+              >
+                {c.map((id) => (
+                  <GameCard key={id} id={id} shelf={shelf} n={n} on={fid === cardFocusId(id, shelf)} />
                 ))}
-              </nav>
-              {fidGame && fid.endsWith('@all') && <FocusLine id={fidGame} />}
-            </div>
-            <div class="home-grid">
-              {grid.length === 0 && <div class="cards-empty">{HOME.empty}</div>}
-              {gridRows.map((c, i) => (
-                <div class="home-grid-row" data-nav={`grid${i}`} key={`${gridTab}-${i}`}>
-                  {c.map((id) => (
-                    <GameCard key={id} id={id} row="all" n={n} on={fid === cardFocusId(id, 'all')} />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </section>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       {invitingNow && <InvitePanel />}
@@ -344,120 +360,74 @@ export function HomePage() {
 
 /* ------------------------------------------------------------------ parts */
 
-function RowHead({ row, n, focusGame }: { row: HomeRow; n: number; focusGame: GameId | null }) {
-  const mood = row.id === 'fit' ? null : MOODS[row.id];
+function HeroText({
+  eyebrow,
+  title,
+  line,
+  sub,
+}: {
+  eyebrow: string;
+  title: string;
+  line: string;
+  sub?: string;
+}) {
   return (
-    <div class="home-row-head">
-      <h2 class={`home-row-title ${mood ? `mood-text-${row.id}` : ''}`}>
-        {mood && <Icon name={mood.icon} size={18} stroke={2.6} />}
-        {mood ? mood.label : HOME.rowFit}
-      </h2>
-      <span class="home-row-sub">{mood ? HOME.rowMoodSub(row.games.length) : HOME.rowFitSub(n)}</span>
-      {focusGame && <FocusLine id={focusGame} />}
+    <div class="home-hero-copy" key={title}>
+      <span class="home-hero-eyebrow">{eyebrow}</span>
+      <h1 class="home-hero-title display">{title}</h1>
+      <p class="home-hero-line">{line}</p>
+      {sub && <p class="home-hero-sub">{sub}</p>}
     </div>
   );
 }
 
-/** The focused game's name and tagline, at the right of its row's heading. */
-function FocusLine({ id }: { id: GameId }) {
+/** The focused game: mood, players, tag, big name and its one-line pitch. */
+function GameHero({ id, n }: { id: GameId; n: number }) {
   const g = GAMES[id];
+  const tag = cardTag(id);
+  const fits = n === 0 || (n >= g.minPlayers && n <= g.maxPlayers);
   return (
-    <span class="home-focus" key={id}>
-      <b class="home-focus-title">{g.title}</b>
-      <span class="home-focus-tagline">{g.tagline}</span>
-    </span>
+    <div class="home-hero-copy" key={id}>
+      <span class="home-hero-chips">
+        <span class={`mood-pill mood-${g.mood}`}>{MOODS[g.mood].label}</span>
+        <span class={`home-hero-players ${fits ? '' : 'short'}`}>
+          {fits ? HOME.players(g.minPlayers, g.maxPlayers) : HOME.needs(g.minPlayers)}
+        </span>
+        {tag && <span class={`tag card-badge-${tag.toLowerCase()}`}>{tag}</span>}
+      </span>
+      <h1 class="home-hero-title display">{g.title}</h1>
+      <p class="home-hero-line">{g.tagline}</p>
+    </div>
   );
 }
 
-function GameCard({ id, row, n, on }: { id: GameId; row: CardRow; n: number; on: boolean }) {
+function GameCard({ id, shelf, n, on }: { id: GameId; shelf: HomeSection; n: number; on: boolean }) {
   const info = GAMES[id];
   const tag = cardTag(id);
   const fits = n === 0 || (n >= info.minPlayers && n <= info.maxPlayers);
   return (
-    <FocusButton id={cardFocusId(id, row)} class={`card ${info.available ? '' : 'soon'}`}>
+    <FocusButton
+      id={cardFocusId(id, shelf)}
+      class={`card ${info.available ? '' : 'soon'} ${fits ? '' : 'short'} ${on ? 'on' : ''}`}
+    >
       <div class="card-art">
         {tag && <span class={`tag card-badge card-badge-${tag.toLowerCase()}`}>{tag}</span>}
         <KeyArt id={id} width={CARD_W} radius={12} />
       </div>
-      <div class="card-meta">
-        <span class="card-title">{info.title}</span>
-        {info.available ? (
-          <span class="card-sub">
-            <span class={`mood-pill mood-${info.mood}`}>{MOODS[info.mood].label}</span>
-            {on && (
-              <span class={`card-players ${fits ? '' : 'short'}`}>
-                {fits ? HOME.players(info.minPlayers, info.maxPlayers) : HOME.needs(info.minPlayers)}
-              </span>
-            )}
-          </span>
-        ) : (
-          <span class="card-sub">{HOME.soon}</span>
-        )}
-      </div>
+      <span class="card-title">{info.title}</span>
     </FocusButton>
   );
 }
 
-function PartyPoster({ lineup }: { lineup: GameId[] }) {
+function Die() {
   return (
-    <FocusButton id={PARTY_ID} class="poster poster-party">
-      <span class="poster-copy">
-        <span class="poster-eyebrow">{HOME.partyEyebrow}</span>
-        <span class="poster-title display">{HOME.partyTitle(lineup.length)}</span>
-        <span class="poster-text">{HOME.partyText}</span>
-        <span class="poster-cta">
-          <Icon name="play" size={15} color="#fff" />
-          {HOME.partyCta}
-        </span>
-      </span>
-      <span class="poster-lineup" aria-hidden="true">
-        {lineup.map((id, i) => (
-          <span class="lineup-card" key={id} style={{ '--i': i } as JSX.CSSProperties}>
-            <KeyArt id={id} width={150} radius={10} />
-            <span class="lineup-no">{i + 1}</span>
-          </span>
-        ))}
-        <span class="lineup-names">{lineup.map((id) => GAMES[id].title).join(' · ')}</span>
-      </span>
-    </FocusButton>
-  );
-}
-
-function RandomPoster({ spin }: { spin: Spin }) {
-  const shown = spin.phase === 'idle' ? null : spin.shown;
-  return (
-    <FocusButton id={RANDOM_ID} class={`poster poster-random is-${spin.phase}`}>
-      <span class="poster-copy">
-        <span class="poster-eyebrow">
-          {spin.phase === 'idle'
-            ? HOME.randomEyebrow
-            : spin.phase === 'done'
-              ? HOME.randomPicked
-              : HOME.randomSpinning}
-        </span>
-        <span class="poster-title display">{shown ? GAMES[shown].title : HOME.randomTitle}</span>
-        {!shown && <span class="poster-text">{HOME.randomText}</span>}
-        {!shown && (
-          <span class="poster-cta">
-            <Icon name="restart" size={15} color="#fff" />
-            {HOME.randomCta}
-          </span>
-        )}
-      </span>
-      {shown ? (
-        <span class="random-window" key={shown}>
-          <KeyArt id={shown} width={176} radius={12} />
-        </span>
-      ) : (
-        <svg class="random-die" viewBox="0 0 80 80" aria-hidden="true">
-          <rect x="6" y="6" width="68" height="68" rx="16" fill="#fff" stroke="#111214" stroke-width="5" />
-          <circle cx="24" cy="24" r="6.5" fill="#111214" />
-          <circle cx="56" cy="24" r="6.5" fill="#111214" />
-          <circle cx="40" cy="40" r="6.5" fill="#FF5A1F" />
-          <circle cx="24" cy="56" r="6.5" fill="#111214" />
-          <circle cx="56" cy="56" r="6.5" fill="#111214" />
-        </svg>
-      )}
-    </FocusButton>
+    <svg class="quick-die" viewBox="0 0 80 80" aria-hidden="true">
+      <rect x="6" y="6" width="68" height="68" rx="16" fill="#fff" stroke="#111214" stroke-width="6" />
+      <circle cx="24" cy="24" r="7" fill="#111214" />
+      <circle cx="56" cy="24" r="7" fill="#111214" />
+      <circle cx="40" cy="40" r="7" fill="#FF5A1F" />
+      <circle cx="24" cy="56" r="7" fill="#111214" />
+      <circle cx="56" cy="56" r="7" fill="#111214" />
+    </svg>
   );
 }

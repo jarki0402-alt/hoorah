@@ -1,4 +1,4 @@
-import { type ControllerView, formatRoomCode } from '@hoorah/protocol';
+import { type ControllerView, type Fruit, formatRoomCode } from '@hoorah/protocol';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Avatar, Icon } from '../shared/ui';
 import { code, me, netStatus, players, serverNow, view } from './store';
@@ -51,9 +51,9 @@ export function StatusRow() {
   );
 }
 
-export function Me({ size = 38 }: { size?: number }) {
+export function Me({ size = 38, fruit }: { size?: number; fruit?: Fruit }) {
   const p = me.value;
-  return p ? <Avatar fruit={p.fruit} ring={p.color} size={size} /> : null;
+  return p ? <Avatar fruit={fruit ?? p.fruit} ring={p.color} size={size} /> : null;
 }
 
 export function PlayerAvatar({ id, size }: { id: number; size: number }) {

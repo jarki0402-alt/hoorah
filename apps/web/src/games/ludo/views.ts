@@ -1,7 +1,7 @@
 /** Phone controller views for Ludo. Pure builders; the driver decides who gets what. */
 import type { ControllerView, ViewStat } from '@hoorah/protocol';
 import { SWATCH } from './colors';
-import { type ColorId, HOME, LAST_TRACK, type MoveOption } from './logic';
+import type { BoardSpec, ColorId, MoveOption } from './logic';
 import { STR } from './strings';
 
 const REMATCH = [{ id: 'rematch', label: STR.phoneRematch, style: 'primary' as const }];
@@ -19,16 +19,17 @@ export function rollView(color: ColorId, bonus: boolean, needSix: boolean, deadl
 }
 
 /** What a move does, in a few words. */
-export function moveLabel(o: MoveOption, victimNames: (o: MoveOption) => string): string {
+export function moveLabel(board: BoardSpec, o: MoveOption, victimNames: (o: MoveOption) => string): string {
   if (o.captures.length) return STR.pickCapture(victimNames(o));
   if (o.home) return STR.pickHome;
   if (o.exit) return STR.pickExit;
-  if (o.to > LAST_TRACK) return STR.pickToHome(HOME - o.to);
+  if (o.to > board.lastTrack) return STR.pickToHome(board.home - o.to);
   if (o.safe) return STR.pickSafe(o.to - o.from);
   return STR.pickStep(o.to - o.from);
 }
 
 export function pickView(
+  board: BoardSpec,
   color: ColorId,
   value: number,
   options: readonly MoveOption[],
@@ -43,7 +44,7 @@ export function pickView(
     deadline: Math.round(deadline),
     options: options.map((o) => ({
       id: String(o.pawn + 1),
-      label: moveLabel(o, victimNames),
+      label: moveLabel(board, o, victimNames),
       color: s.main,
       dark: s.dark,
     })),
@@ -71,24 +72,21 @@ export interface WatchInfo {
   rollerId: number;
   rollerName: string;
   rollerColor: ColorId;
-  /** Same colour as the viewer (teammate rolling). */
-  mate: boolean;
   doing: string;
   myColor: ColorId | null;
   myHome: number;
   pawns: number;
-  teams: boolean;
 }
 
 export function watchView(w: WatchInfo): ControllerView {
   const stats: ViewStat[] = [];
   if (w.myColor !== null) {
-    stats.push({ label: w.teams ? STR.phoneYourTeam : STR.phoneYourColor, value: STR.color(w.myColor) });
+    stats.push({ label: STR.phoneYourColor, value: STR.color(w.myColor) });
     stats.push({ label: STR.phoneHome, value: `${w.myHome}/${w.pawns}` });
   }
   return {
     kind: 'message',
-    eyebrow: w.mate ? STR.phoneMateEyebrow : STR.phoneWatchEyebrow(STR.color(w.rollerColor)),
+    eyebrow: STR.phoneWatchEyebrow(STR.color(w.rollerColor)),
     title: w.rollerName,
     subtitle: w.doing,
     avatarOf: w.rollerId,
@@ -96,14 +94,14 @@ export function watchView(w: WatchInfo): ControllerView {
   };
 }
 
-export function introView(color: ColorId | null, mate: string | null): ControllerView {
+export function introView(color: ColorId | null): ControllerView {
   if (color === null) return spectatorView();
   const name = STR.color(color);
   return {
     kind: 'message',
     eyebrow: STR.phoneIntroEyebrow,
     title: STR.phoneIntroTitle,
-    subtitle: mate ? STR.phoneIntroTeam(name, mate) : STR.phoneIntroSub(name),
+    subtitle: STR.phoneIntroSub(name),
     tone: 'neutral',
   };
 }
@@ -114,7 +112,6 @@ export function spectatorView(): ControllerView {
 
 export interface FinalInfo {
   rank: number;
-  teams: boolean;
   headline: string;
   home: number;
   pawns: number;
@@ -127,7 +124,7 @@ export function finalView(f: FinalInfo): ControllerView {
   return {
     kind: 'result',
     tone: win ? 'win' : 'neutral',
-    title: win ? (f.teams ? STR.phoneTeamWin : STR.phoneWinTitle) : STR.phoneRank(f.rank),
+    title: win ? STR.phoneWinTitle : STR.phoneRank(f.rank),
     big: `${f.home}/${f.pawns}`,
     subtitle: STR.phoneFinalSub(f.headline),
     stats: [

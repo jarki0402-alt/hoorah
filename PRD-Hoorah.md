@@ -175,7 +175,7 @@ Prioritas memakai MoSCoW: **M** = Must (MVP), **S** = Should, **C** = Could, **W
 | SESS-04 | Session Token (128-bit acak) diterbitkan saat join, disimpan di `localStorage`, dipakai untuk reconnect ke slot yang sama. | M |
 | SESS-05 | Slot pemain ditahan 120 detik setelah koneksi terputus. | M |
 | ROLE-01 | Peran: **Screen** (device 0), **Host** (1 Controller, navigasi menu + kelola pemain), **Player**, **Spectator**. | M |
-| ROLE-02 | Host default = pemain pertama yang bergabung; Host dapat menyerahkan mahkota ke pemain lain. | M |
+| ROLE-02 | Host default = pemain pertama yang bergabung; Host dapat menyerahkan mahkota ke pemain lain lewat permintaan yang harus diterima pemain itu (Terima/Tolak, kedaluwarsa 30 detik, divalidasi server; keputusan pemilik 2026-11-22). | M |
 | ROLE-03 | Host dapat mengeluarkan (*kick*) pemain; pemain yang di-kick diblokir dari Room tersebut 10 menit. | S |
 | ROLE-04 | Fallback Host otomatis (lihat 2.3). | M |
 | ROLE-05 | Screen dapat dikendalikan juga dengan keyboard/mouse/remote TV (arrow + Enter) sebagai cadangan. | S |
@@ -754,7 +754,7 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
     - **Game 8 · "Makan Kerupuk"** (2–8 pemain serentak, tegak, satu tombol GIGIT berbasis ayunan seperti Rusun): gigitan pas memotong kerupuk, meleset bikin tersedak sebentar.
     - **Game 9 · "Balap Karung"** (2–8 pemain, ketuk berirama dengan cincin seperti Tarik Tambang): ketukan pas irama = lompatan jauh, asal cepat = tersandung.
     - **Game 10 · "Kompak Gak?"** (2–16 pemain, tegak, pilih jawaban): poin bila sama dengan mayoritas; berdua jadi mode "sehati".
-    - **Game 11 · "Ludo"** (2–4 pemain, 5–8 beregu; tegak; dadu + pilih bidak di HP): keluar dengan 6, 6 = lempar lagi, makan bidak lawan, kotak aman, harus pas masuk rumah. Kilat 2 bidak, Normal 4 bidak.
+    - **Game 11 · "Ludo"** (2–8 pemain, tanpa tim; 2–4 papan klasik, 5–8 papan segi 5 sampai segi 8 (keputusan pemilik 2026-11-22), setiap pemain warna sendiri; tegak; dadu + pilih bidak di HP): keluar dengan 6, 6 = lempar lagi, makan bidak lawan, kotak aman, harus pas masuk rumah. Kilat 2 bidak, Normal 4 bidak.
     - **Game 12 · "Catur"** (2 pemain dengan jam catur; 3–8 pemain = Catur Rame, dua tim voting tiap langkah): papan catur mini di HP (tampilan HP baru `chess`), aturan lengkap tanpa library.
   - **Gelombang 2** (keputusan pemilik, 2026-11-14: katalog tidak harus bertema Indonesia; genre diambil dari game web populer, isi tetap orisinal). Lima game, dibangun paralel:
     - **Game 13 · "Ular Arena"** (`arena`, 1–8 pemain, mendatar, joystick di HP (`pad` mode `stick`) + tombol NGEBUT): ular berkepala avatar buah di satu arena yang selalu terlihat utuh; makan biji supaya panjang, ngebut membakar panjang, kepala menabrak badan lawan = tumbang lalu hidup lagi; terpanjang saat waktu habis menang. Phaser 2D.
@@ -766,7 +766,7 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
   - **Gelombang 3** (keputusan pemilik 2026-11-22, menggantikan rencana gelombang lama termasuk Gambar Kilat dan Panjat Pinang yang dihapus dari katalog): 12 game, desain detail di kanvas Claude Design pemilik (halaman "Desain 30 game"), dikerjakan bergelombang.
     - **Mesin dunia kotak 3D** (Three.js, 3D sederhana bergaya kotak, fisika ditulis sendiri, joystick mengambang ala Roblox): Game 19 · Satu Tali (1–4, kerja sama terikat tali elastis, parkour dengan titik simpan), Game 20 · Obby (1–8, balapan rintangan, kamera mengikuti rombongan), Game 21 · Lantai Runtuh (1–8, sesi ±5 menit, 7 babak aturan berganti, DORONG jeda 3 dtk), Game 22 · Bom Oper (1–8, kejar-kejaran oper bom, 3 nyawa, 2 bom di ronde akhir).
     - Game 23 · Seluncur Es (1–8, bidik ketapel bersamaan lalu meluncur dengan fisika, HP tegak), Game 24 · Langkah Maut (1–16, 8 babak tombol arah menegangkan), Game 25 · Nyebrang (1–8, pixel 2.5D, 4 map pertama: Kota, Sungai, Rel, Malam; mode Balapan dan Bertahan).
-    - 2D: Game 26 · Juara Eja (1–8, lomba mengeja Indonesia/Inggris, versi sederhana, kata dibacakan suara browser), Game 27 · Petualangan Warna (1–8, teka-teki platform kerja sama berwarna), Game 28 · Hantu Tak Terlihat (1–8, horor tampak atas, satu pemain hantu dengan peta rahasia di HP, map Rumah Tua dan Kampung Malam).
+    - 2D: Game 26 · Juara Eja (1–8, lomba mengeja Indonesia/Inggris, versi sederhana, kata dibacakan suara browser), Game 27 · Petualangan Warna (1–8, teka-teki platform kerja sama berwarna; keputusan pemilik 2026-11-22: lompat tetap 2,5 petak, setengah kanan HP = tombol lompat, kabel tuas ke pintu, petunjuk bertahap, bantuan diam-diam, Host bisa lewati level setelah 3 menit; 5 dunia × 30 level (Hutan, Gua, Gurun, Salju, Awan) dikerjakan bertahap, batas peta: naik maks 2 petak, celah maks 3 petak, dicek otomatis), Game 28 · Hantu Tak Terlihat (1–8, horor tampak atas, satu pemain hantu dengan peta rahasia di HP, map Rumah Tua dan Kampung Malam).
     - Sosial (butuh Hoorah Pass): Game 29 · Kampung Siluman (5–16, werewolf dengan Mode Tutup Mata: layar memandu lewat bunyi, tanpa suara pemandu), Game 30 · Penyusup (3–16, undercover, petunjuk diucapkan, mode Ketik).
     - Bersama: setelan kontrol satu sumber + Lab Kontrol (`/lab/`), getar iPhone lewat trik saklar, musik adaptif (lapisan tensi 0–3, bunyi waktu standar detak jam + weker), pemain yang sudah keluar bisa bersorak lewat tombol reaksi platform.
     - Beranda bertingkat (Pas untuk kalian, baris per suasana, kisi Semua game, label BARU), pilihan bergambar di HP dan layar, joystick pola mengambang (mendatar: separuh kiri + tombol bulat kanan bawah; tegak: tengah bawah), dan **Mode Pesta**: 3 game dengan suasana berbeda berurutan, poin 3/2/1 per game (game terakhir poin ganda, lawan komputer tidak masuk klasemen), klasemen antar game, lalu Juara Pesta dan "Pesta lagi"; keluar game atau kembali ke beranda membatalkan pesta (2026-11-22).
@@ -827,6 +827,13 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
 - **Pemain terputus:** otak lawan yang sama mengambil alih kursi pemain yang HP-nya putus di tengah game, sampai tersambung lagi.
 - **Paket gratis:** lawan komputer hanya ada saat main sendiri, jadi tidak bersinggungan dengan batas 2 pemain gratis.
 - **Teknis:** logika lawan berjalan di layar utama (di dalam game), bukan di server. Id negatif, modul bersama `apps/web/src/games/common/cpu.ts`; rekor di `common/records.ts`.
+
+### 6.5 Cara Main (tutorial singkat, keputusan pemilik 2026-11-22)
+
+- Setiap game punya tutorial singkat di layar utama: kartu asal-usul ("Terinspirasi dari ..., bedanya ..."; nama game yang menginspirasi boleh disebut sebagai teks, tanpa logo/aset) lalu 3–4 langkah bergambar beranimasi, masing-masing dengan gambar HP kecil yang menyorot kontrol yang dipakai.
+- Muncul otomatis sebelum ronde pertama, hanya pertama kali game itu dimainkan di perangkat layar tersebut. Sesudahnya lewat tombol "Cara main" di halaman detail game dan menu jeda.
+- HP menampilkan "Paham!"; tutorial selesai saat semua pemain yang tersambung menekannya, saat Host menekan "Lewati cara main" (HP atau OK di remote), atau saat langkah terakhir selesai.
+- Satu mesin bersama (`shared/tutorial`, `screen/tutorial`), isi per game di `games/<id>/tutorial.ts`, animasi SVG/CSS tanpa video. Latihan tombol di HP ditunda.
 
 ## 7. Risiko, Asumsi & Pertanyaan Terbuka
 

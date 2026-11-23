@@ -4,6 +4,7 @@
  * picker (controller/thumbs/warna.ts) and the main screen's picker.
  */
 import { Cell, COLS, type Level, ROWS, type Slot } from './levels';
+import { PALETTE } from './palette';
 
 export const THUMB_W = 160;
 export const THUMB_H = 120;
@@ -21,6 +22,8 @@ export function levelThumbBody(lv: Level): string {
   const pools: Record<number, string> = { 0: '', 1: '', 2: '', 3: '' };
   const gates: Record<number, string> = { 0: '', 1: '', 2: '', 3: '' };
   let doors = '';
+  let planks = '';
+  let caps = '';
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
       const i = y * COLS + x;
@@ -35,14 +38,19 @@ export function levelThumbBody(lv: Level): string {
         pools[lv.meta[i]!] += r(px, py + 1.5, T, T - 1.5);
       } else if (c === Cell.Gate) gates[lv.meta[i]!] += r(px + 1.5, py, 2, T);
       else if (c === Cell.Door) doors += r(px + 0.8, py, T - 1.6, T);
+      else if (c === Cell.Plank) planks += r(px, py, T, 1.6);
+      else if (c === Cell.Bounce) caps += `M${px} ${py + T}a${T / 2} ${T / 2} 0 0 1 ${T} 0Z`;
     }
   }
+  const pal = PALETTE[lv.biome];
   const out: string[] = [
-    `<rect width="${THUMB_W}" height="${THUMB_H}" fill="#0B1F26"/>`,
-    `<rect y="${OY}" width="${THUMB_W}" height="${ROWS * T}" fill="#0F3946"/>`,
-    `<path d="${rock}" fill="#14262B"/>`,
-    `<path d="${lip}" fill="#3FA34D"/>`,
+    `<rect width="${THUMB_W}" height="${THUMB_H}" fill="${pal.sky[2]}"/>`,
+    `<rect y="${OY}" width="${THUMB_W}" height="${ROWS * T}" fill="${pal.sky[1]}"/>`,
+    `<path d="${rock}" fill="${pal.rock}"/>`,
+    `<path d="${lip}" fill="${pal.lip}"/>`,
   ];
+  if (planks) out.push(`<path d="${planks}" fill="#C48A52"/>`);
+  if (caps) out.push(`<path d="${caps}" fill="#F2453D" stroke="#FFFFFF" stroke-width="0.6"/>`);
   for (const s of [0, 1, 2, 3] as const) {
     if (pools[s]) out.push(`<path d="${pools[s]}" fill="${SLOT_FILL[s]}"/>`);
     if (gates[s]) out.push(`<path d="${gates[s]}" fill="${SLOT_FILL[s]}" opacity="0.75"/>`);

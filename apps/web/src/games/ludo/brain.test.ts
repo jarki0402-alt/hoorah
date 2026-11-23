@@ -2,7 +2,9 @@ import type { PlayerInfo } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { isCpu } from '../common/cpu';
 import { actDelay, choosePawn, ludoOpponents, rankOptions, threatened } from './brain';
-import { absOf, BASE, HOME, LudoLogic, type MoveOption, rng } from './logic';
+import { absOf, BASE, boardFor, LudoLogic, type MoveOption, rng } from './logic';
+
+const HOME = boardFor(2).home;
 
 const human = (id: number): PlayerInfo => ({
   id,
@@ -23,7 +25,7 @@ function board(mine: number[], theirs: number[]) {
     ],
     now: 0,
   });
-  const [me, them] = L.teams as [(typeof L.teams)[0], (typeof L.teams)[0]];
+  const [me, them] = L.seats as [(typeof L.seats)[0], (typeof L.seats)[0]];
   me.pawns = [...mine];
   them.pawns = [...theirs];
   return { L, me, them };
@@ -55,9 +57,9 @@ describe('solo lineup', () => {
       ],
       now: 0,
     });
-    expect(L.teams.map((t) => [t.members, t.color])).toEqual([
-      [[1], 0],
-      [[cpu!.id], 2],
+    expect(L.seats.map((t) => [t.player, t.color])).toEqual([
+      [1, 0],
+      [cpu!.id, 2],
     ]);
   });
 });
@@ -65,11 +67,11 @@ describe('solo lineup', () => {
 describe('threat', () => {
   it('sees an opponent up to six squares behind, never on a safe square', () => {
     const { me, L } = board([BASE, BASE], [yellowAt(10), BASE]);
-    expect(threatened(14, me, L.teams)).toBe(true);
-    expect(threatened(16, me, L.teams)).toBe(true);
-    expect(threatened(17, me, L.teams)).toBe(false);
-    expect(threatened(10, me, L.teams)).toBe(false);
-    expect(threatened(13, me, L.teams)).toBe(false);
+    expect(threatened(L.board, 14, me, L.seats)).toBe(true);
+    expect(threatened(L.board, 16, me, L.seats)).toBe(true);
+    expect(threatened(L.board, 17, me, L.seats)).toBe(false);
+    expect(threatened(L.board, 10, me, L.seats)).toBe(false);
+    expect(threatened(L.board, 13, me, L.seats)).toBe(false);
   });
 });
 
@@ -79,28 +81,28 @@ describe('pawn choice', () => {
   it('captures before reaching home', () => {
     // Pawn 0 on loop 10 hits Kuning on 14 with a 4; pawn 1 reaches home with a 4.
     const { L, me } = board([10, HOME - 4], [yellowAt(14), BASE]);
-    const ranked = rankOptions(L.legalMoves(me, 4), me, L.teams);
+    const ranked = rankOptions(L.board, L.legalMoves(me, 4), me, L.seats);
     expect(ranked[0]!.captures).toHaveLength(1);
     expect(pawnsOf(ranked)).toEqual([0, 1]);
   });
 
   it('reaches home before leaving the base', () => {
     const { L, me } = board([BASE, HOME - 6], [BASE, BASE]);
-    const ranked = rankOptions(L.legalMoves(me, 6), me, L.teams);
+    const ranked = rankOptions(L.board, L.legalMoves(me, 6), me, L.seats);
     expect(ranked[0]!.home).toBe(true);
     expect(ranked[1]!.exit).toBe(true);
   });
 
   it('leaves the base on a 6 before walking a pawn', () => {
     const { L, me } = board([BASE, 20], [BASE, BASE]);
-    const ranked = rankOptions(L.legalMoves(me, 6), me, L.teams);
+    const ranked = rankOptions(L.board, L.legalMoves(me, 6), me, L.seats);
     expect(ranked[0]!.exit).toBe(true);
   });
 
   it('prefers a safe square', () => {
     // Pawn 1 at 5 reaches the star on 8 with a 3; pawn 0 at 30 would land on a plain square.
     const { L, me } = board([30, 5], [BASE, BASE]);
-    const ranked = rankOptions(L.legalMoves(me, 3), me, L.teams);
+    const ranked = rankOptions(L.board, L.legalMoves(me, 3), me, L.seats);
     expect(ranked[0]!.pawn).toBe(1);
     expect(ranked[0]!.safe).toBe(true);
   });
@@ -108,31 +110,31 @@ describe('pawn choice', () => {
   it('runs away from danger', () => {
     // Pawn 1 on loop 18 has Kuning three squares behind; pawn 0 is further ahead and calm.
     const { L, me } = board([40, 18], [yellowAt(15), BASE]);
-    expect(threatened(absOf(0, 18)!, me, L.teams)).toBe(true);
-    const ranked = rankOptions(L.legalMoves(me, 5), me, L.teams);
+    expect(threatened(L.board, absOf(L.board, 0, 18)!, me, L.seats)).toBe(true);
+    const ranked = rankOptions(L.board, L.legalMoves(me, 5), me, L.seats);
     expect(ranked[0]!.pawn).toBe(1);
   });
 
   it('otherwise advances the leading pawn', () => {
     const { L, me } = board([30, 15], [BASE, BASE]);
-    const ranked = rankOptions(L.legalMoves(me, 2), me, L.teams);
+    const ranked = rankOptions(L.board, L.legalMoves(me, 2), me, L.seats);
     expect(ranked[0]!.pawn).toBe(0);
   });
 
   it('avoids landing right in front of an opponent', () => {
     // Pawn 0 (ahead) would land on 33 with Kuning on 30 behind it; pawn 1 lands on calm 17.
     const { L, me } = board([31, 15], [yellowAt(30), BASE]);
-    const ranked = rankOptions(L.legalMoves(me, 2), me, L.teams);
+    const ranked = rankOptions(L.board, L.legalMoves(me, 2), me, L.seats);
     expect(ranked[0]!.pawn).toBe(1);
   });
 
   it('plays the best move at full skill and slips sometimes when gentle', () => {
     const { L, me } = board([10, HOME - 4], [yellowAt(14), BASE]);
     const opts = L.legalMoves(me, 4);
-    expect(choosePawn(opts, me, L.teams, 1, () => 0)).toBe(0);
+    expect(choosePawn(L.board, opts, me, L.seats, 1, () => 0)).toBe(0);
     const r = rng(7);
     let slips = 0;
-    for (let i = 0; i < 400; i++) if (choosePawn(opts, me, L.teams, 0, r) !== 0) slips++;
+    for (let i = 0; i < 400; i++) if (choosePawn(L.board, opts, me, L.seats, 0, r) !== 0) slips++;
     expect(slips).toBeGreaterThan(60);
     expect(slips).toBeLessThan(340);
   });
@@ -173,7 +175,7 @@ describe('whole games', () => {
       else if (L.phase === 'pick') {
         const pawn =
           L.roller < 0
-            ? choosePawn(L.options, L.team, L.teams, skill, r)
+            ? choosePawn(L.board, L.options, L.seat, L.seats, skill, r)
             : L.options[Math.floor(r() * L.options.length)]!.pawn;
         L.pick(L.roller, pawn + 1, t);
       } else {

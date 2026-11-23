@@ -7,7 +7,7 @@ export const STR = {
   overrideOn: 'Memakai setelan dari Lab',
   overrideOff: 'Memakai setelan bawaan',
 
-  tabs: { stick: 'Joystick', swipe: 'Usap', haptic: 'Getar', rusun: 'Rusun' },
+  tabs: { stick: 'Joystick', swipe: 'Usap', haptic: 'Getar', rusun: 'Rusun', sound: 'Suara' },
 
   /* Save bar */
   save: 'Pakai setelan ini',
@@ -120,4 +120,26 @@ export const DIAG = {
   hiddenOff: 'Saklar transparan di luar layar',
   overlay: 'Tombol yang sebenarnya saklar transparan',
   done: (n: number) => `Nomor ${n} ditekan.`,
+} as const;
+
+/** "Suara" tab: the Kampung Siluman sounds as the game plays them. */
+export const SOUND = {
+  help: 'Suara Kampung Siluman persis seperti di game. Tekan untuk mendengar.',
+  play: 'Putar',
+  items: {
+    night: { title: 'Malam tiba', when: 'Semua tutup mata', what: 'Gong panjang + jangkrik' },
+    growl: { title: 'Giliran Siluman', when: 'Siluman buka mata', what: 'Napas lalu auman macan' },
+    genta: { title: 'Giliran Dukun', when: 'Dukun buka mata', what: 'Genta dipukul tiga kali' },
+    flute: { title: 'Giliran Tabib', when: 'Tabib buka mata', what: 'Suling panjang bergema' },
+    heart: {
+      title: 'Detak jantung',
+      when: 'Selama Siluman belum memilih',
+      what: 'Makin cepat menjelang waktu habis',
+    },
+    rooster: { title: 'Pagi tiba', when: 'Semua buka mata', what: 'Kukuruyuk panjang (versi baru)' },
+    kentongan: { title: 'Ada korban', when: 'Setelah ayam, jika ada korban', what: 'Kentongan tanda bahaya' },
+    birds: { title: 'Malam aman', when: 'Setelah ayam, jika tidak ada korban', what: 'Kicau burung' },
+    'win-village': { title: 'Warga menang', when: 'Akhir permainan', what: 'Bonang naik + gong' },
+    'win-siluman': { title: 'Siluman menang', when: 'Akhir permainan', what: 'Auman + gong' },
+  },
 } as const;

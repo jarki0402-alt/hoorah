@@ -1,6 +1,7 @@
 /**
  * Phone screens for every phase (pure). While running, the phone is the standard `pad` in swipe
- * mode: one swipe = one hop, a tap hops forward, arrows below as a fallback. Out in Bertahan, the
+ * mode without arrow keys, like Lari Terus (owner 2026-11-22): the whole phone is the swipe zone,
+ * one swipe = one hop, a tap anywhere hops forward. Out in Bertahan, the
  * phone waits with the platform's cheer buttons and a harmless horn for the main screen.
  */
 import type { ControllerView, GuestPlayer, MenuOption } from '@hoorah/protocol';
@@ -146,6 +147,7 @@ export function viewFor(m: NyebrangMatch, me: number, ctx: ViewContext): Control
           { label: STR.statNear, value: String(r.near) },
         ],
         actionLabel: STR.padAction,
+        keys: false,
         hint: STR.padHint,
         ...(train ? { alert: { title: STR.trainTitle, body: STR.trainBody, tone: 'red' as const } } : {}),
         ...(dead

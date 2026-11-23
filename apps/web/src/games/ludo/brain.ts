@@ -5,7 +5,7 @@
  */
 import type { PlayerInfo } from '@hoorah/protocol';
 import { bySkill, pickWithSlips, soloOpponents, thinkMs } from '../common/cpu';
-import { absOf, LAST_TRACK, type MoveOption, SAFE_ABS, type Team, TRACK_LEN } from './logic';
+import { absOf, type BoardSpec, type MoveOption, type Seat } from './logic';
 
 /** Solo play: one opponent; two or more humans: none. */
 export function ludoOpponents(humans: readonly PlayerInfo[], rnd: () => number = Math.random): PlayerInfo[] {
@@ -14,23 +14,24 @@ export function ludoOpponents(humans: readonly PlayerInfo[], rnd: () => number =
 
 /** True when an opponent pawn could land on loop square `abs` with its next roll (1..6). */
 export function threatened(
+  board: BoardSpec,
   abs: number,
-  me: Team,
-  teams: readonly Team[],
+  me: Seat,
+  seats: readonly Seat[],
   ignore: ReadonlySet<string> = new Set(),
 ): boolean {
   // Safe squares (start squares included, where base pawns come out) can't be hit.
-  if (SAFE_ABS.has(abs)) return false;
-  for (const o of teams) {
+  if (board.safe.has(abs)) return false;
+  for (const o of seats) {
     if (o === me) continue;
     for (let i = 0; i < o.pawns.length; i++) {
       if (ignore.has(`${o.index}-${i}`)) continue;
       const p = o.pawns[i]!;
-      const oa = absOf(o.color, p);
+      const oa = absOf(board, o.color, p);
       if (oa === null) continue;
-      const d = (abs - oa + TRACK_LEN) % TRACK_LEN;
+      const d = (abs - oa + board.trackLen) % board.trackLen;
       // The pawn must still be on the loop after d steps (not turned into its home column).
-      if (d >= 1 && d <= 6 && p + d <= LAST_TRACK) return true;
+      if (d >= 1 && d <= 6 && p + d <= board.lastTrack) return true;
     }
   }
   return false;
@@ -52,25 +53,30 @@ const TIER = {
  * 5. escape a pawn that is in danger, 6. advance the pawn that is furthest along.
  * Landing where an opponent can hit next turn counts against a move.
  */
-export function rankOptions(options: readonly MoveOption[], me: Team, teams: readonly Team[]): MoveOption[] {
-  const scored = options.map((o, i) => ({ o, i, s: scoreOption(o, me, teams) }));
+export function rankOptions(
+  board: BoardSpec,
+  options: readonly MoveOption[],
+  me: Seat,
+  seats: readonly Seat[],
+): MoveOption[] {
+  const scored = options.map((o, i) => ({ o, i, s: scoreOption(board, o, me, seats) }));
   scored.sort((a, b) => b.s - a.s || a.i - b.i);
   return scored.map((r) => r.o);
 }
 
-export function scoreOption(o: MoveOption, me: Team, teams: readonly Team[]): number {
+export function scoreOption(board: BoardSpec, o: MoveOption, me: Seat, seats: readonly Seat[]): number {
   let s = 0;
   if (o.captures.length) s += TIER.capture * o.captures.length + o.captures.reduce((a, c) => a + c.from, 0);
   if (o.home) s += TIER.home;
   if (o.exit) s += TIER.exit;
-  const toAbs = absOf(me.color, o.to);
+  const toAbs = absOf(board, me.color, o.to);
   // The home column (and home) can't be reached by anyone else: as good as a safe square.
-  const sheltered = o.to > LAST_TRACK || (toAbs !== null && SAFE_ABS.has(toAbs));
+  const sheltered = o.to > board.lastTrack || (toAbs !== null && board.safe.has(toAbs));
   if (sheltered && !o.home) s += TIER.safe;
-  const fromAbs = absOf(me.color, o.from);
-  const captured = new Set(o.captures.map((c) => `${c.team}-${c.pawn}`));
-  const inDanger = fromAbs !== null && threatened(fromAbs, me, teams);
-  const exposed = !sheltered && toAbs !== null && threatened(toAbs, me, teams, captured);
+  const fromAbs = absOf(board, me.color, o.from);
+  const captured = new Set(o.captures.map((c) => `${c.seat}-${c.pawn}`));
+  const inDanger = fromAbs !== null && threatened(board, fromAbs, me, seats);
+  const exposed = !sheltered && toAbs !== null && threatened(board, toAbs, me, seats, captured);
   if (inDanger && !exposed) s += TIER.escape + o.from;
   if (exposed) s += TIER.exposed;
   // Advance the leading pawn.
@@ -80,13 +86,14 @@ export function scoreOption(o: MoveOption, me: Team, teams: readonly Team[]): nu
 
 /** The pawn the computer moves (0-based), with slips that get rarer as skill rises. */
 export function choosePawn(
+  board: BoardSpec,
   options: readonly MoveOption[],
-  me: Team,
-  teams: readonly Team[],
+  me: Seat,
+  seats: readonly Seat[],
   skill: number,
   rnd: () => number = Math.random,
 ): number {
-  return pickWithSlips(rankOptions(options, me, teams), skill, rnd).pawn;
+  return pickWithSlips(rankOptions(board, options, me, seats), skill, rnd).pawn;
 }
 
 /** How long the computer waits before acting (ms). Takeover seats play at a steady 1.5–3 s pace. */

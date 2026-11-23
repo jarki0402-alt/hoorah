@@ -134,38 +134,64 @@ export interface Drawing {
   labels: CanvasLabel[];
 }
 
+/**
+ * HD look (owner 2026-11-22, Dapur Heboh HD board): every block is a counter in 3/4 view with a
+ * soft floor shadow, a front face with a darker foot, and a top face with a rim light. Every
+ * station except the plain counter carries a name plate on its front face.
+ */
 const COLORS: Partial<Record<StationKind, [string, string]>> = {
-  stove: ['#3A3C42', '#1E1F23'],
-  wok: ['#3A3C42', '#1E1F23'],
-  fryer: ['#A3AAB3', '#555B65'],
-  pass: ['#ECEEF1', '#FF5A1F'],
+  stove: ['#3A3D44', '#2B2D33'],
+  wok: ['#3A3D44', '#2B2D33'],
+  fryer: ['#C9CED6', '#8C939E'],
+  pass: ['#FFF4E2', '#FF5A1F'],
 };
-const STEEL: [string, string] = ['#CDD2D8', '#6E747E'];
+const STEEL: [string, string] = ['#E7EAEE', '#B9C0CA'];
+const WOOD_TOP = '#D9A066';
+const WOOD_FRONT = '#B07A43';
+const WOOD_DARK = '#8A5A2B';
+const INK = '#1E1F23';
 
 const r = (x: number, y: number, w: number, h: number, rx: number, fill: string, extra = '') =>
   `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}"${extra ? ` ${extra}` : ''}/>`;
 const c = (cx: number, cy: number, rr: number, fill: string, extra = '') =>
   `<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${fill}"${extra ? ` ${extra}` : ''}/>`;
-const knob = (x: number, y: number, s = 10) =>
-  `${c(x + s / 2, y + s / 2, s / 2, '#DADCE0')}${r(x, y + s - 3, s, 3, 1.5, '#A8ABB2')}`;
+const e = (cx: number, cy: number, rx: number, ry: number, fill: string, extra = '') =>
+  `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}"${extra ? ` ${extra}` : ''}/>`;
 const icon = (id: string, x: number, y: number, size: number) =>
   `<g transform="translate(${x} ${y}) scale(${size / 40})">${iconMarkup(id)}</g>`;
 
-/** The counter body every station stands on: soft shadow, darker front, light top face. */
+/** The counter body every station stands on: floor shadow, front face, top face, rim light. */
 function body(w: number, top: string, front: string): string {
   const x = ST_INSET;
   const bw = w - ST_INSET * 2;
   return [
-    `<ellipse cx="${w / 2}" cy="81" rx="${bw / 2 - 5}" ry="9" fill="rgb(70,45,20)" fill-opacity="0.22"/>`,
-    r(x + 2, 48, bw - 4, 32, 10, front),
-    r(x + 2, 48, bw - 4, 6, 3, '#000000', 'fill-opacity="0.2"'),
-    r(x, 0, bw, 56, 10, top),
-    r(x + 2, 1.5, bw - 4, 2, 1, '#FFFFFF', 'fill-opacity="0.45"'),
-    r(x, 53, bw, 3, 1.5, '#000000', 'fill-opacity="0.14"'),
+    e(w / 2, 82, bw / 2 - 2, 8, 'rgb(70,45,20)', 'fill-opacity="0.2"'),
+    r(x, 46, bw, 34, 8, front),
+    r(x, 73, bw, 7, 3.5, '#000000', 'fill-opacity="0.16"'),
+    r(x, 0, bw, 56, 9, top),
+    r(x + 4, 2.5, bw - 8, 3.5, 1.75, '#FFFFFF', 'fill-opacity="0.7"'),
+    r(x, 52, bw, 4, 2, '#000000', 'fill-opacity="0.1"'),
   ].join('');
 }
 
-const handleBar = (w: number) => r(w / 2 - 12, 62, 24, 5, 2.5, '#9AA0A9');
+/**
+ * Name plate on the edge between top and front face, centred on `cx`. It ends above y 64, where
+ * the station one row below starts, so plates stay readable in stacked side columns too.
+ */
+function plate(text: string, bg: string, fg = '#FFFFFF', cx = 40): CanvasLabel {
+  const long = text.length > 8;
+  return { text, x: cx, y: 55, size: long ? 10 : 11, color: fg, bg, display: true, track: long ? 0.1 : 0.6 };
+}
+
+/** A pan seen from 3/4 above, centred at (cx, cy), handle to the right. */
+function pan(cx: number, cy: number, rx: number, ry: number, handle: string): string {
+  return [
+    r(cx + rx - 4, cy - 5, 22, 7, 3.5, handle),
+    e(cx, cy + 2, rx, ry, '#4A4E57'),
+    e(cx, cy, rx - 4, ry - 3, '#2A2C31'),
+    `<path d="M${cx - rx + 6} ${cy - 2} A${rx - 4} ${ry - 3} 0 0 1 ${cx + rx - 10} ${cy - ry + 4}" stroke="#5A5E68" stroke-width="2" fill="none" stroke-linecap="round"/>`,
+  ].join('');
+}
 
 /**
  * One station in 3/4 view. Local frame: x from 0, y from -ST_MARGIN (the returned drawing is
@@ -179,81 +205,75 @@ export function stationDrawing(kind: StationKind, source: string | null, labels:
   const lab: CanvasLabel[] = [];
   switch (kind) {
     case 'counter':
-      parts.push(handleBar(w));
       break;
     case 'basket': {
       const id = source ?? 'roti';
-      parts.push('<ellipse cx="40" cy="6" rx="31" ry="11" fill="#5E3B1E"/>');
-      parts.push(icon(id, 11, -12, 28), icon(id, 41, -12, 28), icon(id, 25, -21, 30));
       parts.push(
-        '<path d="M9 6 A31 11 0 0 0 71 6 L65 42 Q40 50 15 42 Z" fill="#B07A45"/>',
-        '<path d="M12 19 Q40 29 68 19 M14 31 Q40 40 66 31" stroke="#8C5D2E" stroke-width="2" fill="none"/>',
-        '<path d="M24 15 L22 44 M40 18 L40 47 M56 15 L58 44" stroke="#9A6837" stroke-width="1.6" fill="none"/>',
-        '<path d="M9 6 A31 11 0 0 0 71 6" stroke="#D39A5E" stroke-width="4" fill="none" stroke-linecap="round"/>',
+        r(10, 8, 60, 40, 6, WOOD_FRONT),
+        r(13, 9, 54, 9, 4, '#5E3B1E'),
+        icon(id, 11, -8, 28),
+        icon(id, 41, -8, 28),
+        icon(id, 25, -17, 30),
+        r(10, 17, 60, 8, 4, WOOD_TOP),
+        r(10, 31, 60, 3, 1.5, WOOD_DARK, 'fill-opacity="0.55"'),
+        r(10, 41, 60, 3, 1.5, WOOD_DARK, 'fill-opacity="0.55"'),
       );
-      const text = labels.basket[id] ?? id.toUpperCase();
-      lab.push({ text, x: 40, y: 49, size: 9, color: '#3A2A1A', bg: '#FFF7F0', track: 0.6 });
+      lab.push(plate(labels.basket[id] ?? id.toUpperCase(), '#6B4423'));
       break;
     }
     case 'stove':
       parts.push(
-        c(21, 28, 12, '#26272B', 'stroke="#4A4D55" stroke-width="4"'),
-        c(54, 28, 16, '#3A3D45', 'stroke="#50545D" stroke-width="4"'),
-        r(69, 24, 14, 7, 3.5, '#1B1C20'),
-        knob(12, 59),
-        knob(28, 59),
-        knob(44, 59),
+        e(38, 30, 28, 13, INK),
+        e(38, 30, 22, 9.5, 'none', 'stroke="#50545D" stroke-width="2.5"'),
+        pan(38, 25, 24, 12, INK),
       );
+      lab.push(plate(labels.stove, '#FF5A1F', '#111214'));
       break;
     case 'wok':
-      parts.push(
-        c(38, 28, 22, '#2B2C30', 'stroke="#44474F" stroke-width="5"'),
-        r(58, 24, 22, 8, 4, '#8A5A2B'),
-        knob(22, 59),
-      );
+      parts.push(e(36, 31, 30, 14, INK), pan(36, 26, 27, 14, '#8A5A2B'));
+      lab.push(plate(labels.wok, '#FF5A1F', '#111214'));
       break;
     case 'fryer':
       parts.push(
-        r(9, 8, 62, 40, 7, '#6E747E'),
-        r(13, 12, 54, 32, 5, '#F2B233'),
-        r(13, 12, 54, 7, 4, '#D9971A'),
-        r(18, 13, 40, 28, 4, 'none', 'stroke="#5C626C" stroke-width="2"'),
-        r(56, 25, 20, 4, 2, '#2B2C30'),
-        knob(14, 57, 14),
-        r(36, 60, 22, 8, 3, '#2B2C30'),
+        r(11, 6, 58, 42, 7, '#5A3E1A'),
+        r(14, 10, 52, 34, 5, '#E2A43A'),
+        e(26, 20, 5, 3, '#FFE08A'),
+        e(54, 34, 4, 2.5, '#FFE08A'),
+        r(22, 14, 36, 22, 3, 'none', 'stroke="#3A3D44" stroke-width="2.5"'),
+        r(56, 8, 18, 5, 2.5, INK),
       );
+      lab.push(plate(labels.fryer, '#A8620C'));
       break;
     case 'board':
       parts.push(
-        r(6, 12, 54, 38, 7, '#B9824C'),
-        r(6, 9, 54, 38, 7, '#E0AE72'),
-        '<path d="M14 18 h36 M14 26 h30 M14 34 h34" stroke="#CF9A5E" stroke-width="1.4" stroke-linecap="round"/>',
-        r(64, 10, 7, 22, 3, '#D7D9DE'),
-        r(64, 31, 7, 13, 2, '#2B2C30'),
-        handleBar(w),
+        r(10, 12, 50, 36, 8, WOOD_FRONT),
+        r(10, 9, 50, 35, 8, WOOD_TOP),
+        '<path d="M17 18 h32 M17 25 h27 M17 32 h22" stroke="#C48A52" stroke-width="1.6" stroke-linecap="round"/>',
+        r(62, 8, 7, 24, 3, '#D5DAE1'),
+        r(62, 30, 7, 13, 2.5, INK),
       );
+      lab.push(plate(labels.board, '#6B4423'));
       break;
     case 'sink':
       parts.push(
-        r(10, 14, 60, 36, 9, '#7E858F'),
-        r(10, 14, 60, 6, 3, '#5C626C'),
-        r(15, 24, 50, 22, 7, '#7CC3EE'),
-        r(15, 24, 50, 3, 1.5, '#5AA8D8'),
-        '<path d="M28 12 V2 a8 8 0 0 1 16 0 V6" stroke="#DADCE0" stroke-width="4" fill="none" stroke-linecap="round"/>',
-        r(24, 9, 8, 5, 2, '#A8ABB2'),
-        handleBar(w),
+        r(11, 10, 58, 38, 10, '#8C939E'),
+        r(15, 14, 50, 30, 8, '#7EC8F2'),
+        '<path d="M22 27 q8 -4 16 0 t16 0" stroke="#D6F0FF" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+        '<path d="M40 11 V2 q0 -6 8 -6 h5" stroke="#9AA3AF" stroke-width="4.5" fill="none" stroke-linecap="round"/>',
       );
+      lab.push(plate(labels.sink, '#2B6CB0'));
       break;
     case 'rack':
       parts.push(
-        r(14, 2, 4, 46, 2, '#6E747E'),
-        r(62, 2, 4, 46, 2, '#6E747E'),
-        r(14, 44, 52, 4, 2, '#6E747E'),
-        handleBar(w),
+        r(14, 6, 4, 36, 2, '#8C939E'),
+        r(62, 6, 4, 36, 2, '#8C939E'),
+        r(13, 32, 54, 14, 6, '#9AA3AF'),
+        r(15, 30, 50, 12, 5, '#C9CED6'),
       );
+      lab.push(plate(labels.rack, INK));
       break;
     case 'cups': {
-      parts.push(r(10, 40, 60, 5, 2.5, '#6E747E'));
+      parts.push(r(10, 40, 60, 5, 2.5, '#8C939E'));
       for (const [x, y] of [
         [14, 18],
         [32, 18],
@@ -266,16 +286,19 @@ export function stationDrawing(kind: StationKind, source: string | null, labels:
           r(x - 1, y + 20, 18, 3, 1.5, '#DADCE0'),
         );
       }
-      lab.push({ text: labels.cups, x: 40, y: 49, size: 9, color: '#3A2A1A', bg: '#FFF7F0', track: 0.6 });
+      lab.push(plate(labels.cups, INK));
       break;
     }
     case 'trash':
       parts.push(
-        '<ellipse cx="40" cy="27" rx="24" ry="15" fill="#2B2C30"/>',
-        '<ellipse cx="40" cy="24" rx="20" ry="10" fill="#1B1C20"/>',
-        r(22, 6, 36, 12, 6, '#8E959F', 'transform="rotate(-14 40 12)"'),
+        e(40, 42, 22, 7, '#2B2D33'),
+        r(18, 14, 44, 28, 0, '#3A3D44'),
+        r(22, 18, 3, 20, 1.5, '#4A4E57'),
+        r(55, 18, 3, 20, 1.5, '#4A4E57'),
+        e(40, 14, 24, 8, '#5A5E68'),
+        r(32, 4, 16, 6, 3, '#5A5E68'),
       );
-      lab.push({ text: labels.trash, x: 40, y: 49, size: 9, color: '#DADCE0', bg: '#2B2C30', track: 0.6 });
+      lab.push(plate(labels.trash, '#3A3D44'));
       break;
     case 'soda':
       parts.push(
@@ -287,17 +310,27 @@ export function stationDrawing(kind: StationKind, source: string | null, labels:
         r(25, -8, 8, 7, 3, '#FF8A2E'),
         r(41, -8, 8, 7, 3, '#FFC928'),
         r(20, 34, 34, 5, 2, '#8E959F'),
-        handleBar(w),
       );
       lab.push({ text: labels.soda, x: 37, y: -23, size: 14, color: '#E8432E', display: true, track: 0.8 });
+      lab.push(plate(labels.drinks, '#E8432E'));
       break;
     case 'pass':
       parts.push(
-        '<g transform="translate(12 12) scale(1.42)"><path d="M4 16h16v-1.5a8 8 0 0 0-16 0z" fill="#C9A23A"/><rect x="2" y="16.5" width="20" height="3" rx="1.5" fill="#8E959F"/><circle cx="12" cy="5.5" r="1.8" fill="#C9A23A"/></g>',
-        r(56, 10, 92, 36, 8, '#FFFFFF', 'stroke="#E4E6EA" stroke-width="2"'),
+        e(32, 36, 20, 7, '#C9CED6'),
+        '<path d="M15 35 a17 15 0 0 1 34 0 z" fill="#FFC928"/>',
+        '<circle cx="32" cy="18" r="3.2" fill="#C99A12"/>',
+        r(58, 9, 90, 36, 9, '#FFFFFF', 'stroke="#FF5A1F" stroke-width="2.5" stroke-dasharray="6 4"'),
       );
-      lab.push({ text: labels.passSlot, x: 102, y: 28, size: 10, color: '#6B6E76', track: 0.6 });
-      lab.push({ text: labels.pass, x: 80, y: 66, size: 19, color: '#FFFFFF', display: true, track: 1.5 });
+      lab.push({
+        text: labels.passSlot,
+        x: 103,
+        y: 27,
+        size: 10,
+        color: '#FF5A1F',
+        display: true,
+        track: 0.4,
+      });
+      lab.push({ text: labels.pass, x: 80, y: 66, size: 16, color: '#FFFFFF', display: true, track: 2 });
       break;
   }
   const svg = `<g transform="translate(0 ${ST_MARGIN})">${parts.join('')}</g>`;
@@ -307,8 +340,15 @@ export function stationDrawing(kind: StationKind, source: string | null, labels:
 
 export interface StationLabels {
   basket: Record<string, string>;
+  stove: string;
+  wok: string;
+  fryer: string;
+  board: string;
+  sink: string;
+  rack: string;
   trash: string;
   soda: string;
+  drinks: string;
   cups: string;
   pass: string;
   passSlot: string;
@@ -318,33 +358,36 @@ export interface StationLabels {
 export function contentSpot(kind: StationKind): { x: number; y: number; size: number } {
   switch (kind) {
     case 'stove':
-      return { x: 54, y: 28, size: 30 };
+      return { x: 38, y: 24, size: 28 };
     case 'wok':
-      return { x: 38, y: 28, size: 34 };
+      return { x: 36, y: 25, size: 32 };
     case 'fryer':
-      return { x: 38, y: 26, size: 30 };
+      return { x: 40, y: 25, size: 30 };
     case 'board':
-      return { x: 33, y: 27, size: 36 };
+      return { x: 35, y: 26, size: 34 };
     case 'pass':
-      return { x: 80, y: 26, size: 40 };
+      return { x: 103, y: 26, size: 40 };
     default:
       return { x: 40, y: 26, size: 42 };
   }
 }
 
-/** Flame ring position on cookers (glows while cooking). */
-export function flameSpot(kind: StationKind): { x: number; y: number; r: number } | null {
-  if (kind === 'stove') return { x: 54, y: 28, r: 20 };
-  if (kind === 'wok') return { x: 38, y: 28, r: 26 };
-  if (kind === 'fryer') return { x: 40, y: 28, r: 31 };
-  return null;
+/**
+ * Where a cooker shows heat, local to the tile top-left: flames licking out under the pan rim
+ * (stove, wok) or bubbles in the oil (fryer).
+ */
+export interface HeatSpot {
+  look: 'flame' | 'oil';
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
 }
 
-/** Indicator light on the front face of cookers. */
-export function lightSpot(kind: StationKind): { x: number; y: number } | null {
-  if (kind === 'stove') return { x: 66, y: 64 };
-  if (kind === 'wok') return { x: 52, y: 64 };
-  if (kind === 'fryer') return { x: 66, y: 64 };
+export function heatSpot(kind: StationKind): HeatSpot | null {
+  if (kind === 'stove') return { look: 'flame', x: 38, y: 27, rx: 24, ry: 12 };
+  if (kind === 'wok') return { look: 'flame', x: 36, y: 28, rx: 27, ry: 14 };
+  if (kind === 'fryer') return { look: 'oil', x: 40, y: 27, rx: 24, ry: 15 };
   return null;
 }
 

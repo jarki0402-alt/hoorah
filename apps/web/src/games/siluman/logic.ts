@@ -316,6 +316,12 @@ export class SilumanMatch {
     return this.phase === 'night' && this.stage === 'open' ? (NIGHT_ORDER[this.turn] ?? null) : null;
   }
 
+  /** Night: every living siluman has picked a victim (the screen's heartbeat stops then). */
+  get silumanChosen(): boolean {
+    const hunters = this.alive.filter((s) => s.role === 'siluman');
+    return hunters.length > 0 && hunters.every((s) => this.silumanPicks.has(s.id));
+  }
+
   get introCue(): IntroCue | null {
     return this.phase === 'intro' ? (INTRO_CUES[this.cue] ?? null) : null;
   }

@@ -41,6 +41,19 @@ async function open(
   return page;
 }
 
+/**
+ * A game played for the first time on this screen opens with its "Cara main": the phones show
+ * "Paham!" and the Host skips it from the phone. A game seen before starts at once.
+ */
+async function passTutorial(tv: Page, host: Page): Promise<void> {
+  const overlay = tv.locator('.tu-overlay');
+  await expect(overlay.or(tv.locator('iframe.game-frame'))).toBeVisible({ timeout: 15_000 });
+  if (!(await overlay.isVisible())) return;
+  await expect(host.getByRole('button', { name: 'Paham!' })).toBeVisible();
+  await host.getByRole('button', { name: 'Lewati cara main' }).click();
+  await expect(overlay).toBeHidden();
+}
+
 async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: `${SHOTS}/${name}.png` });
 }
@@ -94,7 +107,7 @@ test('full flow on TV + iPhone (WebKit) + Android (Chromium)', async () => {
   await rina.getByPlaceholder('Contoh: Rina').fill('Rina');
   await rina.getByRole('button', { name: /Semangka/ }).click();
   await rina.getByRole('button', { name: 'Masuk' }).click();
-  await expect(rina.getByText('HOST')).toBeVisible();
+  await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
 
   // ---- Android joins by typing the code ----
   const budi = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/`, 'android');
@@ -403,6 +416,7 @@ test('full flow on TV + iPhone (WebKit) + Android (Chromium)', async () => {
     await expect(tv.locator('.side-panel')).toBeVisible();
     await shot(tv, `03-${g.id}-detail`);
     await pad(rina, 'OK'); // "Main" is focused
+    await passTutorial(tv, rina);
     await expect(tv.locator(`iframe[src*="/games/${g.id}/"]`)).toBeVisible();
     await expect(tv.locator('.loading-box')).toBeHidden({ timeout: 30_000 });
     // Landscape games ask an upright phone to turn; the players turn their phones sideways and
@@ -476,7 +490,7 @@ test('solo: one phone gets a computer opponent (Ludo)', async () => {
   await rina.getByPlaceholder('Contoh: Rina').fill('Rina');
   await rina.getByRole('button', { name: /Semangka/ }).click();
   await rina.getByRole('button', { name: 'Masuk' }).click();
-  await expect(rina.getByText('HOST')).toBeVisible();
+  await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
 
   await tv.locator('button', { hasText: /mulai|beranda/i }).click();
   await tv.mouse.move(2, 2); // a resting pointer would hover (and focus) whatever lands under it
@@ -485,8 +499,8 @@ test('solo: one phone gets a computer opponent (Ludo)', async () => {
   await rina.getByRole('button', { name: /Pilih game/ }).click();
   await expect(rina.locator('.picker')).toBeVisible();
   await rina.getByRole('tab', { name: 'Semua' }).click();
-  // The main screen jumps to the same group: the "Semua game" grid, its tab in focus.
-  await expect(tv.locator('.home-gtab.focused .home-gtab-label')).toHaveText('Semua');
+  // The main screen jumps to the same group: the "Semua" shelf, its tab in focus.
+  await expect(tv.locator('.home-shelf-tab.focused .home-shelf-label')).toHaveText('Semua');
   await expect(rina.locator('.picker-group').first()).toHaveText('Papan');
   await shot(rina, '19-solo-picker');
   await shot(tv, '19-solo-tv-papan');
@@ -496,6 +510,7 @@ test('solo: one phone gets a computer opponent (Ludo)', async () => {
   await expect(rina.locator('.hostpad')).toBeVisible(); // the picker closed itself
   await tv.waitForTimeout(600);
   await pad(rina, 'OK');
+  await passTutorial(tv, rina);
   await expect(tv.locator('iframe[src*="/games/ludo/"]')).toBeVisible();
   const frame = tv.frameLocator('iframe[src*="/games/ludo/"]');
   await expect(tv.locator('.loading-box')).toBeHidden({ timeout: 30_000 });
@@ -546,7 +561,7 @@ test('same Wi-Fi: direct WebRTC link with relay fallback (laptop screen, Android
   const rina = await open(safari, { ...devices['iPhone 15'] }, `${BASE}/?r=${code}`, 'iphone-rtc');
   await rina.getByPlaceholder('Contoh: Rina').fill('Rina');
   await rina.getByRole('button', { name: 'Masuk' }).click();
-  await expect(rina.getByText('HOST')).toBeVisible();
+  await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
   const budi = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/?r=${code}`, 'android-rtc');
   await budi.getByPlaceholder('Contoh: Rina').fill('Budi');
   await budi.getByRole('button', { name: 'Masuk' }).click();
@@ -618,20 +633,21 @@ test('nearby screen, banner follows the focused card, add-player panel', async (
   await offer.click();
   await budi.getByPlaceholder('Contoh: Rina').fill('Budi');
   await budi.getByRole('button', { name: 'Masuk' }).click();
-  await expect(budi.getByText('HOST')).toBeVisible();
+  await expect(budi.getByText('HOST', { exact: true })).toBeVisible();
   await budi
     .getByRole('button', { name: 'Nanti saja' })
     .click({ timeout: 5_000 })
     .catch(() => {});
 
-  // Home: walking a row shows the focused game (name and tagline) in the row heading.
+  // Home: quick starts → shelf tabs → cards; the hero up top shows the focused game's name.
   await tv.locator('button', { hasText: /mulai/i }).first().click();
   await tv.mouse.move(2, 2);
   await expect(tv.locator('.home-scroll')).toBeVisible();
   await pad(budi, 'Bawah');
+  await pad(budi, 'Bawah');
   await pad(budi, 'Kanan');
   const focusedTitle = (await tv.locator('.card.focused .card-title').textContent())!.trim();
-  await expect(tv.locator('.home-focus-title')).toHaveText(focusedTitle);
+  await expect(tv.locator('.home-hero-title')).toHaveText(focusedTitle);
 
   // "+ Tambah pemain" opens the QR panel over the home screen; Selesai closes it.
   await tv.getByRole('button', { name: 'Tambah pemain' }).click();
@@ -700,7 +716,7 @@ test('Hoorah Pass: a third phone opens a full room with a code made in the admin
     return p;
   };
   const rina = await joinAs(safari, 'iPhone 15', 'Rina');
-  await expect(rina.getByText('HOST')).toBeVisible();
+  await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
   const budi = await joinAs(chrome, 'Pixel 7', 'Budi');
   await expect(budi.getByText('Halo, Budi!')).toBeVisible();
 
@@ -761,7 +777,7 @@ test('solo: Dapur Heboh with a computer helper, floating stick and three buttons
     .getByRole('button', { name: 'Nanti saja' })
     .click({ timeout: 2500 })
     .catch(() => {});
-  await expect(rina.getByText('HOST')).toBeVisible();
+  await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
 
   await tv.locator('button', { hasText: /mulai|beranda/i }).click();
   await tv.mouse.move(2, 2);
@@ -772,6 +788,7 @@ test('solo: Dapur Heboh with a computer helper, floating stick and three buttons
   await expect(tv.locator('.side-panel')).toBeVisible();
   await tv.waitForTimeout(600);
   await pad(rina, 'OK');
+  await passTutorial(tv, rina);
   await expect(tv.locator('.loading-box')).toBeHidden({ timeout: 30_000 });
   const frame = tv.frameLocator('iframe[src*="/games/dapur/"]');
 

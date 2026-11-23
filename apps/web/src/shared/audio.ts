@@ -10,6 +10,7 @@ import { looksLikeTv } from './device';
 import { DUCKS, mergeDuck } from './music/adaptive';
 import { MusicPlayer } from './music/player';
 import type { Track } from './music/songs';
+import { NightSynth } from './night-sounds';
 
 export type { Track };
 
@@ -17,47 +18,6 @@ export type { Track };
 export type Sfx = SfxName;
 
 type PitchPath = readonly (readonly [number, number])[];
-
-/** Rooster syllables: [start s, pitch path]. */
-const ROOSTER: readonly (readonly [number, PitchPath])[] = [
-  [
-    0,
-    [
-      [0, 520],
-      [0.12, 640],
-    ],
-  ],
-  [
-    0.16,
-    [
-      [0, 560],
-      [0.12, 700],
-    ],
-  ],
-  [
-    0.32,
-    [
-      [0, 620],
-      [0.14, 880],
-    ],
-  ],
-  [
-    0.48,
-    [
-      [0, 900],
-      [0.1, 1150],
-      [0.45, 1100],
-      [0.62, 760],
-    ],
-  ],
-];
-
-/** Suling phrase: [start s, length s, Hz]. */
-const FLUTE: readonly (readonly [number, number, number])[] = [
-  [0, 0.15, 659],
-  [0.15, 0.15, 880],
-  [0.3, 0.7, 988],
-];
 
 /** Falling horn sighs: [start s, pitch path]. */
 const FALL: readonly (readonly [number, PitchPath])[] = [
@@ -107,6 +67,8 @@ class AudioEngine {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
   private sfxBus!: GainNode;
+  /** Kampung Siluman sounds, built on first use. */
+  private night: NightSynth | null = null;
   private musicBus!: GainNode;
   /** Announcement ducking, after the music on/off level. */
   private duckBus!: GainNode;
@@ -438,57 +400,37 @@ class AudioEngine {
         this.voice(b, 412, t, 0.9, 'sine', 0.05, 0.04);
         return;
       case 'rooster':
-        // "Ku-ku-ru-yuuuk": four raspy syllables, the last one long and bending down.
-        for (const [at, pts] of ROOSTER) {
-          this.sweep(b, t + at, pts, 'sawtooth', 0.15, {
-            filter: ['bandpass', 1600, 1.4],
-            vibrato: [38, 22],
-            attack: 0.015,
-          });
-        }
+        this.nightSynth(ctx).rooster(t);
         return;
       case 'growl':
-        // Low growl: a detuned saw pair with a rough fast tremolo, kept dark by a lowpass.
-        this.sweep(
-          b,
-          t,
-          [
-            [0, 82],
-            [0.3, 96],
-            [0.8, 74],
-          ],
-          'sawtooth',
-          0.26,
-          { filter: ['lowpass', 520, 2], vibrato: [6, 4], tremolo: [23, 0.6], attack: 0.06 },
-        );
-        this.sweep(
-          b,
-          t,
-          [
-            [0, 61],
-            [0.8, 55],
-          ],
-          'sawtooth',
-          0.16,
-          { filter: ['lowpass', 400, 1], tremolo: [17, 0.5], attack: 0.08 },
-        );
-        this.noiseHit(b, t, 0.8, 'lowpass', 350, 0.16);
+        this.nightSynth(ctx).roar(t);
         return;
       case 'bell':
         this.bellTone(b, 1046, t, 1.3, 0.22);
         return;
       case 'flute':
-        // Suling call: a breathy bamboo flute, a short rising phrase that settles with vibrato.
-        for (const [at, dur, f] of FLUTE) {
-          const last = at === FLUTE[FLUTE.length - 1]![0];
-          const pts: [number, number][] = [
-            [0, f],
-            [dur, last ? f * 0.985 : f],
-          ];
-          this.sweep(b, t + at, pts, 'sine', 0.2, { attack: 0.035, vibrato: last ? [5.5, 9] : undefined });
-          this.sweep(b, t + at, pts, 'triangle', 0.04, { attack: 0.035 });
-          this.noiseHit(b, t + at, Math.min(dur, 0.25), 'bandpass', f * 1.5, 0.05);
-        }
+        this.nightSynth(ctx).suling(t);
+        return;
+      case 'night':
+        this.nightSynth(ctx).night(t);
+        return;
+      case 'genta':
+        this.nightSynth(ctx).genta(t);
+        return;
+      case 'kentongan':
+        this.nightSynth(ctx).kentongan(t);
+        return;
+      case 'heart':
+        this.nightSynth(ctx).heart(t);
+        return;
+      case 'birds':
+        this.nightSynth(ctx).birds(t);
+        return;
+      case 'win-village':
+        this.nightSynth(ctx).villageWin(t);
+        return;
+      case 'win-siluman':
+        this.nightSynth(ctx).silumanWin(t);
         return;
       case 'round': {
         // Next round: a short snare roll into a bright chord hit.
@@ -533,6 +475,11 @@ class AudioEngine {
    * with optional filter, vibrato ([rate Hz, depth Hz]) and tremolo ([rate Hz, depth 0–1]).
    * The note lasts until the last point.
    */
+  private nightSynth(ctx: AudioContext): NightSynth {
+    this.night ??= new NightSynth(ctx, this.sfxBus);
+    return this.night;
+  }
+
   private sweep(
     bus: AudioNode,
     t: number,

@@ -11,11 +11,10 @@ import { cpuSkill, isCpu, reportSoloResult } from '../common/cpu';
 import { actDelay, choosePawn, ludoOpponents } from './brain';
 import { GameClock } from './clock';
 import { SWATCH } from './colors';
-import { layoutPawns, type PawnRef, pawnPoint } from './geometry';
+import { type BoardGeom, geometryFor, layoutPawns, type PawnRef, pawnPoint } from './geometry';
 import {
   BASE,
   clampPawns,
-  HOME,
   HOP_MS,
   type LudoEvent,
   LudoLogic,
@@ -25,8 +24,8 @@ import {
   ROLL_MS,
   standings,
 } from './logic';
-import { buildResult, headline, teamTitle } from './results';
-import type { Banner, LudoStore, PlayerCard, TeamCard } from './store';
+import { buildResult, headline, seatTitle } from './results';
+import type { Banner, LudoStore, PlayerCard, SeatCard } from './store';
 import { joinNames, STR } from './strings';
 import * as V from './views';
 
@@ -72,6 +71,10 @@ export class LudoDriver {
   get logic(): LudoLogic {
     if (!this.logicRef) throw new Error('Ludo has not started');
     return this.logicRef;
+  }
+
+  private get geom(): BoardGeom {
+    return geometryFor(this.logic.board);
   }
 
   start(): void {
@@ -159,7 +162,7 @@ export class LudoDriver {
     const ok =
       L.phase === 'roll'
         ? L.roll(L.roller, now)
-        : L.pick(L.roller, choosePawn(L.options, L.team, L.teams, this.skill) + 1, now);
+        : L.pick(L.roller, choosePawn(L.board, L.options, L.seat, L.seats, this.skill) + 1, now);
     if (ok) this.flush();
   }
 
@@ -240,12 +243,12 @@ export class LudoDriver {
     const L = this.logic;
     switch (e.type) {
       case 'intro': {
-        const first = L.teams[0]?.members[0];
+        const first = L.seats[0]?.player;
         this.banner = {
           kind: 'intro',
           key: ++this.seq,
           first: first !== undefined ? STR.firstTurn(this.name(first)) : null,
-          teams: L.teams.some((t) => t.members.length > 1),
+          note: L.board.sides > 4 ? STR.boardNote(L.board.sides) : null,
         };
         this.sfx('reveal');
         return;
@@ -278,7 +281,7 @@ export class LudoDriver {
         this.onMove(e.move);
         return;
       case 'pass': {
-        const needSix = this.needsSix(e.team);
+        const needSix = this.needsSix(e.seat);
         this.transient.set(e.player, V.passView(e.reason, needSix));
         this.sfx(e.reason === 'triple' ? 'boo' : 'wrong');
         if (e.reason === 'triple') this.showToast(STR.toastTriple, STR.toastTripleSub, 'bad');
@@ -286,7 +289,7 @@ export class LudoDriver {
         return;
       }
       case 'finish':
-        this.onFinish(e.team);
+        this.onFinish(e.seat);
         return;
       case 'end':
         this.finish();
@@ -294,26 +297,28 @@ export class LudoDriver {
     }
   }
 
-  private needsSix(team: number): boolean {
-    const t = this.logic.teams[team]!;
-    return t.pawns.every((p) => p === BASE || p >= HOME);
+  private needsSix(seat: number): boolean {
+    const L = this.logic;
+    const t = L.seats[seat]!;
+    return t.pawns.every((p) => p === BASE || p >= L.board.home);
   }
 
   private onMove(m: MoveInfo): void {
     const L = this.logic;
     const prev = this.store.pawns.value;
-    const before = layoutPawns(prev, L.pawnCount);
+    const g = this.geom;
+    const before = layoutPawns(g, prev, L.pawnCount);
     const next = this.pawnRefs();
-    const after = layoutPawns(next, L.pawnCount);
+    const after = layoutPawns(g, next, L.pawnCount);
     this.store.pawns.value = next;
-    const t = L.teams[m.team]!;
-    const key = `${m.team}-${m.pawn}`;
-    const find = (list: typeof before, k: string) => list.find((p) => `${p.team}-${p.pawn}` === k);
+    const t = L.seats[m.seat]!;
+    const key = `${m.seat}-${m.pawn}`;
+    const find = (list: typeof before, k: string) => list.find((p) => `${p.seat}-${p.pawn}` === k);
     const from = find(before, key);
     const to = find(after, key);
     const walk = m.path.length * HOP_MS;
     if (from && to) {
-      const pts = m.path.map((p) => pawnPoint(t.color, p, m.pawn, L.pawnCount));
+      const pts = m.path.map((p) => pawnPoint(g, t.color, p, m.pawn, L.pawnCount));
       this.store.animateMove(key, from, pts, to, HOP_MS);
     }
     // Footsteps: a soft tick per square.
@@ -327,10 +332,10 @@ export class LudoDriver {
     }
     this.transient.set(m.player, V.rolledView(L.dice));
     if (m.captures.length) {
-      const victims = m.captures.map((c) => teamTitle(L, c.team, (id) => this.name(id)));
+      const victims = m.captures.map((c) => seatTitle(L, c.seat, (id) => this.name(id)));
       const uniq = [...new Set(victims)];
       for (const c of m.captures) {
-        const k = `${c.team}-${c.pawn}`;
+        const k = `${c.seat}-${c.pawn}`;
         const a = find(before, k);
         const b = find(after, k);
         if (a && b) this.store.animateHomeward(k, a, b, walk);
@@ -350,7 +355,7 @@ export class LudoDriver {
           });
         this.showToast(STR.toastCapture(this.name(m.player), joinNames(uniq)), null, 'capture');
       }, walk);
-      for (const c of m.captures) for (const id of L.teams[c.team]!.members) this.buzz(id, [200, 60, 200]);
+      for (const c of m.captures) this.buzz(L.seats[c.seat]!.player, [200, 60, 200]);
     } else if (m.home) {
       window.setTimeout(() => {
         if (this.ended) return;
@@ -360,39 +365,35 @@ export class LudoDriver {
     }
   }
 
-  private onFinish(team: number): void {
+  private onFinish(seat: number): void {
     const L = this.logic;
-    const t = L.teams[team]!;
+    const t = L.seats[seat]!;
     this.result = this.makeResult();
-    this.reportSolo(team);
+    this.reportSolo(seat);
     const rows = standings(L);
     const head = headline(L, (id) => this.name(id));
-    const teams = L.teams.some((x) => x.members.length > 1);
     this.finalViews = new Map();
     for (const r of rows) {
-      const tt = L.teams[r.team]!;
-      for (const id of tt.members) {
-        const s = L.stats.get(id)!;
-        this.finalViews.set(
-          id,
-          V.finalView({
-            rank: r.rank,
-            teams,
-            headline: head,
-            home: r.home,
-            pawns: L.pawnCount,
-            captures: s.captures,
-            sixes: s.sixes,
-          }),
-        );
-      }
+      const id = L.seats[r.seat]!.player;
+      const s = L.stats.get(id)!;
+      this.finalViews.set(
+        id,
+        V.finalView({
+          rank: r.rank,
+          headline: head,
+          home: r.home,
+          pawns: L.pawnCount,
+          captures: s.captures,
+          sixes: s.sixes,
+        }),
+      );
     }
     this.banner = {
       kind: 'finale',
       key: ++this.seq,
-      title: STR.finaleTitle(teamTitle(L, team, (id) => this.name(id)).toUpperCase()),
+      title: STR.finaleTitle(seatTitle(L, seat, (id) => this.name(id)).toUpperCase()),
       sub: STR.finaleSub(L.pawnCount),
-      winners: t.members.map((id) => this.card(id)),
+      winners: [this.card(t.player)],
       color: t.color,
     };
     this.sfx('win');
@@ -419,7 +420,7 @@ export class LudoDriver {
   private reportSolo(winner: number): void {
     if (!this.cpus.length || this.soloReported) return;
     this.soloReported = true;
-    const won = this.logic.teams[winner]!.members.some((id) => !isCpu(id));
+    const won = !isCpu(this.logic.seats[winner]!.player);
     reportSoloResult(this.game.gameId, won ? 'win' : 'lose');
   }
 
@@ -435,8 +436,8 @@ export class LudoDriver {
 
   private pawnRefs(): PawnRef[] {
     const L = this.logic;
-    return L.teams.flatMap((t) =>
-      t.pawns.map((progress, pawn) => ({ team: t.index, color: t.color, pawn, progress })),
+    return L.seats.flatMap((t) =>
+      t.pawns.map((progress, pawn) => ({ seat: t.index, color: t.color, pawn, progress })),
     );
   }
 
@@ -462,17 +463,17 @@ export class LudoDriver {
   private refreshHud(): void {
     const L = this.logic;
     const live = L.phase !== 'intro' && L.phase !== 'finale' && L.phase !== 'ended';
-    const teams: TeamCard[] = L.teams.map((t) => ({
+    const seats: SeatCard[] = L.seats.map((t) => ({
       index: t.index,
       color: t.color,
-      members: t.members.map((id) => this.card(id)),
+      player: this.card(t.player),
       pawns: [...t.pawns],
       home: L.homeCount(t),
       active: live && t.index === L.current,
       winner: L.winner === t.index,
     }));
-    const t = L.team;
-    const auto = !t.members.some((id) => L.isConnected(id));
+    const t = L.seat;
+    const auto = !L.isConnected(t.player);
     let hint = '';
     switch (L.phase) {
       case 'roll':
@@ -496,10 +497,11 @@ export class LudoDriver {
     }
     this.store.model.value = {
       pawnsPer: L.pawnCount,
-      colors: L.teams.map((x) => x.color),
-      teams,
+      sides: L.board.sides,
+      colors: L.seats.map((x) => x.color),
+      seats,
       turn: live
-        ? { team: t.index, color: t.color, player: this.card(L.roller), bonus: L.bonus, auto }
+        ? { seat: t.index, color: t.color, player: this.card(L.roller), bonus: L.bonus, auto }
         : null,
       dice: L.dice,
       rolling: L.phase === 'rolling',
@@ -513,34 +515,38 @@ export class LudoDriver {
   }
 
   /** Every pawn the roller may move (pawns sharing a square all bounce). */
-  private legalKeys(team: number, options: readonly MoveOption[]): string[] {
-    const t = this.logic.teams[team]!;
+  private legalKeys(seat: number, options: readonly MoveOption[]): string[] {
+    const t = this.logic.seats[seat]!;
     const froms = new Set(options.map((o) => o.from));
-    return t.pawns.flatMap((p, i) => (froms.has(p) ? [`${team}-${i}`] : []));
+    return t.pawns.flatMap((p, i) => (froms.has(p) ? [`${seat}-${i}`] : []));
   }
 
   private victimNames = (o: MoveOption): string => {
     const L = this.logic;
-    const names = [...new Set(o.captures.map((c) => teamTitle(L, c.team, (id) => this.name(id))))];
+    const names = [...new Set(o.captures.map((c) => seatTitle(L, c.seat, (id) => this.name(id))))];
     return joinNames(names);
   };
 
   private viewFor(id: number): ControllerView {
     if (this.finalViews) return this.finalViews.get(id) ?? V.spectatorView();
     const L = this.logic;
-    const mine = L.teamOf(id);
-    if (L.phase === 'intro') {
-      const mate = mine?.members.find((m) => m !== id);
-      return V.introView(mine ? mine.color : null, mate !== undefined ? this.name(mate) : null);
-    }
+    const mine = L.seatOf(id);
+    if (L.phase === 'intro') return V.introView(mine ? mine.color : null);
     const tr = this.transient.get(id);
     if (tr) return tr;
-    const t = L.team;
+    const t = L.seat;
     if (id === L.roller) {
       if (L.phase === 'roll')
         return V.rollView(t.color, L.bonus, this.needsSix(t.index), this.clock.toServer(L.deadline));
       if (L.phase === 'pick')
-        return V.pickView(t.color, L.dice ?? 1, L.options, this.victimNames, this.clock.toServer(L.deadline));
+        return V.pickView(
+          L.board,
+          t.color,
+          L.dice ?? 1,
+          L.options,
+          this.victimNames,
+          this.clock.toServer(L.deadline),
+        );
       return V.rolledView(L.dice);
     }
     let doing = STR.phoneWatchRoll;
@@ -552,12 +558,10 @@ export class LudoDriver {
       rollerId: L.roller,
       rollerName: this.name(L.roller),
       rollerColor: t.color,
-      mate: mine === t,
       doing,
       myColor: mine ? mine.color : null,
       myHome: mine ? L.homeCount(mine) : 0,
       pawns: L.pawnCount,
-      teams: L.teams.some((x) => x.members.length > 1),
     });
   }
 

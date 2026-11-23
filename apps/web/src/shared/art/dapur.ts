@@ -8,7 +8,21 @@ import { svgDoc } from './svg';
  * for the logo.
  */
 
-const NO_LABELS = { basket: {}, trash: '', soda: '', cups: '', pass: '', passSlot: '' };
+const NO_LABELS: Parameters<typeof stationDrawing>[2] = {
+  basket: {},
+  stove: '',
+  wok: '',
+  fryer: '',
+  board: '',
+  sink: '',
+  rack: '',
+  trash: '',
+  soda: '',
+  drinks: '',
+  cups: '',
+  pass: '',
+  passSlot: '',
+};
 
 function station(
   kind: Parameters<typeof stationDrawing>[0],

@@ -16,10 +16,10 @@ export interface PlayerCard {
   connected: boolean;
 }
 
-export interface TeamCard {
+export interface SeatCard {
   index: number;
   color: ColorId;
-  members: PlayerCard[];
+  player: PlayerCard;
   /** Progress of each pawn. */
   pawns: number[];
   home: number;
@@ -28,7 +28,7 @@ export interface TeamCard {
 }
 
 export interface TurnInfo {
-  team: number;
+  seat: number;
   color: ColorId;
   player: PlayerCard;
   bonus: boolean;
@@ -37,13 +37,15 @@ export interface TurnInfo {
 }
 
 export type Banner =
-  | { kind: 'intro'; key: number; first: string | null; teams: boolean }
+  | { kind: 'intro'; key: number; first: string | null; note: string | null }
   | { kind: 'finale'; key: number; title: string; sub: string; winners: PlayerCard[]; color: ColorId };
 
 export interface HudModel {
   pawnsPer: number;
+  /** Board shape: 4 = classic, 5..8 = polygon. */
+  sides: number;
   colors: ColorId[];
-  teams: TeamCard[];
+  seats: SeatCard[];
   turn: TurnInfo | null;
   dice: number | null;
   rolling: boolean;
@@ -54,7 +56,7 @@ export interface HudModel {
   six: boolean;
   /** The game is over (finale on screen). */
   over: boolean;
-  /** `team-pawn` keys of pawns the roller can pick right now. */
+  /** `seat-pawn` keys of pawns the roller can pick right now. */
   legal: string[];
   banner: Banner | null;
 }
@@ -77,8 +79,9 @@ export interface Burst {
 
 const EMPTY: HudModel = {
   pawnsPer: 2,
+  sides: 4,
   colors: [],
-  teams: [],
+  seats: [],
   turn: null,
   dice: null,
   rolling: false,
@@ -105,11 +108,13 @@ export class LudoStore {
   readonly bursts = signal<Burst[]>([]);
   readonly paused = signal(false);
 
-  /** Pawn elements by `team-pawn`, registered by the board. */
+  /** Pawn elements by `seat-pawn`, registered by the board. */
   readonly pawnEls = new Map<string, HTMLDivElement>();
-  /** Board cell size in stage px and the grid origin inside the board element. */
-  cell = 40;
+  /** Stage px per board unit and the grid origin inside the board element. */
+  unit = 40;
   origin = 20;
+  /** Size of one loop square in stage px (pawns are sized from it). */
+  cell = 40;
   ringArc: SVGCircleElement | null = null;
   ringText: HTMLDivElement | null = null;
   ringBox: HTMLDivElement | null = null;
@@ -118,9 +123,9 @@ export class LudoStore {
   private lastUrgent: boolean | null = null;
   private lastShow: boolean | null = null;
 
-  /** Stage px (inside the board element) of a point in cell units. */
+  /** Stage px (inside the board element) of a point in board units. */
   px(x: number): number {
-    return this.origin + x * this.cell;
+    return this.origin + x * this.unit;
   }
 
   /** CSS transform of a pawn whose foot stands on (x, y). */
@@ -177,7 +182,7 @@ export class LudoStore {
     const a = this.pawnTransform(from.x, from.y, from.scale);
     const b = this.pawnTransform(to.x, to.y, to.scale);
     const mx = (from.x + to.x) / 2;
-    const my = Math.min(from.y, to.y) - 2.2;
+    const my = Math.min(from.y, to.y) - (2.2 * this.cell) / this.unit;
     const mid = this.pawnTransform(mx, my, 1.25);
     el.classList.add('is-moving');
     const anim = el.animate(

@@ -22,6 +22,12 @@ export interface FocusMap {
 export const focused = signal<string>('');
 let map: FocusMap | null = null;
 let pos = { row: 0, col: 0 };
+let pointerFocus = false;
+
+/** True when the last focus change came from the mouse: the page then stays put (no glide). */
+export function focusFromPointer(): boolean {
+  return pointerFocus;
+}
 
 /**
  * Installs a focus map and returns its disposer. The disposer only clears the map it installed,
@@ -47,11 +53,12 @@ function locate(id: string): { row: number; col: number } | null {
   return null;
 }
 
-/** Focus a specific item (mouse hover/click). */
-export function focus(id: string): void {
+/** Focus a specific item: a mouse hover/click (`byPointer`) or a page jumping to it. */
+export function focus(id: string, byPointer = false): void {
   const found = locate(id);
   if (!found) return;
   pos = found;
+  pointerFocus = byPointer;
   if (focused.value !== id) {
     focused.value = id;
     map?.onMove?.(id);
@@ -60,6 +67,7 @@ export function focus(id: string): void {
 
 export function press(key: NavKey): void {
   if (!map) return;
+  pointerFocus = false;
   const rows = map.rows;
   const move = (row: number, col: number) => {
     const r = Math.max(0, Math.min(rows.length - 1, row));

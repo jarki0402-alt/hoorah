@@ -11,18 +11,40 @@ import { loadJson, saveJson } from '../common/store';
 import { GameClock } from './clock';
 import type { Hud, HudState, LegendRow, Overlay } from './hud';
 import { type StickCommand, StickInputs } from './input';
-import { LEVELS, type Slot } from './levels';
-import { type MatchEvent, type Person, WarnaMatch } from './logic';
+import { BIOMES, biomeOf, Cell, LEVELS, type Slot } from './levels';
+import {
+  isOpen,
+  type MatchEvent,
+  type Person,
+  type Progress,
+  secondFruit,
+  WarnaMatch,
+  worldStars,
+} from './logic';
 import { buildResult } from './results';
 import type { WarnaScene } from './scene';
-import { formatClock, levelName, levelTip, STR } from './strings';
+import { BIOME_TEXT, formatClock, levelName, levelTip, STR } from './strings';
 import { resultView, type ViewContext, viewFor } from './views';
 import { TUNE, type World, type WorldEvent } from './world';
 
 const HUD_MS = 100;
+
+function loadProgress(): Progress {
+  const raw = loadJson<unknown>(PROGRESS_KEY, {});
+  const out: Progress = {};
+  if (typeof raw !== 'object' || raw === null) return out;
+  for (const [id, v] of Object.entries(raw)) {
+    if (typeof v === 'number' && Number.isFinite(v) && LEVELS.some((l) => l.id === id))
+      out[id] = Math.max(0, Math.min(3, Math.floor(v)));
+  }
+  return out;
+}
 const VIEW_MS = 300;
 const TIP_S = 12;
-const BEST_KEY = 'warna.best';
+/** Stars per stage on this screen (v2: world stages, owner 2026-11-22). */
+const PROGRESS_KEY = 'warna.progress.v2';
+/** The opening that shows the exits lasts into play this long (s). */
+const GOAL_PLAY_S = 2;
 
 export class Driver {
   readonly match: WarnaMatch;
@@ -31,7 +53,6 @@ export class Driver {
   private readonly online = new Set<number>();
   private readonly sent = new Map<number, string>();
   private readonly lastSfx = new Map<string, number>();
-  private readonly best: Record<string, number>;
   private attached: World | null = null;
   private result: GameResult | null = null;
   private ended = false;
@@ -49,9 +70,7 @@ export class Driver {
     private readonly phaser: Phaser.Game,
     stages: number,
   ) {
-    this.match = new WarnaMatch(stages);
-    const stored = loadJson<Record<string, number>>(BEST_KEY, {});
-    this.best = typeof stored === 'object' && stored !== null ? { ...stored } : {};
+    this.match = new WarnaMatch(stages, loadProgress());
     this.onPlayers();
   }
 
@@ -124,10 +143,24 @@ export class Driver {
     const host = from === this.hostId();
     switch (id) {
       case 'pick':
-        if (host && typeof value === 'string' && m.pickLevel(value)) this.sfx('select');
+        if (!host || typeof value !== 'string') break;
+        if (m.pickStep === 'world' ? m.pickWorld(value.replace(/^w:/, '')) : m.pickLevel(value))
+          this.sfx('select');
+        break;
+      case 'next':
+        if (host && m.toLevels()) this.sfx('select');
+        break;
+      case 'back':
+        if (host && m.toWorlds()) this.sfx('back');
         break;
       case 'start':
         if (host && m.phase === 'select') m.start();
+        break;
+      case 'hint':
+        m.hint(from);
+        break;
+      case 'skip':
+        if (host) m.skip();
         break;
       case 'swap':
         m.swap(from);
@@ -162,6 +195,9 @@ export class Driver {
     this.match.update(dt / 1000);
     this.drain();
     if (this.ended) return;
+    const m = this.match;
+    this.scene.setGoal(m.phase === 'intro' || (m.phase === 'play' && m.playT < GOAL_PLAY_S));
+    this.scene.setHint(m.currentHint());
     if (t - this.lastViews >= VIEW_MS) {
       this.lastViews = t;
       this.sendViews();
@@ -175,28 +211,23 @@ export class Driver {
 
   private drain(): void {
     const m = this.match;
-    if (m.world && m.world !== this.attached) {
-      this.attached = m.world;
-      this.scene.attach(m.world, (key) => this.look(key));
+    if (m.sim && m.sim !== this.attached) {
+      this.attached = m.sim;
+      this.scene.attach(m.sim, (key) => this.look(key));
     }
     for (const e of m.drainEvents()) this.onEvent(e);
   }
 
   private look(key: number): { name: string; fruit: PlayerInfo['fruit']; idle: boolean } {
     const m = this.match;
-    const c = m.world?.chars[key];
+    const c = m.sim?.chars[key];
     const p = c ? m.person(c.owner) : undefined;
     const idle = Boolean(m.solo && c && c.sub !== m.steer);
     return {
       name: p?.name ?? '',
-      fruit: (c?.sub === 1 ? this.secondFruit(p?.fruit) : p?.fruit) ?? 'jeruk',
+      fruit: (c?.sub === 1 ? secondFruit(p?.fruit) : p?.fruit) ?? 'jeruk',
       idle,
     };
-  }
-
-  /** Solo: the second character wears another fruit so the two are easy to tell apart. */
-  private secondFruit(f: PlayerInfo['fruit'] | undefined): PlayerInfo['fruit'] {
-    return f === 'semangka' ? 'nanas' : 'semangka';
   }
 
   private sfx(name: string, gapMs = 0): void {
@@ -238,7 +269,7 @@ export class Driver {
         this.sendViews();
         return;
       case 'ping': {
-        const c = m.world?.chars[e.key];
+        const c = m.sim?.chars[e.key];
         if (!c) return;
         this.sfx('bell', 250);
         const p = this.scene.toStage(c.x + TUNE.charW / 2, c.y);
@@ -247,6 +278,16 @@ export class Driver {
       }
       case 'stage':
         return;
+      case 'hint':
+        this.sfx(e.level === 1 ? 'select' : 'reveal');
+        this.lastHud = Number.NEGATIVE_INFINITY;
+        this.sendViews();
+        return;
+      case 'skip':
+        this.sfx('back');
+        this.hud.float(STR.skipFloat, this.scene.ox + 640, this.scene.oy + 300, '#FFE27A');
+        this.saveProgress();
+        return;
       case 'world':
         this.onWorld(e.e);
         return;
@@ -254,7 +295,7 @@ export class Driver {
   }
 
   private onWorld(e: WorldEvent): void {
-    const w = this.match.world;
+    const w = this.match.sim;
     if (!w) return;
     switch (e.type) {
       case 'jump':
@@ -324,21 +365,38 @@ export class Driver {
         this.sendViews();
         return;
       }
+      case 'bounce':
+        this.scene.onBounce(e.x, e.y);
+        this.sfx('jump', 70);
+        return;
+      case 'assist':
+        this.scene.onAssist(e.y, e.x0, e.x1);
+        this.sfx('reveal', 300);
+        return;
       case 'clear':
         this.scene.onClear();
         return;
     }
   }
 
+  /** A plate that only moves a lift says so; others open doors. */
+  private plateHint(target: string): string {
+    const ch = Number(target.slice(2));
+    const lv = this.match.level;
+    const door = lv.meta.some((m, i) => m === ch && lv.cells[i] === Cell.Door);
+    return !door && lv.lifts.some((l) => l.ch === ch) ? STR.hintLift : STR.hintPlate;
+  }
+
+  private saveProgress(): void {
+    saveJson(PROGRESS_KEY, this.match.progress);
+  }
+
   private onClear(): void {
     const s = this.match.lastScore();
     this.sfx('stinger-win');
     window.setTimeout(() => this.game.sfx('cheer'), 400);
-    celebrate();
-    if (s && s.stars > (this.best[s.level] ?? 0)) {
-      this.best[s.level] = s.stars;
-      saveJson(BEST_KEY, this.best);
-    }
+    if (!s?.skipped) celebrate();
+    this.saveProgress();
   }
 
   private finish(): void {
@@ -358,7 +416,7 @@ export class Driver {
   private everyone(): number[] {
     const ids: number[] = [];
     for (const [id, t] of this.match.tallies) {
-      const played = t.jumps + t.deaths + t.gems + t.carried + t.pushed + t.helped + t.firstIn > 0;
+      const played = t.jumps + t.deaths + t.gems + t.pushed + t.helped + t.firstIn > 0;
       if (played || this.match.inCast(id)) ids.push(id);
     }
     return ids;
@@ -369,8 +427,8 @@ export class Driver {
   private updateMusic(): void {
     const m = this.match;
     let level: MusicIntensity = 0;
-    if (m.phase === 'play' && m.world) {
-      const active = m.world.chars.filter((c) => c.active);
+    if (m.phase === 'play' && m.sim) {
+      const active = m.sim.chars.filter((c) => c.active);
       const inside = active.filter((c) => c.inExit).length;
       level = inside >= active.length - 1 && active.length > 1 ? 3 : inside * 2 >= active.length ? 2 : 1;
     } else if (m.phase === 'clear') level = 3;
@@ -385,7 +443,7 @@ export class Driver {
 
   private ctx(): ViewContext {
     const host = this.hostId();
-    return { hostId: host, hostName: this.nameOf(host), best: this.best };
+    return { hostId: host, hostName: this.nameOf(host), progress: this.match.progress };
   }
 
   /** Sends every phone its view; identical views are never re-sent (a reconnect clears the memory). */
@@ -405,7 +463,7 @@ export class Driver {
 
   private legend(): LegendRow[] {
     const m = this.match;
-    const w = m.world;
+    const w = m.sim;
     if (!w) return [];
     const rows: LegendRow[] = [];
     for (let s = 0; s < w.colors; s++) {
@@ -422,21 +480,49 @@ export class Driver {
 
   private overlay(): Overlay {
     const m = this.match;
+    const worldName = BIOME_TEXT[m.level.biome].name;
     switch (m.phase) {
-      case 'select':
+      case 'select': {
+        const host = this.nameOf(this.hostId());
+        if (m.pickStep === 'world') {
+          return {
+            kind: 'worlds',
+            host,
+            stages: m.stages,
+            selected: m.world,
+            worlds: BIOMES.map((b) => ({
+              id: b.id,
+              name: BIOME_TEXT[b.id].name,
+              sub: b.ready ? BIOME_TEXT[b.id].sub : STR.soon,
+              ready: b.ready,
+              ...worldStars(b.id, m.progress),
+            })),
+          };
+        }
+        const levels = biomeOf(m.world).levels;
         return {
-          kind: 'pick',
+          kind: 'journey',
+          host,
+          world: m.world,
+          title: STR.screenLevelTitle(BIOME_TEXT[m.world].name),
           selected: LEVELS[m.pick]?.id ?? '',
-          best: this.best,
-          host: this.nameOf(this.hostId()),
-          stages: m.stages,
+          nodes: levels.map((lv) => ({
+            id: lv.id,
+            number: lv.number,
+            name: levelName(lv.id),
+            stars: m.progress[lv.id] ?? 0,
+            done: m.progress[lv.id] !== undefined,
+            open: isOpen(lv, m.progress),
+          })),
         };
+      }
       case 'intro':
         return {
           kind: 'intro',
-          eyebrow: STR.stageOf(m.stage + 1, m.order.length),
+          eyebrow: STR.worldLevel(worldName, m.level.number),
           name: levelName(m.level.id),
           tip: levelTip(m.level.id),
+          goal: STR.goal,
           legend: this.legend(),
           solo: m.solo,
         };
@@ -446,14 +532,17 @@ export class Driver {
         const next = nextIdx !== undefined ? LEVELS[nextIdx] : undefined;
         return {
           kind: 'clear',
-          eyebrow: STR.stageOf(m.stage + 1, m.order.length),
-          stars: [
-            { label: STR.starClear, on: true },
-            { label: STR.starGems, on: Boolean(s?.starGems) },
-            { label: STR.starTime(formatClock(m.level.par)), on: Boolean(s?.starTime) },
-          ],
-          time: STR.clearTime(formatClock(s?.time ?? 0)),
-          gems: STR.clearGems(s?.gems ?? 0, s?.gemTotal ?? 0),
+          eyebrow: STR.worldLevel(worldName, m.level.number),
+          title: s?.skipped ? STR.skippedTitle : STR.clearTitle,
+          stars: s?.skipped
+            ? []
+            : [
+                { label: STR.starClear, on: true },
+                { label: STR.starGems, on: Boolean(s?.starGems) },
+                { label: STR.starTime(formatClock(m.level.par)), on: Boolean(s?.starTime) },
+              ],
+          time: s?.skipped ? STR.skippedNote : STR.clearTime(formatClock(s?.time ?? 0)),
+          gems: s?.skipped ? '' : STR.clearGems(s?.gems ?? 0, s?.gemTotal ?? 0),
           next: next ? STR.nextStage(levelName(next.id)) : STR.lastStage,
         };
       }
@@ -464,20 +553,31 @@ export class Driver {
 
   private hudState(): HudState {
     const m = this.match;
-    const w = m.world;
+    const w = m.sim;
     const playing = m.phase === 'play' && w !== null;
     const chips = [];
     if (w) for (let s = 0; s < w.colors; s++) chips.push({ slot: s as Slot, ...w.exitCount(s as Slot) });
     const g = w?.allGems() ?? { taken: 0, total: 0 };
     const showTip = playing && m.playT - this.tipFrom < TIP_S;
+    const hint = m.currentHint();
+    const hintText = hint
+      ? hint.kind === 'box'
+        ? STR.hintBox
+        : hint.kind === 'plate'
+          ? this.plateHint(hint.target)
+          : hint.kind === 'lever'
+            ? STR.hintLever
+            : STR.hintExit
+      : '';
     return {
       show: m.phase === 'play' || m.phase === 'clear',
-      stage: STR.hudStage(m.stage + 1, Math.max(1, m.order.length)),
+      stage: STR.worldLevel(BIOME_TEXT[m.level.biome].name, m.level.number),
       name: levelName(m.level.id),
       timer: formatClock(m.playT),
       gems: `${STR.hudGems} ${g.taken}/${g.total}`,
       chips,
-      tip: showTip ? levelTip(m.level.id) : '',
+      tip: hintText || (showTip ? levelTip(m.level.id) : ''),
+      hint: Boolean(hintText),
       vote: playing && m.voteLeft > 0 ? `${STR.voteTitle} ${STR.voteCount(m.votes.size, m.voteNeed())}` : '',
       overlay: this.overlay(),
     };

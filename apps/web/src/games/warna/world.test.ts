@@ -8,7 +8,7 @@ const FLOOR = '#'.repeat(COLS);
 /** A test map: rows given from the top, padded with empty rows and two floor rows at the bottom. */
 function map(rows: string[], lifts: LevelDef['lifts'] = []) {
   const all = [FLOOR, ...Array.from({ length: ROWS - 3 - rows.length }, () => EMPTY), ...rows, FLOOR, FLOOR];
-  return parseLevel({ id: 'test', par: 60, rows: all, lifts }, 0);
+  return parseLevel({ par: 60, rows: all, lifts }, 0);
 }
 
 function row(cells: Record<number, string>): string {
@@ -38,7 +38,7 @@ describe('stage maps', () => {
         expect(cellAt(lv, 0, y)).toBe(Cell.Rock);
         expect(cellAt(lv, COLS - 1, y)).toBe(Cell.Rock);
       }
-      expect(lv.spawns.length, lv.id).toBeGreaterThanOrEqual(6);
+      expect(lv.spawns.length, lv.id).toBeGreaterThanOrEqual(2);
       for (const slot of [0, 1, 2, 3])
         expect(
           lv.exits.some((e) => e.slot === slot),
@@ -141,7 +141,7 @@ describe('platformer world', () => {
     const rows = [...Array.from({ length: ROWS }, (_, y) => (y === 0 || y >= ROWS - 2 ? FLOOR : EMPTY))];
     rows[ROWS - 3] = row({ 3: 'S', 4: 'S' });
     rows[ROWS - 2] = `#${'#'.repeat(7)}BBBBB${'#'.repeat(COLS - 14)}#`;
-    const pools = parseLevel({ id: 't', par: 60, rows }, 0);
+    const pools = parseLevel({ par: 60, rows }, 0);
     const w = new World(pools, two);
     run(w, 0.3);
     w.setInput(0, 1, false); // Merah walks into the blue pool.
@@ -161,7 +161,7 @@ describe('platformer world', () => {
     rows[ROWS - 3] = row({ 3: 'S', 4: 'S', 10: 'b' });
     rows[ROWS - 4] = row({ 10: 'b' });
     rows[ROWS - 5] = row({ 10: '#' });
-    const w = new World(parseLevel({ id: 't', par: 60, rows }, 0), two);
+    const w = new World(parseLevel({ par: 60, rows }, 0), two);
     w.setInput(0, 1, false);
     w.setInput(1, 1, false);
     run(w, 2.5);
@@ -173,7 +173,7 @@ describe('platformer world', () => {
     const rows = Array.from({ length: ROWS }, (_, y) => (y === 0 || y >= ROWS - 2 ? FLOOR : EMPTY));
     rows[ROWS - 3] = row({ 3: 'S', 4: 'S', 6: 'u', 12: 'U' });
     for (let y = 1; y < ROWS - 3; y++) rows[y] = row({ 12: 'U' });
-    const w = new World(parseLevel({ id: 't', par: 60, rows }, 0), two);
+    const w = new World(parseLevel({ par: 60, rows }, 0), two);
     run(w, 0.3);
     expect(w.doorOpen.get(1)).toBe(false);
     // Merah steps on the plate.
@@ -204,7 +204,7 @@ describe('platformer world', () => {
     const rows = Array.from({ length: ROWS }, (_, y) => (y === 0 || y >= ROWS - 2 ? FLOOR : EMPTY));
     rows[ROWS - 4] = row({ 8: 'O' });
     rows[ROWS - 3] = row({ 3: 'S', 4: 'S' });
-    const lv = parseLevel({ id: 't', par: 60, rows }, 0);
+    const lv = parseLevel({ par: 60, rows }, 0);
     const w = new World(lv, two);
     run(w, 0.3);
     const x0 = w.boxes[0]!.x;
@@ -222,7 +222,7 @@ describe('platformer world', () => {
     expect(solo.boxes[0]!.x).toBeGreaterThan(x0 + 1);
   });
 
-  it('carries a friend standing on the shoulders', () => {
+  it('never lets a character stand on another one (no stacking)', () => {
     const lv = map([row({ 3: 'S', 4: 'S' })]);
     const w = new World(lv, two);
     run(w, 0.3);
@@ -230,21 +230,17 @@ describe('platformer world', () => {
     const bottom = w.chars[0]!;
     top.x = bottom.x;
     top.y = bottom.y - TUNE.charH - 0.3;
-    run(w, 0.4);
-    expect(top.support).toEqual({ kind: 'char', i: 0 });
-    const gap = top.x - bottom.x;
-    w.setInput(0, 1, false);
-    run(w, 0.5);
-    expect(top.x - bottom.x).toBeCloseTo(gap, 1);
-    expect(bottom.x).toBeGreaterThan(4);
-    expect(top.support).toEqual({ kind: 'char', i: 0 });
+    run(w, 0.6);
+    expect(top.support).toBeNull();
+    expect(top.grounded).toBe(true);
+    expect(top.y).toBeCloseTo(bottom.y, 3);
   });
 
   it('flips a lever by walking over it and raises a lift on its channel', () => {
     const lifts = [{ ch: 1, x: 14, w: 3, yDown: ROWS - 3, yUp: ROWS - 8 }];
     const rows = Array.from({ length: ROWS }, (_, y) => (y === 0 || y >= ROWS - 2 ? FLOOR : EMPTY));
     rows[ROWS - 3] = row({ 3: 'S', 4: 'S', 8: 'j' });
-    const w = new World(parseLevel({ id: 't', par: 60, rows, lifts }, 0), two);
+    const w = new World(parseLevel({ par: 60, rows, lifts }, 0), two);
     run(w, 0.3);
     w.setInput(0, 1, false);
     run(w, 1);
@@ -257,7 +253,7 @@ describe('platformer world', () => {
   it('finishes when every character stands at its own door', () => {
     const rows = Array.from({ length: ROWS }, (_, y) => (y === 0 || y >= ROWS - 2 ? FLOOR : EMPTY));
     rows[ROWS - 3] = row({ 3: 'S', 4: 'S', 10: 'F', 12: 'E' });
-    const w = new World(parseLevel({ id: 't', par: 60, rows }, 0), two);
+    const w = new World(parseLevel({ par: 60, rows }, 0), two);
     w.setInput(0, 1, false);
     w.setInput(1, 1, false);
     let cleared = false;
@@ -272,5 +268,93 @@ describe('platformer world', () => {
     }
     expect(cleared).toBe(true);
     expect(w.exitCount(0)).toEqual({ in: 1, total: 1 });
+  });
+});
+
+describe('feel and helpers (owner 2026-11-22)', () => {
+  it('runs at full speed past a quarter of the stick and stands below it', () => {
+    const w = new World(map([row({ 3: 'S', 4: 'S' })]), two);
+    run(w, 0.4);
+    const c = w.chars[0]!;
+    w.setInput(0, 0.2, false);
+    expect(c.inX).toBe(0);
+    w.setInput(0, 0.3, false);
+    expect(c.inX).toBe(1);
+    run(w, 0.5);
+    expect(c.vx).toBeCloseTo(TUNE.run, 3);
+  });
+
+  it('jumps again on every landing while the button is held', () => {
+    const w = new World(map([row({ 3: 'S', 4: 'S' })]), two);
+    run(w, 0.4);
+    const c = w.chars[0]!;
+    let jumps = 0;
+    w.setInput(0, 0, true);
+    for (let i = 0; i < 60 * 3; i++) {
+      w.update(1 / 60);
+      for (const e of w.drainEvents()) if (e.type === 'jump') jumps++;
+    }
+    expect(jumps).toBeGreaterThanOrEqual(3);
+    expect(c.stats.jumps).toBe(jumps);
+  });
+
+  it('passes up through a wooden plank and stands on it', () => {
+    const lv = map([row({ 3: '=', 4: '=', 5: '=', 6: '=' }), row({ 4: 'S', 8: 'S' })]);
+    const w = new World(lv, two);
+    run(w, 0.4);
+    const c = w.chars[0]!;
+    const floor = c.y;
+    w.setInput(0, 0, true);
+    w.update(1 / 60);
+    w.setInput(0, 0, false);
+    run(w, 1.2);
+    expect(c.grounded).toBe(true);
+    expect(floor - c.y).toBeCloseTo(2, 1);
+  });
+
+  it('bounces off a mushroom', () => {
+    const lv = map([row({ 3: 'S', 5: 'm', 9: 'S' })]);
+    const w = new World(lv, two);
+    run(w, 0.4);
+    w.setInput(0, 1, false);
+    let bounced = false;
+    for (let i = 0; i < 60; i++) {
+      w.update(1 / 60);
+      for (const e of w.drainEvents()) if (e.type === 'bounce') bounced = true;
+      if (bounced) w.setInput(0, 0, false);
+    }
+    expect(bounced).toBe(true);
+  });
+
+  it('lays a helper plank over a pool after three falls into it', () => {
+    const lv = map([row({ 3: 'S', 12: 'S' }), row({ 6: 'B', 7: 'B', 8: 'B' }).replace(/\./g, '#')]);
+    const w = new World(lv, two);
+    run(w, 0.4);
+    const red = w.chars[0]!;
+    let assists = 0;
+    for (let fall = 0; fall < 3; fall++) {
+      red.x = 7.1;
+      red.y = ROWS - 4;
+      red.vy = 0;
+      run(w, 1.5);
+      for (const e of w.drainEvents()) if (e.type === 'assist') assists++;
+    }
+    expect(red.stats.deaths).toBe(3);
+    expect(assists).toBe(1);
+    expect(w.assist.size).toBe(3);
+    red.x = 7.1;
+    red.y = ROWS - 5;
+    run(w, 1);
+    expect(red.dead).toBe(false);
+    expect(red.grounded).toBe(true);
+  });
+
+  it('lets a third colour through the gate it pairs with', () => {
+    const lv = map([row({ 3: 'S', 4: 'S', 5: 'S' })]);
+    const w = new World(lv, [...two, { owner: 3, sub: 0 }]);
+    expect(w.gateOpenFor(0, 2)).toBe(true);
+    expect(w.gateOpenFor(1, 2)).toBe(false);
+    expect(w.gateOpenFor(0, 0)).toBe(true);
+    expect(w.gateOpenFor(0, 1)).toBe(false);
   });
 });

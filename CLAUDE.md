@@ -1,6 +1,6 @@
 # CLAUDE.md — Hoorah
 
-Panduan wajib untuk Claude (dan siapa pun) yang bekerja di repo ini. Baca seluruh file ini dan `PROGRESS.md` di awal setiap sesi.
+Panduan wajib untuk Claude (dan siapa pun) yang bekerja di repo ini. Baca seluruh file ini, `PLAN.md` (serah terima: selesai, rencana, belum terealisasi, skema), dan `PROGRESS.md` di awal setiap sesi.
 
 # Token Efficiency Rules (Input & Output)
 - ZERO FLUFF: Skip all greetings, intros, apologies, and summaries. Output only code and critical technical points.
@@ -37,7 +37,7 @@ Panduan wajib untuk Claude (dan siapa pun) yang bekerja di repo ini. Baca seluru
 | Main sendiri | Semua game bisa dimainkan 1 orang (kecuali Kompak Gak?, Kampung Siluman, Penyusup). Lawan komputer otomatis hanya saat 1 orang, tampil seperti pemain biasa tanpa label BOT, tingkat menyesuaikan diri diam-diam. Detail di PRD 6.4 |
 | Room code | **6 angka** (keputusan pemilik 2026-11-14), ditampilkan "482 917", label "Kode". HP: keyboard angka. Server: maks 20 kode salah per menit per alamat. HP di Wi-Fi yang sama ditawari layar terdekat (`GET /api/nearby`, alamat publik sama). |
 | Bahasa aplikasi | Bahasa Indonesia saja (MVP) |
-| Desain | Tanpa violet, tanpa gaya "AI" (blob, gradien berlebihan), ringkas, avatar buah Nusantara. Sumber: `design/` |
+| Desain | Tanpa violet, tanpa gaya "AI" (blob, gradien berlebihan, **garis warna di tepi kartu**: dilarang pemilik 2026-11-22, tandai keadaan dengan cincin penuh, isi berwarna, chip, atau sorot avatar), ringkas, avatar buah Nusantara. Sumber: `design/` |
 | Hoorah Pass (uji coba) | **Sementara** (keputusan pemilik 2026-11-16): kode Pass bersama dibuat pemilik di `/admin/`, ada waktu berakhir, bisa dipakai di perangkat mana pun, tanpa akun/pembayaran. Ditinjau ulang setelah uji coba. Detail PRD 3.4.1 |
 | Database | SQLite bawaan Node (`node:sqlite`), satu file (`DB_FILE`, Docker `/data/hoorah.db`) untuk admin dan Pass. Room tetap di memori. Postgres baru dipertimbangkan jika server lebih dari satu proses atau ada pembayaran otomatis |
 
@@ -156,7 +156,7 @@ Perubahan yang hanya mengedit dokumen (PRD, CLAUDE.md) juga dicatat, cukup singk
 
 ### 8. Konten dan merek
 
-- Semua game, nama, aset, dan identitas visual harus orisinal. Jangan menyalin kode, aset, teks, atau branding produk lain (termasuk AirConsole) maupun game yang sudah ada.
+- Semua game, nama, aset, dan identitas visual harus orisinal. Jangan menyalin kode, aset, teks, atau branding produk lain (termasuk AirConsole) maupun game yang sudah ada. Menyebut nama game yang menginspirasi sebagai teks di tutorial ("Terinspirasi dari ...") boleh (keputusan pemilik 2026-11-22), tanpa logo atau aset game itu.
 - **Dilarang memakai em dash (—) di aplikasi**: teks pemain (layar utama dan HP), file string, nama lagu/game, maupun komentar kode. Ganti dengan koma, titik dua, titik, atau kalimat baru. Tanda pisah pendek (–) hanya untuk rentang angka, mis. "2–16 pemain".
 
 ## Perintah

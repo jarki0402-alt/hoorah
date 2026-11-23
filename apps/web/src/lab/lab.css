@@ -643,3 +643,50 @@
   margin: 0;
   padding-left: 18px;
 }
+
+/* Suara tab: one card per moment, the sounds as chips. */
+.lab-sounds {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.lab-sound {
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--surface, #1b1d22);
+  border: 1px solid var(--line, #2c2f36);
+}
+
+.lab-sound-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 10px;
+}
+
+.lab-sound-when {
+  color: var(--text-3, #9aa0aa);
+  font-size: 13px;
+}
+
+.lab-sound-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lab-sound-row .lab-chip {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.lab-sound-row .lab-chip small {
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.8;
+}

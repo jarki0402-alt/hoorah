@@ -8,9 +8,9 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Avatar } from '../../shared/ui';
 import { boardSvg, pawnSvg, VIEW, VIEW_PAD } from './board-art';
 import { SWATCH } from './colors';
-import { layoutPawns } from './geometry';
-import { BASE, type ColorId, HOME } from './logic';
-import { type Banner, type HudModel, type LudoStore, RING_LEN, RING_R, type TeamCard } from './store';
+import { geometryFor, layoutPawns } from './geometry';
+import { BASE, boardFor, type ColorId } from './logic';
+import { type Banner, type HudModel, type LudoStore, RING_LEN, RING_R, type SeatCard } from './store';
 import { STR } from './strings';
 
 export interface StageSize {
@@ -95,40 +95,45 @@ function Dice({ value, rolling, rollId }: { value: number | null; rolling: boole
 /* ------------------------------------------------------------------ board */
 
 function Board({ store, m, s }: { store: LudoStore; m: HudModel; s: number }) {
-  const art = useMemo(() => boardSvg(m.colors, m.pawnsPer), [m.colors.join(','), m.pawnsPer]);
-  const cell = s / VIEW;
+  const spec = boardFor(m.sides);
+  const geom = geometryFor(spec);
+  const art = useMemo(() => boardSvg(spec, m.colors, m.pawnsPer), [m.sides, m.colors.join(','), m.pawnsPer]);
+  const unit = s / VIEW;
+  const cell = unit * geom.cell;
+  store.unit = unit;
   store.cell = cell;
-  store.origin = VIEW_PAD * cell;
+  store.origin = VIEW_PAD * unit;
   const refs = store.pawns.value;
-  const placed = layoutPawns(refs, m.pawnsPer);
+  const placed = layoutPawns(geom, refs, m.pawnsPer);
   const legal = new Set(m.legal);
-  const turnTeam = m.turn?.team ?? -1;
+  const turnSeat = m.turn?.seat ?? -1;
   const w = cell * 0.84;
+  const glow = m.turn ? geom.base(m.turn.color) : null;
   return (
     <>
       <div class="ld-board-art" dangerouslySetInnerHTML={{ __html: art }} />
-      {m.turn && (
+      {m.turn && glow && (
         <div
-          class="ld-base-glow"
-          key={`${m.turn.team}`}
+          class={`ld-base-glow${glow.round ? ' is-round' : ''}`}
+          key={`${m.turn.seat}`}
           style={{
-            left: store.px(m.turn.color === 1 || m.turn.color === 2 ? 9 : 0),
-            top: store.px(m.turn.color === 2 || m.turn.color === 3 ? 9 : 0),
-            width: cell * 6,
-            height: cell * 6,
+            left: store.px(glow.x),
+            top: store.px(glow.y),
+            width: glow.w * unit,
+            height: glow.h * unit,
             ['--glow' as string]: SWATCH[m.turn.color].main,
           }}
         />
       )}
       <div class="ld-pawns">
         {placed.map((p) => {
-          const key = `${p.team}-${p.pawn}`;
+          const key = `${p.seat}-${p.pawn}`;
           const isLegal = legal.has(key);
           return (
             <div
               key={key}
-              class={`ld-pawn${isLegal ? ' is-legal' : ''}${p.team === turnTeam ? ' is-turn' : ''}${
-                p.progress >= HOME ? ' is-home' : ''
+              class={`ld-pawn${isLegal ? ' is-legal' : ''}${p.seat === turnSeat ? ' is-turn' : ''}${
+                p.progress >= spec.home ? ' is-home' : ''
               }`}
               style={{
                 width: w,
@@ -188,7 +193,7 @@ function TurnCard({ store, m }: { store: LudoStore; m: HudModel }) {
       {t ? (
         <div
           class="ld-who"
-          key={`${t.team}-${t.player.id}-${t.bonus}`}
+          key={`${t.seat}-${t.player.id}-${t.bonus}`}
           style={{ ['--tc' as string]: SWATCH[t.color].main }}
         >
           <Avatar fruit={t.player.fruit} ring={t.player.color} size={58} face={t.bonus ? 'wow' : 'effort'} />
@@ -274,61 +279,54 @@ function Legend() {
   );
 }
 
-function Pips({ t, per }: { t: TeamCard; per: number }) {
+function Pips({ t, per, home }: { t: SeatCard; per: number; home: number }) {
   const sorted = [...t.pawns].sort((a, b) => b - a);
   return (
     <div class="ld-pips" aria-hidden="true">
       {Array.from({ length: per }, (_, i) => {
         const p = sorted[i] ?? BASE;
-        const cls = p >= HOME ? 'is-home' : p === BASE ? 'is-base' : 'is-out';
+        const cls = p >= home ? 'is-home' : p === BASE ? 'is-base' : 'is-out';
         return <span key={i} class={`ld-pip-dot ${cls}`} />;
       })}
     </div>
   );
 }
 
-function TeamsPanel({ m }: { m: HudModel }) {
-  const many = m.teams.length > 3;
+/** Panel density by seat count: roomy up to 4, compact rows for 5 to 8. */
+function density(n: number, tall: boolean): '' | ' is-many' | ' is-crowd' {
+  if (n <= (tall ? 3 : 4)) return '';
+  return n <= (tall ? 4 : 6) ? ' is-many' : ' is-crowd';
+}
+
+function SeatsPanel({ m, tall }: { m: HudModel; tall: boolean }) {
+  const home = boardFor(m.sides).home;
+  const dense = density(m.seats.length, tall);
   return (
-    <div class={`ld-card ld-teams${many ? ' is-many' : ''}`}>
-      {m.teams.map((t) => {
+    <div class={`ld-card ld-seats${dense}`}>
+      {m.seats.map((t) => {
         const sw = SWATCH[t.color];
-        const pair = t.members.length > 1;
         return (
           <div
             key={t.index}
-            class={`ld-team${t.active ? ' is-active' : ''}${t.winner ? ' is-winner' : ''}`}
+            class={`ld-seat${t.active ? ' is-active' : ''}${t.winner ? ' is-winner' : ''}`}
             style={{ ['--tc' as string]: sw.main, ['--td' as string]: sw.dark }}
           >
-            <div class="ld-team-top">
-              <div class="ld-team-avatars">
-                {t.members.map((p) => (
-                  <Avatar
-                    key={p.id}
-                    fruit={p.fruit}
-                    ring={sw.main}
-                    size={pair ? 34 : 42}
-                    dim={!p.connected}
-                    face={t.winner ? 'wow' : 'happy'}
-                  />
-                ))}
-              </div>
-              <div class="ld-team-text">
-                <div class="ld-team-name">
-                  {pair ? STR.team(t.color) : (t.members[0]?.name ?? STR.unknownPlayer)}
-                </div>
-                <div class="ld-team-sub">
-                  {pair
-                    ? t.members.map((p) => p.name).join(' & ')
-                    : t.members[0]?.connected === false
-                      ? STR.offline
-                      : STR.color(t.color)}
-                </div>
+            <div class="ld-seat-top">
+              <Avatar
+                fruit={t.player.fruit}
+                ring={sw.main}
+                size={dense === ' is-crowd' ? 30 : dense ? 34 : 42}
+                dim={!t.player.connected}
+                face={t.winner ? 'wow' : 'happy'}
+              />
+              <div class="ld-seat-text">
+                <div class="ld-seat-name">{t.player.name}</div>
+                <div class="ld-seat-sub">{t.player.connected ? STR.color(t.color) : STR.offline}</div>
               </div>
             </div>
-            <div class="ld-team-bottom">
-              <Pips t={t} per={m.pawnsPer} />
-              <div class="ld-team-home">{STR.homeStat(t.home, m.pawnsPer)}</div>
+            <div class="ld-seat-bottom">
+              <Pips t={t} per={m.pawnsPer} home={home} />
+              <div class="ld-seat-home">{STR.homeStat(t.home, m.pawnsPer)}</div>
             </div>
           </div>
         );
@@ -349,7 +347,7 @@ function BannerView({ b }: { b: Banner }) {
             <li key={l}>{l}</li>
           ))}
         </ul>
-        {b.teams && <div class="ld-banner-note">{STR.teamsNote}</div>}
+        {b.note && <div class="ld-banner-note">{b.note}</div>}
         {b.first && <div class="ld-banner-first">{b.first}</div>}
       </div>
     );
@@ -396,8 +394,8 @@ export function LudoScreen({ store, size }: { store: LudoStore; size: Signal<Sta
         {board}
         <div class="ld-side" style={{ top: r.top, left: sz.w - PANEL_W - EDGE * 1.5 }}>
           <TurnCard store={store} m={m} />
-          <TeamsPanel m={m} />
-          <Legend />
+          <SeatsPanel m={m} tall />
+          {m.seats.length <= 4 && <Legend />}
         </div>
         {banner}
       </div>
@@ -415,7 +413,7 @@ export function LudoScreen({ store, size }: { store: LudoStore; size: Signal<Sta
         class="ld-side ld-right"
         style={{ ...side, left: Math.min(sz.w - PANEL_W - EDGE, r.left + r.s + EDGE * 1.5) }}
       >
-        <TeamsPanel m={m} />
+        <SeatsPanel m={m} tall={false} />
       </div>
       {banner}
     </div>

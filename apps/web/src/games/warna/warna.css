@@ -212,7 +212,7 @@
   padding: 6px 14px 6px 8px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.05);
-  box-shadow: inset 4px 0 0 var(--c);
+  box-shadow: inset 0 0 0 2px var(--c);
 }
 
 .wa-legend-name {
@@ -271,69 +271,10 @@
   font-weight: 600;
 }
 
-.wa-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 280px);
-  gap: 18px;
-}
-
-.wa-card {
-  border-radius: 20px;
-  overflow: hidden;
-  background: #0b1f26;
-  box-shadow:
-    inset 0 0 0 3px #1e4a50,
-    0 6px 0 rgba(0, 0, 0, 0.3);
-  transition: transform 0.18s ease;
-}
-
-.wa-card.on {
-  transform: translateY(-6px) scale(1.04);
-  box-shadow:
-    inset 0 0 0 4px #ffc928,
-    0 10px 0 rgba(0, 0, 0, 0.35);
-}
-
 .wa-card-img {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
-}
-
-.wa-card-text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px 10px;
-}
-
-.wa-card-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #1e4a50;
-  font-weight: 800;
-  font-size: 15px;
-  color: #fff;
-}
-
-.wa-card.on .wa-card-num {
-  background: #ffc928;
-  color: #111214;
-}
-
-.wa-card-name {
-  flex: 1;
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 800;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .wa-stars span {
@@ -476,4 +417,169 @@
     opacity: 0;
     transform: translate(-50%, -160%) scale(1);
   }
+}
+
+/* ---------------------------------------------------------------- worlds and journey (owner 2026-11-22) */
+.wa-worlds {
+  display: grid;
+  grid-template-columns: repeat(5, 200px);
+  gap: 16px;
+  margin: 18px 0 8px;
+}
+
+.wa-wcard {
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0b1f26;
+  box-shadow:
+    inset 0 0 0 3px #1e4a50,
+    0 6px 0 rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s ease;
+}
+
+.wa-wcard.on {
+  transform: translateY(-6px) scale(1.04);
+  box-shadow:
+    inset 0 0 0 4px #ffc928,
+    0 10px 0 rgba(0, 0, 0, 0.35);
+}
+
+.wa-wcard.soon {
+  filter: saturate(0.35) brightness(0.7);
+}
+
+.wa-wcard-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px 12px;
+}
+
+.wa-wcard-name {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+
+.wa-wcard-sub {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b9d6d2;
+}
+
+.wa-wcard-stars {
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffc928;
+}
+
+.wa-journey {
+  width: min(1000px, 94%);
+  height: auto;
+  margin: 12px 0 4px;
+}
+
+.wa-journey-road {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 30;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wa-journey-dash {
+  fill: none;
+  stroke: rgba(255, 226, 122, 0.55);
+  stroke-width: 4;
+  stroke-dasharray: 2 14;
+  stroke-linecap: round;
+}
+
+.wa-node-disc {
+  fill: #1e4a50;
+  stroke: #0b1f26;
+  stroke-width: 4;
+}
+
+.wa-node.done .wa-node-disc {
+  fill: #2c9a57;
+}
+
+.wa-node.open:not(.done) .wa-node-disc {
+  fill: #ffc928;
+}
+
+.wa-node.locked:not(.done) .wa-node-disc {
+  fill: #2a3236;
+}
+
+.wa-node-ring {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 5;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wa-node-ring {
+    animation: wa-node-pulse 1.2s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+}
+
+@keyframes wa-node-pulse {
+  50% {
+    transform: scale(1.15);
+    opacity: 0.5;
+  }
+}
+
+.wa-node-num {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  text-anchor: middle;
+  fill: #ffffff;
+}
+
+.wa-node.open:not(.done) .wa-node-num {
+  fill: #111214;
+}
+
+.wa-node-lock {
+  fill: none;
+  stroke: #7b8a8f;
+  stroke-width: 2.5;
+}
+
+.wa-node-stars {
+  font-size: 16px;
+  text-anchor: middle;
+  fill: #ffc928;
+  letter-spacing: 1px;
+}
+
+.wa-node-stars .off {
+  fill: #3d4047;
+}
+
+.wa-goal {
+  margin: 4px auto 10px;
+  display: inline-block;
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: #ffc928;
+  color: #111214;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.wa-tipbar.is-hint {
+  background: #ffc928;
+  color: #111214;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
+  font-weight: 800;
 }

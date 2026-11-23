@@ -85,7 +85,7 @@ export function PadView({ v }: { v: V<'pad'> }) {
       style={{ '--pad-color': v.color }}
     >
       <div class="pad-status">
-        <Me size={38} />
+        <Me size={38} fruit={v.fruit} />
         <div class="pad-heading">
           {v.eyebrow && <div class="pad-eyebrow">{v.eyebrow}</div>}
           <div class="pad-title">{v.title}</div>
@@ -459,7 +459,12 @@ function StickPad({ v, locked }: { v: V<'pad'>; locked: boolean }) {
     const tune = CONTROL_TUNING.stick;
     const t = trackStick(center.current.x, center.current.y, e.clientX - r.left, e.clientY - r.top, tune);
     center.current = { x: t.cx, y: t.cy };
-    setUi({ cx: t.cx, cy: t.cy, kx: t.kx, ky: t.ky });
+    // The base is only drawn inside the zone (a thumb landing at the very edge would cut the ring
+    // off); the output still comes from where the thumb really landed, so nothing reads as a push.
+    const half = ringSize(tune.radius) / 2 + 4;
+    const fit = (c: number, size: number) =>
+      size > half * 2 ? Math.min(Math.max(c, half), size - half) : size / 2;
+    setUi({ cx: fit(t.cx, r.width), cy: fit(t.cy, r.height), kx: t.kx, ky: t.ky });
     const out = stickOutput(t.dx, t.dy, tune);
     if (out.x === 0 && out.y === 0) {
       setStick(0, 0);
@@ -475,10 +480,12 @@ function StickPad({ v, locked }: { v: V<'pad'>; locked: boolean }) {
     }
   };
 
-  // Up to three buttons; a game with only `actionLabel` gets it as the main (held) button.
+  // Up to three buttons (five with a jump zone); a game with only `actionLabel` gets it as the
+  // main (held) button.
+  const zoneMode = Boolean(v.jumpZone) && Boolean(v.buttons?.some((b) => b.press === 'hold'));
   const buttons: PadButton[] =
     v.buttons && v.buttons.length > 0
-      ? v.buttons.slice(0, 3)
+      ? v.buttons.slice(0, zoneMode ? 5 : 3)
       : v.actionLabel
         ? [{ id: 'action', label: v.actionLabel, icon: 'zap', tone: 'yellow', press: 'hold', big: true }]
         : [];
@@ -487,7 +494,7 @@ function StickPad({ v, locked }: { v: V<'pad'>; locked: boolean }) {
 
   return (
     <div
-      class={`pad-stick-wrap ${buttons.length ? 'has-buttons' : 'no-buttons'}`}
+      class={`pad-stick-wrap ${zoneMode ? 'has-jump-zone' : buttons.length ? `has-buttons bn-${buttons.length}` : 'no-buttons'}`}
       style={{ '--ring': `${ring}px` }}
     >
       <div
@@ -539,8 +546,144 @@ function StickPad({ v, locked }: { v: V<'pad'>; locked: boolean }) {
         </div>
         {resting && <div class="pad-stick-help">{STR.stickAnywhere}</div>}
       </div>
-      {buttons.length > 0 && <PadButtons buttons={buttons} locked={locked} />}
+      {zoneMode && <JumpZone buttons={buttons} locked={locked} />}
+      {!zoneMode && buttons.length > 0 && <PadButtons buttons={buttons} locked={locked} />}
     </div>
+  );
+}
+
+/** How long a touch ripple stays on the jump zone (ms). */
+const RIPPLE_MS = 450;
+
+interface Ripple {
+  id: number;
+  x: number;
+  y: number;
+}
+
+/**
+ * Jump zone (`jumpZone`, owner 2026-11-22, after Roblox): the whole right half holds the main
+ * button, so the thumb never has to aim. The button is still drawn large in the corner as a
+ * guide, a ripple shows where each touch landed, and any number of fingers may share the zone
+ * (the hold ends when the last one lifts). The other buttons are small pills in the top right.
+ */
+function JumpZone({ buttons, locked }: { buttons: PadButton[]; locked: boolean }) {
+  const main = buttons.find((b) => b.big && b.press === 'hold') ?? buttons.find((b) => b.press === 'hold');
+  const minis = buttons.filter((b) => b !== main);
+  const zone = useRef<HTMLDivElement>(null);
+  const fingers = useRef(new Set<number>());
+  const seq = useRef(0);
+  const timers = useRef(new Set<number>());
+  const [down, setDown] = useState(false);
+  const [ripples, setRipples] = useState<Ripple[]>([]);
+
+  const releaseAll = () => {
+    fingers.current.clear();
+    setDown(false);
+    setHeld(0);
+  };
+  useEffect(() => {
+    if (locked) releaseAll();
+  }, [locked]);
+  useEffect(
+    () => () => {
+      for (const t of timers.current) window.clearTimeout(t);
+      setHeld(0);
+    },
+    [],
+  );
+
+  const lift = (id: number) => {
+    if (!fingers.current.delete(id)) return;
+    if (fingers.current.size === 0) {
+      setDown(false);
+      setHeld(0);
+    }
+  };
+
+  if (!main) return null;
+  return (
+    <>
+      <div
+        ref={zone}
+        class={`pad-jump-zone ${down ? 'pressed' : ''}`}
+        role="application"
+        aria-label={main.label}
+        onPointerDown={(e) => {
+          if (locked) return;
+          capture(e);
+          fingers.current.add(e.pointerId);
+          if (fingers.current.size === 1) {
+            haptic(12);
+            setHeld(PAD_ACTION);
+            setDown(true);
+          }
+          const r = zone.current?.getBoundingClientRect();
+          if (!r) return;
+          const id = ++seq.current;
+          setRipples((list) => [...list.slice(-3), { id, x: e.clientX - r.left, y: e.clientY - r.top }]);
+          const t = window.setTimeout(() => {
+            timers.current.delete(t);
+            setRipples((list) => list.filter((x) => x.id !== id));
+          }, RIPPLE_MS);
+          timers.current.add(t);
+        }}
+        onPointerUp={(e) => lift(e.pointerId)}
+        onPointerCancel={(e) => lift(e.pointerId)}
+        onLostPointerCapture={(e) => lift(e.pointerId)}
+      >
+        <span class={`pad-jump-btn tone-${main.tone}`} aria-hidden="true">
+          <Icon name={BUTTON_ICON[main.icon]} size={34} stroke={2.4} />
+          <span class="pad-jump-label">{main.label}</span>
+        </span>
+        {ripples.map((r) => (
+          <span key={r.id} class="pad-jump-ripple" style={{ left: `${r.x}px`, top: `${r.y}px` }} />
+        ))}
+        <span class="pad-jump-help" aria-hidden="true">
+          {STR.jumpZoneHelp}
+        </span>
+      </div>
+      {minis.length > 0 && (
+        <div class="pad-minis">
+          {minis.map((b) => (
+            <MiniButton key={b.id} b={b} locked={locked} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** A small tap pill of the jump-zone layout (TUKAR, Petunjuk, Lewati, Ulang). */
+function MiniButton({ b, locked }: { b: PadButton; locked: boolean }) {
+  const [lit, setLit] = useState(false);
+  const restUntil = useRef(0);
+  const timer = useRef(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return (
+    <button
+      type="button"
+      class={`pad-mini tone-${b.tone} ${lit ? 'pressed' : ''} ${b.pulse ? 'is-pulse' : ''}`}
+      aria-label={b.sub ? `${b.label}, ${b.sub}` : b.label}
+      disabled={locked}
+      onPointerDown={() => {
+        if (locked) return;
+        const now = performance.now();
+        if (now < restUntil.current) {
+          haptic(4);
+          return;
+        }
+        restUntil.current = now + Math.min(MAX_COOLDOWN_MS, Math.max(0, b.cooldownMs ?? 0));
+        haptic(10);
+        action(b.id);
+        setLit(true);
+        window.clearTimeout(timer.current);
+        timer.current = window.setTimeout(() => setLit(false), 140);
+      }}
+    >
+      <Icon name={BUTTON_ICON[b.icon]} size={18} stroke={2.4} />
+      <span class="pad-mini-label">{b.label}</span>
+    </button>
   );
 }
 
@@ -557,6 +700,8 @@ const BUTTON_ICON: Record<PadButtonIcon, IconName> = {
   light: 'target',
   dark: 'close',
   door: 'exit',
+  hint: 'brain',
+  skip: 'right',
 };
 
 /** Longest rest a game may ask for on a tap button (ms). */

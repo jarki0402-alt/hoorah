@@ -25,10 +25,10 @@ describe('settings', () => {
     });
   });
 
-  it('defaults to a fixed joystick base and a jump of about 0.75 s', () => {
-    expect(CONTROL_DEFAULTS.stick.follow).toBe(false);
+  it('defaults to a following joystick base and a jump of about 0.75 s', () => {
+    expect(CONTROL_DEFAULTS.stick.follow).toBe(true);
     expect(normalizeTuning({ stick: { follow: true } }).stick.follow).toBe(true);
-    expect(normalizeTuning({ stick: { follow: 'yes' } }).stick.follow).toBe(false);
+    expect(normalizeTuning({ stick: { follow: 'yes' } }).stick.follow).toBe(true);
     expect(CONTROL_DEFAULTS.rusun).toEqual({ periodMs: 3400, speedup: 0.015, minPeriodMs: 2400 });
   });
 
@@ -38,13 +38,20 @@ describe('settings', () => {
     expect(t.rusun.speedup).toBe(CONTROL_RANGES.rusun.speedup.max);
   });
 
-  it('drops a jump stored before the float was added, keeps the rest', () => {
-    const old = { stick: { radius: 60 }, runner: { jumpV: 7.6, gravity: 25 } };
-    const t = normalizeTuning(migrateStored(old));
-    expect(t.stick.radius).toBe(60);
-    expect(t.runner).toEqual({ ...CONTROL_DEFAULTS.runner });
-    const current = { version: 2, runner: { jumpV: 9 } };
-    expect(normalizeTuning(migrateStored(current)).runner.jumpV).toBe(9);
+  it('drops blocks whose meaning changed since they were stored, keeps the rest', () => {
+    const v1 = { stick: { radius: 60 }, runner: { jumpV: 7.6, gravity: 25 }, swipe: { distance: 30 } };
+    const t1 = normalizeTuning(migrateStored(v1));
+    expect(t1.stick).toEqual({ ...CONTROL_DEFAULTS.stick });
+    expect(t1.runner).toEqual({ ...CONTROL_DEFAULTS.runner });
+    expect(t1.swipe.distance).toBe(30);
+    const v2 = { version: 2, stick: { radius: 52, follow: true }, runner: { jumpV: 9 } };
+    const t2 = normalizeTuning(migrateStored(v2));
+    expect(t2.stick).toEqual({ ...CONTROL_DEFAULTS.stick });
+    expect(t2.runner.jumpV).toBe(9);
+    const v3 = { version: 3, stick: { radius: 84, follow: false }, runner: { jumpV: 9 } };
+    expect(normalizeTuning(migrateStored(v3)).stick).toEqual({ ...CONTROL_DEFAULTS.stick });
+    const current = { version: 4, stick: { radius: 100 } };
+    expect(normalizeTuning(migrateStored(current)).stick.radius).toBe(100);
   });
 
   it('keeps valid stored values, clamps wild ones and drops junk', () => {
@@ -73,9 +80,9 @@ describe('settings', () => {
 
   it('lists every value for the owner to send', () => {
     const text = tuningSummary(normalizeTuning(null));
-    expect(text).toContain('radius=52');
+    expect(text).toContain('radius=56');
     expect(text).toContain('laneTime=0.14');
-    expect(text).toContain('base=fixed');
+    expect(text).toContain('base=follow');
     expect(text).toContain('period=3400ms');
     expect(text.split('\n')).toHaveLength(5);
   });

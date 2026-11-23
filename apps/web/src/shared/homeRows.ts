@@ -24,8 +24,8 @@ export function isHomeSection(v: unknown): v is HomeSection {
   return typeof v === 'string' && (HOME_SECTIONS as readonly string[]).includes(v);
 }
 
-/** Longest row: a row should never feel like the whole catalog again. */
-export const ROW_MAX = 8;
+/** "Pas untuk kalian" holds one screenful (two rows of five on the home grid). */
+export const ROW_MAX = 10;
 /** A mood row with fewer games than this is left out (it would look empty on a big screen). */
 export const ROW_MIN = 3;
 
@@ -37,8 +37,8 @@ export interface HomeRow {
 const fits = (id: GameId, n: number): boolean => n >= GAMES[id].minPlayers && n <= GAMES[id].maxPlayers;
 
 /**
- * The rows under the posters. "Pas untuk kalian": playable now, the last played first. Each mood:
- * its playable games, the ones that fit this many players first, the newest wave next.
+ * The home shelves. "Pas untuk kalian": playable now, the last played first (one screenful). Each
+ * mood: all its playable games, the ones that fit this many players first, the newest wave next.
  */
 export function homeRows(players: number, recent: readonly string[] = []): HomeRow[] {
   const n = Math.max(1, players);
@@ -51,7 +51,7 @@ export function homeRows(players: number, recent: readonly string[] = []): HomeR
         Number(isNewGame(b)) - Number(isNewGame(a)) ||
         all.indexOf(a) - all.indexOf(b),
     );
-    if (ranked.length >= ROW_MIN) rows.push({ id: mood, games: ranked.slice(0, ROW_MAX) });
+    if (ranked.length >= ROW_MIN) rows.push({ id: mood, games: ranked });
   }
   return rows;
 }
@@ -66,6 +66,11 @@ export function gridGames(tab: GridTab, withSoon = true): GameId[] {
   return CATALOG.filter(
     (id) => (tab === 'all' || GAMES[id].category === tab) && (withSoon || GAMES[id].available),
   );
+}
+
+/** Every game grouped by category (the phone picker's "Semua" groups, same order). */
+export function catalogByCategory(withSoon = true): GameId[] {
+  return CATEGORIES.flatMap((c) => gridGames(c.id, withSoon));
 }
 
 /** The phone picker's list for a section: the row's games, or the whole catalog for `all`. */

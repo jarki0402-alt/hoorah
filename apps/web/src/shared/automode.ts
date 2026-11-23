@@ -22,8 +22,8 @@ const RULES: Record<GameId, Rule> = {
   // Dishes (1–3). Everyone cooks at once, so player count does not change the length; three dishes
   // plus the final showcase.
   masak: () => 3,
-  // Board size (50 or 100 squares). 50 keeps the race to the top short even with 6 players.
-  ular: () => 50,
+  // Board size (50 or 100 squares): the familiar 1–100 board (owner 2026-11-22); the turn cap keeps a game near 10 minutes.
+  ular: () => 100,
   // Babak. One babak: the fullest store wins.
   congklak: () => 1,
   // Rounds (45 s each). Three, so a bad first round can still be won back.

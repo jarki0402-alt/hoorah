@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { autoHideCursor } from '../../shared/cursor';
 import { GAMES } from '../../shared/games';
 import { KeyArt } from '../../shared/keyart';
 import { Avatar, Icon, LogoMark } from '../../shared/ui';
-import { InvitePanel } from '../components';
+import { FocusButton, InvitePanel } from '../components';
 import { setFocusMap } from '../nav';
 import {
   type ActiveGame,
@@ -11,8 +12,10 @@ import {
   connected,
   detachGame,
   inviting,
+  openTutorial,
   players,
   togglePause,
+  tutorial,
 } from '../store';
 
 function Loading({ g }: { g: ActiveGame }) {
@@ -82,17 +85,20 @@ function Loading({ g }: { g: ActiveGame }) {
  * Host runs the pause menu from the phone; a remote or keyboard can still resume with OK/Back.
  */
 function PauseScreen({ g }: { g: ActiveGame }) {
+  const reading = tutorial.value !== null;
   useEffect(() => {
+    // "Cara main" open on top: it owns the remote until it closes.
+    if (reading) return;
     return setFocusMap(
       {
-        rows: [['resume']],
-        onOk: () => togglePause(false),
+        rows: [['resume', 'howto']],
+        onOk: (id) => (id === 'howto' ? openTutorial(g.id) : togglePause(false)),
         onBack: () => togglePause(false),
         onMenu: () => togglePause(false),
       },
       'resume',
     );
-  }, []);
+  }, [reading]);
   const host = players.value.find((p) => p.isHost);
   return (
     <div class="overlay pause-screen">
@@ -100,6 +106,16 @@ function PauseScreen({ g }: { g: ActiveGame }) {
         <LogoMark size={96} />
         <h1 class="display pause-title">Dijeda</h1>
         <div class="pause-game">{GAMES[g.id].title}</div>
+        <div class="pause-actions">
+          <FocusButton id="resume" class="btn primary">
+            <Icon name="play" size={16} color="#111214" />
+            Lanjutkan
+          </FocusButton>
+          <FocusButton id="howto" class="btn">
+            <Icon name="tap" size={16} />
+            Cara main
+          </FocusButton>
+        </div>
         <div class="pause-hint">
           {host ? (
             <>
@@ -122,24 +138,28 @@ export function GamePage() {
   const g = activeGame.value;
   const frame = useRef<HTMLIFrameElement>(null);
 
+  // A first-time game shows its "Cara main" before the iframe even loads.
+  const intro = tutorial.value?.mode === 'intro' && tutorial.value.id === g?.id;
+
   // Attach before the iframe loads so its "hello" is answered.
   useEffect(() => {
-    if (!g || !frame.current) return;
+    if (!g || intro || !frame.current) return;
     const el = frame.current;
     attachGame(el, g);
     return () => detachGame(el);
-  }, [g?.run]);
+  }, [g?.run, intro]);
 
   // While playing, the only TV control is the menu (pause).
   useEffect(() => {
-    if (!g || g.paused) return;
+    if (!g || g.paused || intro) return;
     return setFocusMap(
       { rows: [['game']], onOk: () => {}, onBack: () => togglePause(true), onMenu: () => togglePause(true) },
       'game',
     );
-  }, [g?.run, g?.paused]);
+  }, [g?.run, g?.paused, intro]);
 
   if (!g) return null;
+  if (intro) return <div class="page" style={{ animation: 'none' }} />;
   return (
     <div class="page" style={{ animation: 'none' }}>
       <iframe
@@ -149,6 +169,10 @@ export function GamePage() {
         title={GAMES[g.id].title}
         src={`/games/${g.id}/?run=${g.run}`}
         allow="autoplay; fullscreen"
+        onLoad={(e) => {
+          const doc = e.currentTarget.contentDocument;
+          if (doc) autoHideCursor(doc);
+        }}
       />
       {!g.ready && <Loading g={g} />}
       {g.paused && (inviting.value ? <InvitePanel inGame /> : <PauseScreen g={g} />)}

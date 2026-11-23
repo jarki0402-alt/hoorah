@@ -12,6 +12,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Icon, type IconName } from '../shared/ui';
 import { formatUntil } from '../shared/when';
 import { Me } from './common';
+import { HostSwapSheet } from './hostoffer';
 import { PassSheet } from './pass';
 import {
   code,
@@ -189,6 +190,7 @@ function InviteCard({ onDone, onScreen }: { onDone?: () => void; onScreen: boole
 export function HostMenu({ onClose }: { onClose: () => void }) {
   const pg = platform.value;
   const [ask, setAsk] = useState<'restart' | 'quit' | null>(null);
+  const [swap, setSwap] = useState(false);
   const resume = () => {
     host('invite-off');
     host('resume');
@@ -236,9 +238,11 @@ export function HostMenu({ onClose }: { onClose: () => void }) {
             onChange={(on) => host(on ? 'sound-on' : 'sound-off')}
           />
           <Toggle label="Getar" sub="di HP ini" on={vibrationOn.value} onChange={setVibration} />
+          <Tile icon="crown" label={STR.hostSwap} onClick={() => setSwap(true)} />
         </div>
       </div>
 
+      {swap && <HostSwapSheet onClose={() => setSwap(false)} />}
       {ask === 'restart' && (
         <Confirm
           title="Ulang dari awal?"

@@ -86,10 +86,17 @@ export const STR = {
     telur: 'TELUR',
     nasi: 'NASI',
   } as Record<string, string>,
+  stoveLabel: 'KOMPOR',
+  wokLabel: 'WAJAN',
+  fryerLabel: 'PENGGORENG',
+  boardLabel: 'TALENAN',
+  sinkLabel: 'CUCI PIRING',
+  rackLabel: 'PIRING',
   trashLabel: 'SAMPAH',
-  passLabel: 'LOKET',
+  passLabel: 'LOKET ANTAR',
   passSlot: 'TARUH PESANAN',
   sodaLabel: 'SODA',
+  drinksLabel: 'MINUMAN',
   cupsLabel: 'GELAS',
 
   /* setup (main screen) */

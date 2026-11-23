@@ -13,7 +13,7 @@ export type MusicIntensity = 0 | 1 | 2 | 3;
 
 /**
  * Sound effects the shell synthesizes (Web Audio, no files). Unknown names play nothing.
- * Announcement sounds (`weker`, `gong`, `rooster`, `bell`, `flute`, `round`, `stinger-win`,
+ * Announcement sounds (`weker`, `gong`, `rooster`, `bell`, `flute`, Kampung Siluman's night set, `round`, `stinger-win`,
  * `stinger-fall`) briefly duck the music so they read clearly from the sofa.
  */
 export type SfxName =
@@ -48,6 +48,13 @@ export type SfxName =
   | 'growl'
   | 'bell'
   | 'flute'
+  | 'night'
+  | 'genta'
+  | 'kentongan'
+  | 'heart'
+  | 'birds'
+  | 'win-village'
+  | 'win-siluman'
   | 'round'
   | 'stinger-win'
   | 'stinger-fall'
@@ -103,6 +110,13 @@ const SFX_NAMES: ReadonlySet<string> = new Set<SfxName>([
   'growl',
   'bell',
   'flute',
+  'night',
+  'genta',
+  'kentongan',
+  'heart',
+  'birds',
+  'win-village',
+  'win-siluman',
   'round',
   'stinger-win',
   'stinger-fall',

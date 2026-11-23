@@ -1,14 +1,17 @@
 /**
- * Canvas-drawn textures for Petualangan Warna: the glowing cave backdrop (per stage size), the
- * static stage layer (rock, exit arches, rails), and small sprites (fruit faces, colour badges,
- * gems, boxes, glow). Everything is drawn at RENDER_SCALE so it stays crisp on the 1.5x canvas.
+ * Canvas-drawn textures for Petualangan Warna: the backdrop of each world (sky, glows and two
+ * silhouette bands that the scene drifts apart for depth), the static stage layer (rock or soil
+ * with a lip of moss or grass, planks, mushroom stems, exit arches, rails), and small sprites
+ * (fruit faces, colour badges, gems, boxes, glow, leaves, light shafts). Everything is drawn at
+ * RENDER_SCALE so it stays crisp on the 1.5x canvas.
  */
 import { FRUITS, type Fruit } from '@hoorah/protocol';
 import type * as Phaser from 'phaser';
 import { type Face, fruitMarkup } from '../../shared/art/fruits';
 import { seeded, svgDoc, svgUrl } from '../../shared/art/svg';
 import { loadImage } from '../common/stage';
-import { Cell, COLS, cellAt, foldSlot, type Level, ROWS, type Slot } from './levels';
+import { type BiomeId, Cell, COLS, cellAt, foldSlot, type Level, ROWS, type Slot } from './levels';
+import { PALETTE } from './palette';
 
 export const RENDER_SCALE = 1.5;
 /** Stage px per tile. */
@@ -23,14 +26,6 @@ export const SLOT_LIGHT: Record<Slot, string> = { 0: '#FF9A8E', 1: '#9CC2FF', 2:
 export const CHANNEL_COLOR: Record<number, number> = { 1: 0xffe27a, 2: 0x9ff3e6, 3: 0xffc2a8 };
 export const CHANNEL_CSS: Record<number, string> = { 1: '#FFE27A', 2: '#9FF3E6', 3: '#FFC2A8' };
 
-const ROCK = '#14262B';
-const ROCK_DEEP = '#0F2A30';
-const ROCK_EDGE = '#2A4A52';
-const MOSS = '#3FA34D';
-const MOSS_HI = '#7BD36A';
-const CRYSTAL = '#4FE3C8';
-const CRYSTAL_HI = '#9FF3E6';
-
 export const faceKey = (fruit: Fruit, face: Face) => `wf:${fruit}:${face}`;
 export const badgeKey = (slot: Slot) => `wb:${slot}`;
 export const gemKey = (slot: Slot) => `wg:${slot}`;
@@ -39,6 +34,8 @@ export const SPARK = 'w-spark';
 export const BOX = 'w-box';
 export const BOX_HEAVY = 'w-box2';
 export const ARROW = 'w-arrow';
+export const LEAF = 'w-leaf';
+export const SHAFT = 'w-shaft';
 
 const FACE_PX = 96;
 
@@ -240,6 +237,34 @@ export function makeSprites(
     c.stroke();
     arrow.refresh();
   }
+  const lp = Math.round(16 * S);
+  const leaf = canvas(textures, LEAF, lp, lp);
+  {
+    const c = leaf.context;
+    c.fillStyle = '#FFFFFF';
+    c.beginPath();
+    c.moveTo(lp * 0.1, lp * 0.9);
+    c.quadraticCurveTo(lp * 0.05, lp * 0.1, lp * 0.9, lp * 0.1);
+    c.quadraticCurveTo(lp * 0.95, lp * 0.9, lp * 0.1, lp * 0.9);
+    c.fill();
+    leaf.refresh();
+  }
+  const shaft = canvas(textures, SHAFT, 64, 256);
+  {
+    const c = shaft.context;
+    const g = c.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.moveTo(18, 0);
+    c.lineTo(46, 0);
+    c.lineTo(64, 256);
+    c.lineTo(0, 256);
+    c.closePath();
+    c.fill();
+    shaft.refresh();
+  }
 }
 
 function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -252,40 +277,89 @@ function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number,
   c.closePath();
 }
 
-/** Cave behind the stage, filling the whole stage (wider or taller screens see more cave). */
+/** Sky of a world behind the stage, filling the whole stage (wider or taller screens see more). */
 export function drawBackdrop(
   textures: Phaser.Textures.TextureManager,
   key: string,
   w: number,
   h: number,
+  biome: BiomeId,
 ): void {
   const S = RENDER_SCALE;
+  const p = PALETTE[biome];
   const tex = canvas(textures, key, w * S, h * S);
   const c = tex.context;
   c.save();
   c.scale(S, S);
   const sky = c.createLinearGradient(0, 0, 0, h);
-  sky.addColorStop(0, '#0A2731');
-  sky.addColorStop(0.55, '#0B1F26');
-  sky.addColorStop(1, '#0E3440');
+  sky.addColorStop(0, p.sky[0]);
+  sky.addColorStop(0.55, p.sky[1]);
+  sky.addColorStop(1, p.sky[2]);
   c.fillStyle = sky;
   c.fillRect(0, 0, w, h);
   const rnd = seeded(27);
-  // Far glows behind the rock.
   for (let i = 0; i < 9; i++) {
     const x = rnd() * w;
     const y = rnd() * h;
     const rr = 120 + rnd() * 160;
     const g = c.createRadialGradient(x, y, 0, x, y, rr);
-    g.addColorStop(0, rnd() < 0.5 ? 'rgba(47,213,197,0.16)' : 'rgba(255,226,122,0.10)');
+    g.addColorStop(0, p.glow);
     g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g;
     c.fillRect(x - rr, y - rr, rr * 2, rr * 2);
   }
-  // Two layers of hanging and standing rock.
-  const layer = (color: string, depth: number, count: number) => {
-    c.fillStyle = color;
+  c.restore();
+  tex.refresh();
+}
+
+/**
+ * One silhouette band for the depth layers: trees for the forest, hanging and standing rock for
+ * the cave. `w` is wider than the stage so the scene can drift it sideways without showing an edge.
+ */
+export function drawBand(
+  textures: Phaser.Textures.TextureManager,
+  key: string,
+  w: number,
+  h: number,
+  biome: BiomeId,
+  near: boolean,
+): void {
+  const S = RENDER_SCALE;
+  const p = PALETTE[biome];
+  const tex = canvas(textures, key, w * S, h * S);
+  const c = tex.context;
+  c.save();
+  c.scale(S, S);
+  const rnd = seeded(near ? 71 : 43);
+  c.fillStyle = near ? p.near : p.far;
+  if (biome === 'hutan') {
+    const base = h * (near ? 0.92 : 0.8);
+    const count = near ? 9 : 14;
     for (let i = 0; i < count; i++) {
+      const x = (i + rnd() * 0.6) * (w / count);
+      const r = (near ? 70 : 46) + rnd() * 40;
+      const trunk = near ? 18 : 11;
+      c.fillRect(x - trunk / 2, base - r * 2.2, trunk, h);
+      c.beginPath();
+      c.arc(x, base - r * 2.4, r, 0, Math.PI * 2);
+      c.arc(x - r * 0.7, base - r * 1.9, r * 0.75, 0, Math.PI * 2);
+      c.arc(x + r * 0.7, base - r * 2.0, r * 0.8, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillRect(0, base, w, h - base);
+    // Hanging vines at the top of the near band.
+    if (near) {
+      for (let i = 0; i < 18; i++) {
+        const x = rnd() * w;
+        c.fillRect(x, 0, 3, 40 + rnd() * 110);
+        c.beginPath();
+        c.arc(x + 1.5, 0, 26 + rnd() * 20, 0, Math.PI);
+        c.fill();
+      }
+    }
+  } else {
+    const depth = h * (near ? 0.2 : 0.32);
+    for (let i = 0; i < (near ? 16 : 22); i++) {
       const x = rnd() * w;
       const bw = 30 + rnd() * 70;
       const bh = depth * (0.4 + rnd() * 0.8);
@@ -295,28 +369,13 @@ export function drawBackdrop(
       c.lineTo(x + bw * 0.08, bh);
       c.closePath();
       c.fill();
-      const by = h;
       c.beginPath();
-      c.moveTo(x - bw / 2 + 20, by);
-      c.lineTo(x + bw / 2 + 20, by);
-      c.lineTo(x + 20 - bw * 0.1, by - bh * 0.7);
+      c.moveTo(x - bw / 2 + 20, h);
+      c.lineTo(x + bw / 2 + 20, h);
+      c.lineTo(x + 20 - bw * 0.1, h - bh * 0.7);
       c.closePath();
       c.fill();
     }
-  };
-  layer('#0E3440', h * 0.32, 22);
-  layer('#163A40', h * 0.2, 16);
-  // Light shafts.
-  c.fillStyle = 'rgba(232,255,249,0.035)';
-  for (let i = 0; i < 4; i++) {
-    const x = rnd() * w;
-    c.beginPath();
-    c.moveTo(x, 0);
-    c.lineTo(x + 60, 0);
-    c.lineTo(x + 220, h);
-    c.lineTo(x + 100, h);
-    c.closePath();
-    c.fill();
   }
   c.restore();
   tex.refresh();
@@ -344,6 +403,11 @@ export function drawStage(
   const c = tex.context;
   c.save();
   c.scale(S, S);
+  const pal = PALETTE[lv.biome];
+  const ROCK = pal.rock;
+  const ROCK_DEEP = pal.rockDeep;
+  const ROCK_EDGE = pal.rockEdge;
+  const forest = lv.biome === 'hutan';
   const rnd = seeded(101 + lv.index * 7);
   // Lift rails first (behind everything).
   for (const l of lv.lifts) {
@@ -373,17 +437,28 @@ export function drawStage(
       c.fillStyle = ROCK_DEEP;
       for (let k = 0; k < 3; k++) c.fillRect(px + rnd() * 34, py + rnd() * 34, 4 + rnd() * 5, 3 + rnd() * 3);
       if (openL) {
-        c.fillStyle = '#1B3137';
+        c.fillStyle = ROCK_EDGE;
+        c.globalAlpha = 0.5;
         c.fillRect(px, py, 4, TILE);
+        c.globalAlpha = 1;
       }
       if (openR) {
-        c.fillStyle = '#0D2025';
+        c.fillStyle = ROCK_DEEP;
         c.fillRect(px + TILE - 4, py, 4, TILE);
       }
       if (openDown) {
-        c.fillStyle = '#0B1B20';
+        c.fillStyle = 'rgba(0,0,0,0.3)';
         c.fillRect(px, py + TILE - 5, TILE, 5);
-        if (rnd() < 0.22) {
+        if (forest && rnd() < 0.3) {
+          // Roots hanging under the soil.
+          c.strokeStyle = ROCK_EDGE;
+          c.lineWidth = 2.5;
+          c.beginPath();
+          const rx = px + 8 + rnd() * 24;
+          c.moveTo(rx, py + TILE);
+          c.quadraticCurveTo(rx + 6, py + TILE + 8, rx - 2, py + TILE + 14 + rnd() * 8);
+          c.stroke();
+        } else if (!forest && rnd() < 0.22) {
           // Stalactite with a glowing drip.
           const sx = px + 8 + rnd() * 24;
           c.fillStyle = ROCK;
@@ -398,11 +473,39 @@ export function drawStage(
       if (openUp) {
         c.fillStyle = ROCK_EDGE;
         c.fillRect(px, py, TILE, 7);
-        c.fillStyle = MOSS;
-        c.fillRect(px, py, TILE, 3);
-        c.fillStyle = MOSS_HI;
+        c.fillStyle = pal.lip;
+        c.fillRect(px, py, TILE, forest ? 5 : 3);
+        c.fillStyle = pal.lipHi;
         for (let k = 0; k < 3; k++) c.fillRect(px + rnd() * 36, py - 1, 3 + rnd() * 4, 2);
-        if (rnd() < 0.12) {
+        if (forest) {
+          // Grass blades and now and then a small flower.
+          c.fillStyle = pal.lip;
+          for (let k = 0; k < 4; k++) {
+            const gx = px + rnd() * 36;
+            c.beginPath();
+            c.moveTo(gx, py);
+            c.lineTo(gx + 2, py - 5 - rnd() * 5);
+            c.lineTo(gx + 4, py);
+            c.closePath();
+            c.fill();
+          }
+          if (rnd() < 0.14) {
+            const fx = px + 6 + rnd() * 28;
+            c.fillStyle = '#2E7D32';
+            c.fillRect(fx - 1, py - 9, 2, 9);
+            c.fillStyle = rnd() < 0.5 ? pal.accent : pal.accentHi;
+            for (let k = 0; k < 5; k++) {
+              const a = (k / 5) * Math.PI * 2;
+              c.beginPath();
+              c.arc(fx + Math.cos(a) * 3, py - 11 + Math.sin(a) * 3, 2.4, 0, Math.PI * 2);
+              c.fill();
+            }
+            c.fillStyle = '#F28C28';
+            c.beginPath();
+            c.arc(fx, py - 11, 1.8, 0, Math.PI * 2);
+            c.fill();
+          }
+        } else if (rnd() < 0.12) {
           // Crystal cluster on the ground.
           const cx = px + 8 + rnd() * 24;
           const g = c.createRadialGradient(cx, py - 6, 0, cx, py - 6, 26);
@@ -411,9 +514,9 @@ export function drawStage(
           c.fillStyle = g;
           c.fillRect(cx - 26, py - 32, 52, 52);
           for (const [dx, hh, col] of [
-            [-5, 12, CRYSTAL],
-            [0, 18, CRYSTAL_HI],
-            [5, 10, CRYSTAL],
+            [-5, 12, pal.accent],
+            [0, 18, pal.accentHi],
+            [5, 10, pal.accent],
           ] as const) {
             c.fillStyle = col;
             c.beginPath();
@@ -424,6 +527,35 @@ export function drawStage(
             c.fill();
           }
         }
+      }
+    }
+  }
+  // Wooden planks (solid from above) and mushroom stems (the caps move, see the scene).
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const cell = cellAt(lv, x, y);
+      const px = x * TILE;
+      const py = y * TILE;
+      if (cell === Cell.Plank) {
+        c.fillStyle = '#6B4423';
+        c.fillRect(px, py + 2, TILE, 12);
+        c.fillStyle = '#C48A52';
+        c.fillRect(px, py, TILE, 10);
+        c.fillStyle = '#D9A066';
+        c.fillRect(px, py, TILE, 3);
+        c.fillStyle = '#6B4423';
+        c.fillRect(px + TILE - 2, py, 2, 12);
+        c.fillStyle = '#3A2718';
+        c.beginPath();
+        c.arc(px + 6, py + 6, 1.6, 0, Math.PI * 2);
+        c.arc(px + TILE - 8, py + 6, 1.6, 0, Math.PI * 2);
+        c.fill();
+      } else if (cell === Cell.Bounce) {
+        c.fillStyle = '#F4E6CC';
+        roundRect(c, px + 13, py + 22, 14, 18, 5);
+        c.fill();
+        c.fillStyle = 'rgba(0,0,0,0.12)';
+        c.fillRect(px + 13, py + 34, 14, 6);
       }
     }
   }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { CATALOG, GAMES } from './games';
+import { CATALOG, CATEGORIES, GAMES } from './games';
 import {
   cardTag,
+  catalogByCategory,
   GRID_TABS,
   gridGames,
   HOME_SECTIONS,
@@ -22,12 +23,14 @@ describe('home rows', () => {
     expect(fit!.games.length).toBeLessThanOrEqual(ROW_MAX);
   });
 
-  it('has one row per mood in order, each with only that mood, fitting games first', () => {
+  it('has one shelf per mood in order with all of that mood, fitting games first', () => {
     const rows = homeRows(1).slice(1);
     expect(rows.map((r) => r.id)).toEqual(MOOD_ORDER.filter((m) => rows.some((r) => r.id === m)));
     for (const r of rows) {
       expect(r.games.length).toBeGreaterThanOrEqual(ROW_MIN);
-      expect(r.games.length).toBeLessThanOrEqual(ROW_MAX);
+      expect(r.games.length).toBe(
+        CATALOG.filter((id) => GAMES[id].available && GAMES[id].mood === r.id).length,
+      );
       for (const id of r.games) expect(GAMES[id].mood).toBe(r.id);
       const fit = r.games.map((id) => GAMES[id].minPlayers <= 1);
       expect(fit).toEqual([...fit].sort((a, b) => Number(b) - Number(a)));
@@ -36,6 +39,11 @@ describe('home rows', () => {
 
   it('lists every game in the "Semua" grid and filters it by category', () => {
     expect(gridGames('all')).toEqual(CATALOG);
+    const grouped = catalogByCategory();
+    expect([...grouped].sort()).toEqual([...CATALOG].sort());
+    expect(grouped.map((id) => GAMES[id].category)).toEqual(
+      CATEGORIES.flatMap((c) => grouped.filter((id) => GAMES[id].category === c.id).map(() => c.id)),
+    );
     expect(GRID_TABS[0]).toBe('all');
     for (const tab of GRID_TABS.slice(1))
       for (const id of gridGames(tab)) expect(GAMES[id].category).toBe(tab);

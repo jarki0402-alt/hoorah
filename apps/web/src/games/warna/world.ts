@@ -2,13 +2,15 @@
  * One Petualangan Warna stage as a fixed-step platformer simulation (pure, no rendering).
  *
  * Units are tiles, +y down, positions are top-left corners. Every step runs in this order:
- * triggers (plates, levers) → doors → lifts → boxes → characters (lowest first, so a character
- * standing on another one rides along) → pickups, checkpoints and exits. Riders move with what
- * they stand on (lift, box, another character).
+ * triggers (plates, levers) → doors → lifts → boxes → characters → pickups, checkpoints and exits.
+ * Riders move with what they stand on (lift or box).
  *
- * Forgiving jumps: coyote time after leaving a ledge, a jump buffer before landing, a lower
- * jump when the button is released early and a short hang at the top. Characters never block
- * each other sideways (no shoving matches), only from above (standing on a friend's shoulders).
+ * Jumps (owner 2026-11-22, after Roblox): one press is always a full jump of JUMP_TILES, and a
+ * held button jumps again on every landing. Forgiving on top: coyote time after leaving a ledge,
+ * a jump buffer before landing, a nudge past ceiling corners and a lift onto a ledge the feet
+ * just missed. Wooden planks are solid from above only; mushrooms bounce. Three falls into the
+ * same pool lay a quiet helper plank over it. Characters pass through each other (no stacking),
+ * so every spot is reachable alone.
  */
 import {
   Cell,
@@ -23,22 +25,33 @@ import {
   type Slot,
 } from './levels';
 
+/** Height of every jump, feet to feet (tiles). Maps never ask for more than 2 (rules test). */
+export const JUMP_TILES = 2.5;
+/** Height of a mushroom bounce above its cap (tiles). */
+export const BOUNCE_TILES = 4.6;
+const GRAVITY = 52;
+
 export const TUNE = {
   step: 1 / 120,
   run: 6.4,
   accelGround: 72,
-  accelAir: 46,
+  /** 50% more than before (owner 2026-11-22): a jump can still be steered. */
+  accelAir: 69,
   decelGround: 90,
-  gravity: 52,
-  jumpV: 16,
+  gravity: GRAVITY,
+  jumpV: Math.sqrt(2 * GRAVITY * JUMP_TILES),
+  bounceV: Math.sqrt(2 * GRAVITY * BOUNCE_TILES),
   fallMax: 20,
-  /** Gravity multiplier while rising with the button released (short hop). */
-  cut: 2.4,
-  /** Gravity multiplier near the apex while the button is held. */
-  hang: 0.6,
-  hangBand: 1.4,
-  coyote: 0.11,
-  buffer: 0.14,
+  /** Stick share below which the character stands; past it, it runs at full speed. */
+  runDead: 0.25,
+  coyote: 0.15,
+  buffer: 0.2,
+  /** Sideways shift that slips a rising head past a ceiling corner (tiles). */
+  cornerNudge: 0.3,
+  /** Height a falling character is lifted onto a ledge its feet just missed (tiles). */
+  ledgeAssist: 0.3,
+  /** Falls into the same pool before a helper plank appears over it. */
+  assistDeaths: 3,
   charW: 0.76,
   charH: 0.9,
   pushLight: 3.4,
@@ -60,7 +73,7 @@ export interface CharSpec {
   sub: 0 | 1;
 }
 
-export type Support = { kind: 'char' | 'box' | 'lift'; i: number } | null;
+export type Support = { kind: 'box' | 'lift'; i: number } | null;
 
 export interface Char {
   readonly key: number;
@@ -97,8 +110,6 @@ export interface CharStats {
   jumps: number;
   deaths: number;
   gems: number;
-  /** Seconds a friend stood on this character. */
-  carried: number;
   /** Seconds spent pushing a moving box. */
   pushed: number;
   /** Seconds on a pressure plate or levers flipped (x3 s each). */
@@ -151,6 +162,8 @@ export type WorldEvent =
   | { type: 'lift'; i: number }
   | { type: 'push'; box: number }
   | { type: 'exit'; key: number; first: boolean }
+  | { type: 'bounce'; key: number; x: number; y: number }
+  | { type: 'assist'; y: number; x0: number; x1: number }
   | { type: 'clear' };
 
 interface Rect {
@@ -189,6 +202,10 @@ export class World {
   readonly doorOpen = new Map<number, boolean>();
   readonly doorShown = new Map<number, number>();
   readonly active = new Map<number, boolean>();
+  /** Pool cells covered by a helper plank (row-major index). */
+  readonly assist = new Set<number>();
+  /** Falls per pool run (key: row * COLS + first column). */
+  private readonly poolDeaths = new Map<number, number>();
   t = 0;
   cleared = false;
   private acc = 0;
@@ -234,7 +251,7 @@ export class World {
         pingAt: Number.NEGATIVE_INFINITY,
         dx: 0,
         dy: 0,
-        stats: { jumps: 0, deaths: 0, gems: 0, carried: 0, pushed: 0, helped: 0, firstIn: 0 },
+        stats: { jumps: 0, deaths: 0, gems: 0, pushed: 0, helped: 0, firstIn: 0 },
       });
     });
     for (const b of level.boxes) {
@@ -275,7 +292,7 @@ export class World {
   setInput(key: number, x: number, jump: boolean): void {
     const c = this.chars[key];
     if (!c) return;
-    c.inX = Math.abs(x) < 0.18 ? 0 : Math.max(-1, Math.min(1, x));
+    c.inX = Math.abs(x) < TUNE.runDead ? 0 : Math.sign(x);
     c.inJump = jump;
   }
 
@@ -314,9 +331,11 @@ export class World {
       case Cell.Door:
         return this.doorOpen.get(metaAt(this.level, cx, cy)) ? null : [0, 1];
       case Cell.Gate:
-        return who >= 0 && foldSlot(metaAt(this.level, cx, cy), this.colors) === who ? null : [0, 1];
+        return who >= 0 && this.gateOpenFor(metaAt(this.level, cx, cy), who) ? null : [0, 1];
       case Cell.Pool:
         return [TUNE.poolFloor, 1];
+      case Cell.Bounce:
+        return [0.5, 1];
       default:
         return null;
     }
@@ -397,7 +416,7 @@ export class World {
     return hit;
   }
 
-  /** Vertical move; returns what stopped it (null = free fall). One-way tops: lifts, and characters when `rider`. */
+  /** Vertical move; returns what stopped it (null = free fall). One-way tops: lifts. */
   private moveY(
     b: { x: number; y: number },
     w: number,
@@ -405,7 +424,6 @@ export class World {
     dy: number,
     who: number,
     skipBox: number,
-    rider: Char | null,
   ): { hit: boolean; support: Support } {
     if (dy === 0) return { hit: false, support: null };
     const ny = b.y + dy;
@@ -427,6 +445,19 @@ export class World {
     }
     if (dy > 0) {
       const bottom = b.y + h;
+      // Wooden planks (and helper planks): solid only for something coming down onto them.
+      const x0 = Math.floor(b.x + EPS);
+      const x1 = Math.floor(b.x + w - EPS);
+      for (let cy = Math.ceil(bottom - 0.02); cy <= Math.floor(bottom + dy); cy++) {
+        if (cy - h >= limit) break;
+        for (let cx = x0; cx <= x1; cx++) {
+          if (!this.isPlank(cx, cy)) continue;
+          limit = cy - h;
+          hit = true;
+          support = null;
+          break;
+        }
+      }
       for (let i = 0; i < this.lifts.length; i++) {
         const l = this.lifts[i]!;
         const top = l.y;
@@ -437,22 +468,23 @@ export class World {
           support = { kind: 'lift', i };
         }
       }
-      if (rider) {
-        for (const o of this.chars) {
-          if (o === rider || o.dead) continue;
-          // Shoulders: a decent horizontal overlap, so brushing a friend's edge does not count.
-          const ov = Math.min(b.x + w, o.x + TUNE.charW) - Math.max(b.x, o.x);
-          if (ov < 0.22 || bottom > o.y + 0.02) continue;
-          if (o.y - h < limit) {
-            limit = o.y - h;
-            hit = true;
-            support = { kind: 'char', i: o.key };
-          }
-        }
-      }
     }
     b.y = limit;
     return { hit, support };
+  }
+
+  /**
+   * Whether a gate of map slot `slot` lets colour `who` through. Maps are built for two colours,
+   * so a third and fourth colour pair with them (green with red gates, yellow with blue ones) and
+   * never meet a wall they cannot pass.
+   */
+  gateOpenFor(slot: number, who: number): boolean {
+    return foldSlot(slot, this.colors) === who || (who >= 2 && slot === who % 2);
+  }
+
+  /** A plank top at the top edge of cell (cx, cy): a wooden plank or a helper over a pool. */
+  isPlank(cx: number, cy: number): boolean {
+    return cellAt(this.level, cx, cy) === Cell.Plank || this.assist.has(cy * COLS + cx);
   }
 
   /* ------------------------------------------------------------------ step */
@@ -591,17 +623,17 @@ export class World {
       const net = right - left;
       b.pushers = Math.abs(net);
       const speed = b.heavy ? TUNE.pushHeavy : TUNE.pushLight;
-      b.vx = b.pushers >= b.need && b.support?.kind !== 'char' ? Math.sign(net) * speed : 0;
+      b.vx = b.pushers >= b.need ? Math.sign(net) * speed : 0;
       const [sdx, sdy] = this.supportDelta(b.support);
       if (sdx) this.moveX(b, b.w, b.h, sdx, -1, i);
-      if (sdy) this.moveY(b, b.w, b.h, sdy, -1, i, null);
+      if (sdy) this.moveY(b, b.w, b.h, sdy, -1, i);
       const wasMoving = b.dx !== 0;
       if (b.vx !== 0) {
         const hit = this.moveX(b, b.w, b.h, b.vx * dt, -1, i);
         if (hit !== -2) b.vx = 0;
       }
       b.vy = Math.min(b.vy + TUNE.gravity * dt, TUNE.fallMax);
-      const res = this.moveY(b, b.w, b.h, b.vy * dt, -1, i, null);
+      const res = this.moveY(b, b.w, b.h, b.vy * dt, -1, i);
       if (res.hit) {
         if (b.vy > 0) b.support = res.support;
         b.vy = 0;
@@ -635,11 +667,6 @@ export class World {
       }
       this.stepChar(c, dt);
     }
-    for (const c of this.chars) {
-      if (c.dead || c.support?.kind !== 'char') continue;
-      const under = this.chars[c.support.i];
-      if (under && !under.dead) under.stats.carried += dt;
-    }
   }
 
   private stepChar(c: Char, dt: number): void {
@@ -657,7 +684,7 @@ export class World {
     // Ride whatever we stand on.
     const [sdx, sdy] = this.supportDelta(c.support);
     if (sdx) this.moveX(c, w, h, sdx, who, -1);
-    if (sdy) this.moveY(c, w, h, sdy, who, -1, null);
+    if (sdy) this.moveY(c, w, h, sdy, who, -1);
 
     // Run.
     const target = c.inX * TUNE.run;
@@ -674,12 +701,18 @@ export class World {
         if (Math.sign(b.vx) !== Math.sign(c.vx) || max === 0) c.vx = 0;
         else c.vx = Math.sign(c.vx) * Math.min(Math.abs(c.vx), max);
       } else if (hit === -1) {
-        if (!(c.grounded && this.tryStepUp(c, before + c.vx * dt))) c.vx = 0;
+        const want = before + c.vx * dt;
+        const climbed = c.grounded
+          ? this.tryStepUp(c, want, TUNE.stepUp)
+          : c.vy > -4 && this.tryStepUp(c, want, TUNE.ledgeAssist);
+        if (!climbed) c.vx = 0;
+        else if (!c.grounded) c.vy = Math.max(0, c.vy);
       }
     }
 
-    // Jump with coyote time and buffer.
-    if (c.inJump && !c.prevJump) c.buffer = TUNE.buffer;
+    // Jump with coyote time and buffer; a held button keeps the buffer full, so it jumps again
+    // on every landing (owner 2026-11-22, like Roblox).
+    if (c.inJump) c.buffer = TUNE.buffer;
     c.prevJump = c.inJump;
     if (c.grounded) c.coyote = TUNE.coyote;
     else c.coyote -= dt;
@@ -694,36 +727,90 @@ export class World {
     }
     c.buffer -= dt;
 
-    let g = TUNE.gravity;
-    if (c.vy < 0 && !c.inJump) g *= TUNE.cut;
-    else if (c.inJump && Math.abs(c.vy) < TUNE.hangBand) g *= TUNE.hang;
-    c.vy = Math.min(c.vy + g * dt, TUNE.fallMax);
+    // Every jump is the same height: plain gravity, no cut on release.
+    c.vy = Math.min(c.vy + TUNE.gravity * dt, TUNE.fallMax);
     const fall = c.vy;
-    const res = this.moveY(c, w, h, c.vy * dt, who, -1, c);
+    if (c.vy < 0) this.nudgeCorner(c, c.vy * dt);
+    const res = this.moveY(c, w, h, c.vy * dt, who, -1);
     const wasGrounded = c.grounded;
     if (res.hit) {
-      if (c.vy > 0) {
-        c.grounded = true;
-        c.support = res.support;
-        if (!wasGrounded) this.events.push({ type: 'land', key: c.key, hard: fall > 14 });
+      if (c.vy > 0 && this.onBounce(c)) {
+        c.vy = -TUNE.bounceV;
+        c.grounded = false;
+        c.support = null;
+        c.coyote = 0;
+        this.events.push({ type: 'bounce', key: c.key, x: c.x + w / 2, y: c.y + h });
+      } else {
+        if (c.vy > 0) {
+          c.grounded = true;
+          c.support = res.support;
+          if (!wasGrounded) this.events.push({ type: 'land', key: c.key, hard: fall > 14 });
+        }
+        c.vy = 0;
       }
-      c.vy = 0;
     } else {
       c.grounded = false;
       c.support = null;
     }
     c.dx = c.x - x0;
     c.dy = c.y - y0;
-    if (this.inHazard(c)) this.die(c);
-    else if (c.y > ROWS + 1 || c.x < -1 || c.x > COLS + 1) this.die(c);
+    const pool = this.inHazard(c);
+    if (pool >= 0) {
+      this.die(c);
+      this.countPoolDeath(pool);
+    } else if (c.y > ROWS + 1 || c.x < -1 || c.x > COLS + 1) this.die(c);
   }
 
-  /** Small ledges (a pool's edge, a lift's lip) are climbed by walking. */
-  private tryStepUp(c: Char, wantX: number): boolean {
+  /** True when the feet rest on a mushroom cap. */
+  private onBounce(c: Char): boolean {
+    const feet = c.y + TUNE.charH;
+    const cy = Math.floor(feet + 0.01);
+    if (Math.abs(feet - (cy + 0.5)) > 0.03) return false;
+    const x0 = Math.floor(c.x + EPS);
+    const x1 = Math.floor(c.x + TUNE.charW - EPS);
+    for (let cx = x0; cx <= x1; cx++) if (cellAt(this.level, cx, cy) === Cell.Bounce) return true;
+    return false;
+  }
+
+  /** A rising head that clips a ceiling corner slips past it sideways. */
+  private nudgeCorner(c: Char, dy: number): void {
+    const w = TUNE.charW;
+    const h = TUNE.charH;
+    if (!this.blocked(c.x, c.y + dy, w, h, c.slot, -1)) return;
+    for (let d = 0.04; d <= TUNE.cornerNudge + EPS; d += 0.04) {
+      for (const side of [-1, 1]) {
+        const nx = c.x + side * d;
+        if (!this.blocked(nx, c.y + dy, w, h, c.slot, -1) && !this.blocked(nx, c.y, w, h, c.slot, -1)) {
+          c.x = nx;
+          return;
+        }
+      }
+    }
+  }
+
+  /** Counts a fall into the pool at cell `i`; the third one lays a helper plank over its run. */
+  private countPoolDeath(i: number): void {
+    const y = Math.floor(i / COLS);
+    let x0 = i % COLS;
+    let x1 = x0;
+    const slot = metaAt(this.level, x0, y);
+    const same = (x: number) => cellAt(this.level, x, y) === Cell.Pool && metaAt(this.level, x, y) === slot;
+    while (same(x0 - 1)) x0--;
+    while (same(x1 + 1)) x1++;
+    const key = y * COLS + x0;
+    const n = (this.poolDeaths.get(key) ?? 0) + 1;
+    this.poolDeaths.set(key, n);
+    if (n < TUNE.assistDeaths || this.assist.has(key)) return;
+    for (let x = x0; x <= x1; x++) this.assist.add(y * COLS + x);
+    this.events.push({ type: 'assist', y, x0, x1 });
+  }
+
+  /** Small ledges (a pool's edge, a lift's lip) are climbed by walking, or by a falling body. */
+  private tryStepUp(c: Char, wantX: number, maxUp: number): boolean {
     const w = TUNE.charW;
     const h = TUNE.charH;
     const bottom = c.y + h;
-    for (let up = 0.05; up <= TUNE.stepUp + EPS; up += 0.05) {
+    for (let up = 0.05; up <= maxUp + EPS; up += 0.05) {
       if (!this.blocked(wantX, c.y - up, w, h, c.slot, -1)) {
         // Only when there is ground right under the new spot (a real step, not a wall top far above).
         if (this.blocked(wantX, bottom - up, w, 0.06, c.slot, -1) || up < 0.06) {
@@ -737,7 +824,8 @@ export class World {
     return false;
   }
 
-  private inHazard(c: Char): boolean {
+  /** Index of a pool cell of another colour the body is in, or -1. */
+  private inHazard(c: Char): number {
     const x0 = Math.floor(c.x + EPS);
     const x1 = Math.floor(c.x + TUNE.charW - EPS);
     const y0 = Math.floor(c.y + EPS);
@@ -747,14 +835,15 @@ export class World {
         if (cellAt(this.level, cx, cy) !== Cell.Pool) continue;
         if (foldSlot(metaAt(this.level, cx, cy), this.colors) === c.slot) continue;
         // A little margin at the sides so a toe over the edge is forgiven.
+        if (this.assist.has(cy * COLS + cx)) continue;
         if (
           overlap(c.x, c.x + TUNE.charW, cx + 0.12, cx + 0.88) &&
           overlap(c.y, c.y + TUNE.charH, cy + TUNE.poolSurface, cy + 1)
         )
-          return true;
+          return cy * COLS + cx;
       }
     }
-    return false;
+    return -1;
   }
 
   private die(c: Char): void {

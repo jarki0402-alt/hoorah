@@ -21,12 +21,13 @@ import {
 import { primeHaptics } from '../shared/haptics';
 import { HapticTab } from './haptic';
 import { RusunTab } from './rusun';
+import { SoundTab } from './sound';
 import { StickTab } from './stick';
 import { STR } from './strings';
 import { SwipeTab } from './swipe';
 
-type Tab = 'stick' | 'swipe' | 'haptic' | 'rusun';
-const TABS: readonly Tab[] = ['stick', 'swipe', 'haptic', 'rusun'];
+type Tab = 'stick' | 'swipe' | 'haptic' | 'rusun' | 'sound';
+const TABS: readonly Tab[] = ['stick', 'swipe', 'haptic', 'rusun', 'sound'];
 const TAB_KEY = 'hoorah.lab.tab';
 
 function storedTab(): Tab {
@@ -114,6 +115,7 @@ function Lab() {
       {tab === 'swipe' && <SwipeTab tuning={draft} update={update} />}
       {tab === 'haptic' && <HapticTab tuning={draft} update={update} />}
       {tab === 'rusun' && <RusunTab tuning={draft} update={update} />}
+      {tab === 'sound' && <SoundTab />}
       <p class="lab-note">{STR.scopeNote}</p>
       {notice?.kind === 'saved' && (
         <div class="lab-saved" role="status">

@@ -110,6 +110,14 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case 'kick':
       if (!isInt(m.id) || m.id < 1 || m.id > 255) return null;
       return { t: m.t, id: m.id };
+    case 'hostOffer':
+      if (!isInt(m.id) || m.id < 1 || m.id > 255) return null;
+      return { t: 'hostOffer', id: m.id };
+    case 'hostOfferCancel':
+      return { t: 'hostOfferCancel' };
+    case 'hostReply':
+      if (typeof m.accept !== 'boolean') return null;
+      return { t: 'hostReply', accept: m.accept };
     case 'leave':
       return { t: 'leave' };
     case 'status': {

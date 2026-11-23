@@ -1,5 +1,7 @@
 /**
- * Petualangan Warna stages: 32×18 tile maps written as text, parsed once into typed data (pure).
+ * Petualangan Warna stages: 32×18 tile maps written as text, parsed once into typed data (pure),
+ * grouped in worlds ("dunia", owner 2026-11-22): Hutan and Gua are playable, the others are
+ * announced. Each world numbers its stages 1..30 and opens them in order.
  *
  * Colour slots: maps name colours by slot (A..D). A stage is played with K colours (2 for two
  * characters, 3 for three, 4 for four or more); a slot past K folds onto an existing colour
@@ -14,17 +16,25 @@
  *   o  box (1×1)             O  heavy box (2×2, top-left cell; the other three cells are '.')
  *   u v w  pressure plate on channel 1 2 3     U V W  door cell on channel 1 2 3
  *   j k l  lever on channel 1 2 3
+ *   =  wooden plank (solid from above only)    m  bounce mushroom (half-height cap)
  * Lifts are listed apart: a platform `w` tiles wide at column `x`, its top at `yDown` while its
  * channel is off and `yUp` while it is on.
  */
+import { GUA } from './maps-gua';
+import { HUTAN } from './maps-hutan';
 
 export const COLS = 32;
 export const ROWS = 18;
+/** Stages per world. */
+export const WORLD_SIZE = 30;
 
 export type Slot = 0 | 1 | 2 | 3;
 
-export const Cell = { Empty: 0, Rock: 1, Pool: 2, Gate: 3, Door: 4 } as const;
+export const Cell = { Empty: 0, Rock: 1, Pool: 2, Gate: 3, Door: 4, Plank: 5, Bounce: 6 } as const;
 export type Cell = (typeof Cell)[keyof typeof Cell];
+
+export type BiomeId = 'hutan' | 'gua' | 'gurun' | 'salju' | 'awan';
+export const BIOME_IDS: readonly BiomeId[] = ['hutan', 'gua', 'gurun', 'salju', 'awan'];
 
 export interface Plate {
   x: number;
@@ -52,16 +62,25 @@ export interface Placed {
   slot: Slot;
 }
 
+/** What a hint step points at: a box, the switches of a channel, or the exits. */
+export type HintTarget = 'box' | 'ch1' | 'ch2' | 'ch3' | 'exit';
+
 export interface LevelDef {
-  id: string;
   /** Seconds for the time star. */
   par: number;
   rows: readonly string[];
   lifts?: readonly LiftDef[];
+  /** Order of the staged hints (default: boxes, then channels 1..3, then the exits). */
+  hints?: readonly HintTarget[];
 }
 
 export interface Level {
+  /** `<world>-<number>`, e.g. `hutan-7`. */
   id: string;
+  biome: BiomeId;
+  /** 1..30 inside its world. */
+  number: number;
+  /** Position in LEVELS. */
   index: number;
   par: number;
   /** Cell kinds, row-major (`y * COLS + x`). */
@@ -78,160 +97,8 @@ export interface Level {
   lifts: LiftDef[];
   /** Channels used by any trigger. */
   channels: number[];
+  hints: HintTarget[];
 }
-
-const DEFS: readonly LevelDef[] = [
-  {
-    id: 'kolam',
-    par: 60,
-    rows: [
-      '################################',
-      '#..............................#',
-      '#..............e...............#',
-      '#.............................E#',
-      '#...#########AAAAA##############',
-      '#..............................#',
-      '###..................f.........#',
-      '#.............................F#',
-      '#...###############BBBBB########',
-      '#..............................#',
-      '###.............g..............#',
-      '#.............................G#',
-      '#...##########CCCCC#############',
-      '#..............................#',
-      '###..............h.............#',
-      '#..SSSSSSSS...................H#',
-      '###############DDDDD############',
-      '################################',
-    ],
-  },
-  {
-    id: 'injak',
-    par: 90,
-    rows: [
-      '################################',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#.....................U........#',
-      '#######.........gefh..U.....####',
-      '#.....b...............U.....a..#',
-      '#.....b.........####..U.....a..#',
-      '#.....b.........####..U.....a..#',
-      '#.u...bSSSSSSSS.####..U.EFGHa.u#',
-      '################################',
-      '################################',
-    ],
-  },
-  {
-    id: 'kotak',
-    par: 120,
-    rows: [
-      '################################',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#...........g......e........f..#',
-      '#.............................j#',
-      '#.......................#BBBBB##',
-      '#....................#..U......#',
-      '#....................#..U..h...#',
-      '#........O...........#..U......#',
-      '#SSSSSSSS............#.KU.EFGH.#',
-      '################################',
-      '################################',
-    ],
-  },
-  {
-    id: 'lift',
-    par: 120,
-    lifts: [{ ch: 1, x: 12, w: 3, yDown: 16, yUp: 4 }],
-    rows: [
-      '################################',
-      '#..............................#',
-      '#............................g.#',
-      '#...............j.K...EFGH.....#',
-      '#..............#################',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#.f..........e.................#',
-      '######BBBBB#...................#',
-      '######.........................#',
-      '#....a.........................#',
-      '#....a.........................#',
-      '#....a..................h......#',
-      '#.u..aSSSSSS...SS..............#',
-      '############...#####DDDDDDD#####',
-      '################################',
-    ],
-  },
-  {
-    id: 'menara',
-    par: 150,
-    lifts: [
-      { ch: 1, x: 9, w: 3, yDown: 16, yUp: 13 },
-      { ch: 2, x: 17, w: 3, yDown: 13, yUp: 10 },
-    ],
-    rows: [
-      '################################',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#............................g.#',
-      '#..............................#',
-      '#..............f...............#',
-      '#.........................EFGH.#',
-      '#...................##bb########',
-      '#....e..............##v.########',
-      '#............K......############',
-      '#.h.........###aa...############',
-      '#...........###.j###############',
-      '#SSSSSSSS...####################',
-      '#########...####################',
-      '################################',
-    ],
-  },
-  {
-    id: 'besar',
-    par: 180,
-    lifts: [{ ch: 2, x: 18, w: 3, yDown: 16, yUp: 8 }],
-    rows: [
-      '################################',
-      '#..............................#',
-      '#..............................#',
-      '#.....................e....g...#',
-      '#..............................#',
-      '#..............................#',
-      '#..............................#',
-      '#.....................k.KEFGH..#',
-      '#....................###########',
-      '#....................###########',
-      '#....................###########',
-      '###########..........###########',
-      '#.h.......Uk.f.......###########',
-      '#.........U#BBBBB#...###########',
-      '#.....O...U..........###########',
-      '#SSuSS..SSU..........###########',
-      '##################...###########',
-      '################################',
-    ],
-  },
-];
 
 const SLOT_OF: Record<string, Slot> = { A: 0, B: 1, C: 2, D: 3 };
 
@@ -239,13 +106,25 @@ function slotOf(ch: string, base: string): Slot {
   return (ch.charCodeAt(0) - base.charCodeAt(0)) as Slot;
 }
 
+/** Default hint order: boxes first (they are usually the step up), then channels, then exits. */
+function defaultHints(level: Level): HintTarget[] {
+  const out: HintTarget[] = [];
+  if (level.boxes.length > 0) out.push('box');
+  for (const ch of level.channels) out.push(`ch${ch}` as HintTarget);
+  out.push('exit');
+  return out;
+}
+
 /** Parses one stage. Throws on a malformed map (caught by the tests, never at runtime). */
-export function parseLevel(def: LevelDef, index: number): Level {
-  if (def.rows.length !== ROWS) throw new Error(`${def.id}: ${def.rows.length} rows`);
+export function parseLevel(def: LevelDef, index: number, biome: BiomeId = 'gua', number = index + 1): Level {
+  const id = `${biome}-${number}`;
+  if (def.rows.length !== ROWS) throw new Error(`${id}: ${def.rows.length} rows`);
   const cells = new Uint8Array(COLS * ROWS);
   const meta = new Uint8Array(COLS * ROWS);
   const level: Level = {
-    id: def.id,
+    id,
+    biome,
+    number,
     index,
     par: def.par,
     cells,
@@ -259,14 +138,17 @@ export function parseLevel(def: LevelDef, index: number): Level {
     levers: [],
     lifts: [...(def.lifts ?? [])],
     channels: [],
+    hints: [],
   };
   const channels = new Set<number>();
   def.rows.forEach((row, y) => {
-    if (row.length !== COLS) throw new Error(`${def.id}: row ${y} has ${row.length} cols`);
+    if (row.length !== COLS) throw new Error(`${id}: row ${y} has ${row.length} cols`);
     for (let x = 0; x < COLS; x++) {
       const ch = row[x]!;
       const i = y * COLS + x;
       if (ch === '#') cells[i] = Cell.Rock;
+      else if (ch === '=') cells[i] = Cell.Plank;
+      else if (ch === 'm') cells[i] = Cell.Bounce;
       else if (ch in SLOT_OF) {
         cells[i] = Cell.Pool;
         meta[i] = SLOT_OF[ch]!;
@@ -290,18 +172,47 @@ export function parseLevel(def: LevelDef, index: number): Level {
         const c = ch.charCodeAt(0) - 'j'.charCodeAt(0) + 1;
         level.levers.push({ x, y, ch: c });
         channels.add(c);
-      } else if (ch !== '.') throw new Error(`${def.id}: unknown '${ch}' at ${x},${y}`);
+      } else if (ch !== '.') throw new Error(`${id}: unknown '${ch}' at ${x},${y}`);
     }
   });
   level.channels = [...channels].sort((a, b) => a - b);
+  level.hints = def.hints ? [...def.hints] : defaultHints(level);
   return level;
 }
 
-export const LEVELS: readonly Level[] = DEFS.map((d, i) => parseLevel(d, i));
+export interface Biome {
+  id: BiomeId;
+  /** Playable now; the others show as "Segera hadir". */
+  ready: boolean;
+  levels: readonly Level[];
+}
+
+const MAPS: Record<BiomeId, readonly LevelDef[]> = { hutan: HUTAN, gua: GUA, gurun: [], salju: [], awan: [] };
+
+function build(): { biomes: Biome[]; levels: Level[] } {
+  const levels: Level[] = [];
+  const biomes = BIOME_IDS.map((id) => {
+    const own = MAPS[id].map((def, i) => {
+      const lv = parseLevel(def, levels.length, id, i + 1);
+      levels.push(lv);
+      return lv;
+    });
+    return { id, ready: own.length > 0, levels: own };
+  });
+  return { biomes, levels };
+}
+
+const BUILT = build();
+export const BIOMES: readonly Biome[] = BUILT.biomes;
+export const LEVELS: readonly Level[] = BUILT.levels;
 export const LEVEL_IDS: readonly string[] = LEVELS.map((l) => l.id);
 
 export function levelById(id: string): Level | undefined {
   return LEVELS.find((l) => l.id === id);
+}
+
+export function biomeOf(id: BiomeId): Biome {
+  return BIOMES.find((b) => b.id === id) ?? BIOMES[0]!;
 }
 
 /** Number of colours for this many characters: 2 to 4. */

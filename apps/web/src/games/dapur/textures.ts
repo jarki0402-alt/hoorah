@@ -6,7 +6,7 @@
 import { FRUITS } from '@hoorah/protocol';
 import type { Face } from '../../shared/art/fruits';
 import { svgDoc } from '../../shared/art/svg';
-import { loadImage } from '../common/stage';
+import { deviceScale, loadImage, STAGE_H, STAGE_W } from '../common/stage';
 import {
   type Backdrop,
   backdropDrawing,
@@ -28,10 +28,66 @@ import type { StainKind } from './items';
 import { KITCHEN_DEFS, type KitchenId, type StationKind } from './kitchens';
 import { STR } from './strings';
 
-/** Texture px per world px. */
-export const TEX = 2;
-/** Canvas px per world px of the Phaser canvas (camera zoom). */
-export const RENDER_SCALE = 1.5;
+/**
+ * Texture px per world px. Set once at boot (pickResolution) from the largest size the screen can
+ * show, so textures stay crisp after going fullscreen: 2 on 1080p, 3 on high-DPI laptops and 4K.
+ */
+export let TEX = 2;
+/**
+ * Canvas px per world px of the Phaser canvas (camera zoom). Follows the real device pixels the
+ * stage covers (stage scale x devicePixelRatio): the canvas then matches the screen 1:1, sharp on
+ * high-DPI laptops and 4K, and no wasted supersampling on a 720p or 1080p Smart TV.
+ */
+export let RENDER_SCALE = 1.5;
+
+/**
+ * Dapur is light 2D, so it always renders at the screen's own sharpness (owner 2026-11-22: "selalu
+ * HD"), up to 3 (a 4K panel), whatever the 3D graphics level says. The safety net in main.tsx
+ * lowers `ceiling` one step at a time if a device cannot keep up.
+ */
+const MAX_RENDER_SCALE = 3;
+/** The safety net never goes below the old fixed 1.5 (a 1920x1080 canvas, smooth everywhere). */
+const MIN_SAFE_SCALE = 1.5;
+const STEP = 0.5;
+let ceiling = MAX_RENDER_SCALE;
+
+/** Device px per stage px right now (the shell's own scaling included, see common/stage). */
+function devicePx(): number {
+  return Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H) * deviceScale();
+}
+
+/** Updates RENDER_SCALE for the current window; returns true when it changed. */
+export function updateRenderScale(): boolean {
+  const next = Math.min(
+    ceiling,
+    // Rounded up to a quarter: a canvas a little larger than the screen stays sharp, smaller blurs.
+    Math.max(1, Math.ceil(devicePx() * 4 - 0.05) / 4),
+  );
+  if (next === RENDER_SCALE) return false;
+  RENDER_SCALE = next;
+  return true;
+}
+
+/**
+ * Safety net: one step down (3 -> 2.5 -> 2 -> 1.5) for a device that cannot hold the frame rate.
+ * Returns true when RENDER_SCALE changed.
+ */
+export function lowerRenderScale(): boolean {
+  if (RENDER_SCALE <= MIN_SAFE_SCALE) return false;
+  ceiling = Math.max(MIN_SAFE_SCALE, RENDER_SCALE - STEP);
+  return updateRenderScale();
+}
+
+/** Picks TEX (from the full screen size) and RENDER_SCALE (from the window). Call before loading textures. */
+export function pickResolution(): void {
+  // The most the screen can show: the whole monitor (fullscreen) at its pixel ratio.
+  const dpr =
+    Number.isFinite(window.devicePixelRatio) && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
+  const full = Math.max(devicePx(), Math.min(screen.width / STAGE_W, screen.height / STAGE_H) * dpr);
+  TEX = full > 2.05 ? 3 : 2;
+  updateRenderScale();
+}
+
 export const CHEF_FACES: readonly Face[] = ['happy', 'effort', 'wow'];
 /** Backdrops get this much room around them for the frame stroke. */
 export const BACKDROP_PAD = 8;
@@ -46,8 +102,15 @@ export const cartKey = (k: KitchenId, side: 0 | 1): string => `dp-cart-${k}-${si
 
 const LABELS: StationLabels = {
   basket: STR.basketLabel,
+  stove: STR.stoveLabel,
+  wok: STR.wokLabel,
+  fryer: STR.fryerLabel,
+  board: STR.boardLabel,
+  sink: STR.sinkLabel,
+  rack: STR.rackLabel,
   trash: STR.trashLabel,
   soda: STR.sodaLabel,
+  drinks: STR.drinksLabel,
   cups: STR.cupsLabel,
   pass: STR.passLabel,
   passSlot: STR.passSlot,

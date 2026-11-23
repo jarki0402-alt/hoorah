@@ -9,24 +9,76 @@
  * - the exact number is needed to reach home;
  * - the first colour with every pawn home wins.
  *
- * 2 to 4 players get one colour each. 5 to 8 players play in teams of two per colour, and
- * teammates alternate turns (a bonus roll stays with whoever rolled the 6).
+ * Every player gets their own colour. 2 to 4 players use the classic cross board; 5 to 8 players
+ * a regular polygon with one side per colour (owner 2026-11-22: no teams).
  */
 
-/** Squares on the shared loop around the board. */
-export const TRACK_LEN = 52;
 /** Squares in each colour's home column. */
 export const HOME_COL = 5;
 /** Progress of a pawn still in its base. */
 export const BASE = -1;
-/** Last progress on the shared loop (the square before the home column). */
-export const LAST_TRACK = TRACK_LEN - 2;
-/** Progress of a pawn that reached home (the centre). */
-export const HOME = LAST_TRACK + HOME_COL + 1;
-/** Loop index of each colour's start square (0 Merah, 1 Hijau, 2 Kuning, 3 Biru; clockwise). */
-export const START_ABS = [0, 13, 26, 39] as const;
-/** Start squares and the star squares eight steps after them. */
-export const SAFE_ABS: ReadonlySet<number> = new Set([0, 8, 13, 21, 26, 34, 39, 47]);
+/** Most colours on one board. */
+export const MAX_SEATS = 8;
+
+/**
+ * The loop around a board. A pawn starts on its start square (progress 0), walks the loop to the
+ * square before its start's neighbour (`lastTrack`), turns into its home column and ends at
+ * `home`. The same formulas hold for every board, so only the loop itself differs.
+ */
+export interface BoardSpec {
+  /** 4 = the classic cross, 5..8 = a regular polygon with one side per colour. */
+  sides: number;
+  /** Loop squares per side. */
+  perSide: number;
+  /** Squares on the shared loop. */
+  trackLen: number;
+  /** Last progress on the loop (the square before the home column). */
+  lastTrack: number;
+  /** Progress of a pawn that reached home (the centre). */
+  home: number;
+  /** Loop index of each colour's start square, by ColorId (clockwise). */
+  start: readonly number[];
+  /** Loop index of each colour's star square. */
+  star: readonly number[];
+  /** Start squares and star squares. */
+  safe: ReadonlySet<number>;
+}
+
+/** Loop squares per side of the polygon boards: fewer as sides grow, so a lap stays near 52. */
+const PER_SIDE: Readonly<Record<number, number>> = { 5: 11, 6: 9, 7: 7, 8: 7 };
+
+function makeSpec(sides: number, perSide: number, start: number[], star: number[]): BoardSpec {
+  const trackLen = sides * perSide;
+  return {
+    sides,
+    perSide,
+    trackLen,
+    lastTrack: trackLen - 2,
+    home: trackLen - 2 + HOME_COL + 1,
+    start,
+    star,
+    safe: new Set([...start, ...star]),
+  };
+}
+
+const CLASSIC = makeSpec(4, 13, [0, 13, 26, 39], [8, 21, 34, 47]);
+const specs = new Map<number, BoardSpec>([[4, CLASSIC]]);
+
+/** The board for a number of colours: classic up to 4, a polygon with one side each for 5..8. */
+export function boardFor(colors: number): BoardSpec {
+  const sides = colors <= 4 ? 4 : Math.min(MAX_SEATS, colors);
+  let spec = specs.get(sides);
+  if (!spec) {
+    const L = PER_SIDE[sides]!;
+    const mid = (L - 1) / 2;
+    const lap = sides * L;
+    const start = Array.from({ length: sides }, (_, c) => (c * L + mid + 2) % lap);
+    const star = start.map((s) => (s + Math.round((8 * L) / 13)) % lap);
+    spec = makeSpec(sides, L, start, star);
+    specs.set(sides, spec);
+  }
+  return spec;
+}
 
 export const INTRO_MS = 2800;
 export const ROLL_MS = 12_000;
@@ -46,7 +98,7 @@ export const SETTLE_MS = 350;
 export const PASS_MS = 1300;
 export const FINALE_MS = 4200;
 
-export type ColorId = 0 | 1 | 2 | 3;
+export type ColorId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type Phase = 'intro' | 'roll' | 'rolling' | 'pick' | 'moving' | 'pass' | 'finale' | 'ended';
 
@@ -55,21 +107,20 @@ export interface RosterEntry {
   connected: boolean;
 }
 
-export interface Team {
+/** One colour on the board and the player who rolls for it. */
+export interface Seat {
   index: number;
   color: ColorId;
-  members: number[];
-  /** Progress per pawn: BASE, 0..LAST_TRACK on the loop, then the home column, HOME at the end. */
+  player: number;
+  /** Progress per pawn: BASE, 0..lastTrack on the loop, then the home column, `home` at the end. */
   pawns: number[];
-  /** Turns this colour has started (picks whose turn it is inside a team). */
-  turns: number;
   /** Pawns of this colour sent home by opponents. */
   lost: number;
 }
 
 export interface PlayerStats {
   id: number;
-  team: number;
+  seat: number;
   rolls: number;
   sixes: number;
   captures: number;
@@ -80,7 +131,7 @@ export interface PlayerStats {
 }
 
 export interface Capture {
-  team: number;
+  seat: number;
   pawn: number;
   /** Progress of the captured pawn before it went back to base. */
   from: number;
@@ -98,7 +149,7 @@ export interface MoveOption {
 }
 
 export interface MoveInfo extends MoveOption {
-  team: number;
+  seat: number;
   player: number;
   /** Progress after each hop (a pawn leaving the base makes one hop to its start square). */
   path: number[];
@@ -109,12 +160,12 @@ export type PassReason = 'none' | 'triple';
 
 export type LudoEvent =
   | { type: 'intro' }
-  | { type: 'turn'; team: number; player: number; bonus: boolean }
-  | { type: 'roll'; team: number; player: number; value: number; auto: boolean }
-  | { type: 'pick'; team: number; player: number; options: MoveOption[] }
+  | { type: 'turn'; seat: number; player: number; bonus: boolean }
+  | { type: 'roll'; seat: number; player: number; value: number; auto: boolean }
+  | { type: 'pick'; seat: number; player: number; options: MoveOption[] }
   | { type: 'move'; move: MoveInfo }
-  | { type: 'pass'; team: number; player: number; reason: PassReason }
-  | { type: 'finish'; team: number }
+  | { type: 'pass'; seat: number; player: number; reason: PassReason }
+  | { type: 'finish'; seat: number }
   | { type: 'end' };
 
 export interface LudoOptions {
@@ -140,29 +191,17 @@ export function rng(seed: number): () => number {
 }
 
 /** Loop index of a pawn, or null when it is in its base, home column or home. */
-export function absOf(color: ColorId, progress: number): number | null {
-  if (progress < 0 || progress > LAST_TRACK) return null;
-  return (START_ABS[color] + progress) % TRACK_LEN;
+export function absOf(board: BoardSpec, color: ColorId, progress: number): number | null {
+  if (progress < 0 || progress > board.lastTrack) return null;
+  return (board.start[color]! + progress) % board.trackLen;
 }
 
-/** Colours used for n teams: two players sit opposite each other. */
-export function colorsFor(teams: number): ColorId[] {
-  if (teams <= 1) return [0];
-  if (teams === 2) return [0, 2];
-  if (teams === 3) return [0, 1, 2];
-  return [0, 1, 2, 3];
-}
-
-/** Player ids per team, in join order: up to 4 play alone, 5..8 play in pairs. */
-export function makeTeams(ids: readonly number[]): number[][] {
-  const n = ids.length;
-  if (n <= 4) return ids.map((id) => [id]);
-  const count = Math.min(4, Math.ceil(n / 2));
-  const teams: number[][] = Array.from({ length: count }, () => []);
-  ids.forEach((id, i) => {
-    teams[i % count]!.push(id);
-  });
-  return teams;
+/** Colours for n players: on the classic board two players sit opposite each other. */
+export function colorsFor(n: number): ColorId[] {
+  if (n <= 1) return [0];
+  if (n === 2) return [0, 2];
+  if (n === 3) return [0, 1, 2];
+  return Array.from({ length: Math.min(MAX_SEATS, n) }, (_, i) => i as ColorId);
 }
 
 export function clampPawns(v: unknown): number {
@@ -172,12 +211,13 @@ export function clampPawns(v: unknown): number {
 
 export class LudoLogic {
   readonly pawnCount: number;
-  readonly teams: Team[];
+  readonly board: BoardSpec;
+  readonly seats: Seat[];
   readonly stats = new Map<number, PlayerStats>();
   phase: Phase = 'intro';
-  /** Team whose turn it is. */
+  /** Seat whose turn it is. */
   current = 0;
-  /** Player rolling for the current team. */
+  /** Player rolling for the current seat. */
   roller = -1;
   dice: number | null = null;
   /** Sixes in a row this turn. */
@@ -201,20 +241,27 @@ export class LudoLogic {
   constructor(opts: LudoOptions) {
     this.pawnCount = clampPawns(opts.pawns);
     for (const r of opts.roster) this.connected.set(r.id, r.connected);
-    const ids = opts.roster.filter((r) => r.connected).map((r) => r.id);
-    const groups = makeTeams(ids.length ? ids : opts.roster.map((r) => r.id));
-    const colors = colorsFor(groups.length);
-    this.teams = groups.map((members, index) => ({
+    const live = opts.roster.filter((r) => r.connected).map((r) => r.id);
+    const ids = (live.length ? live : opts.roster.map((r) => r.id)).slice(0, MAX_SEATS);
+    const colors = colorsFor(ids.length);
+    this.board = boardFor(colors.length);
+    this.seats = ids.map((player, index) => ({
       index,
       color: colors[index]!,
-      members,
+      player,
       pawns: Array.from({ length: this.pawnCount }, () => BASE),
-      turns: 0,
       lost: 0,
     }));
-    for (const t of this.teams)
-      for (const id of t.members)
-        this.stats.set(id, { id, team: t.index, rolls: 0, sixes: 0, captures: 0, home: 0, steps: 0 });
+    for (const t of this.seats)
+      this.stats.set(t.player, {
+        id: t.player,
+        seat: t.index,
+        rolls: 0,
+        sixes: 0,
+        captures: 0,
+        home: 0,
+        steps: 0,
+      });
     if (opts.dice) {
       this.roll6 = opts.dice;
     } else {
@@ -226,25 +273,25 @@ export class LudoLogic {
     this.emit({ type: 'intro' });
   }
 
-  /** Every player in a team, in join order. */
+  /** Every player with a seat, in join order. */
   get participants(): number[] {
-    return this.teams.flatMap((t) => t.members);
+    return this.seats.map((t) => t.player);
   }
 
-  get team(): Team {
-    return this.teams[this.current]!;
+  get seat(): Seat {
+    return this.seats[this.current]!;
   }
 
-  teamOf(playerId: number): Team | null {
-    return this.teams.find((t) => t.members.includes(playerId)) ?? null;
+  seatOf(playerId: number): Seat | null {
+    return this.seats.find((t) => t.player === playerId) ?? null;
   }
 
   isConnected(id: number): boolean {
     return this.connected.get(id) ?? false;
   }
 
-  homeCount(team: Team): number {
-    return team.pawns.filter((p) => p === HOME).length;
+  homeCount(seat: Seat): number {
+    return seat.pawns.filter((p) => p === this.board.home).length;
   }
 
   drain(): LudoEvent[] {
@@ -258,19 +305,9 @@ export class LudoLogic {
   setRoster(roster: readonly RosterEntry[], now: number): void {
     for (const r of roster) this.connected.set(r.id, r.connected);
     if (this.phase !== 'roll' && this.phase !== 'pick') return;
-    const t = this.team;
     if (!this.isConnected(this.roller)) {
-      // Hand the turn to a connected teammate, or let the colour play itself.
-      const mate = t.members.find((id) => id !== this.roller && this.isConnected(id));
-      if (mate !== undefined) {
-        this.roller = mate;
-        this.deadline = Math.max(this.deadline, now + 5000);
-        this.emit({ type: 'turn', team: t.index, player: mate, bonus: this.bonus });
-        if (this.phase === 'pick')
-          this.emit({ type: 'pick', team: t.index, player: mate, options: this.options });
-      } else {
-        this.deadline = Math.min(this.deadline, now + AWAY_MS);
-      }
+      // Nobody rolls for this colour any more: it plays itself.
+      this.deadline = Math.min(this.deadline, now + AWAY_MS);
     } else if (this.deadline - now < 5000) {
       // The roller is back: give them time to act again.
       this.deadline = now + 5000;
@@ -288,7 +325,7 @@ export class LudoLogic {
   pick(from: number, pawn: number, now: number): boolean {
     if (this.phase !== 'pick' || from !== this.roller) return false;
     const idx = pawn - 1;
-    const t = this.team;
+    const t = this.seat;
     if (!Number.isInteger(idx) || idx < 0 || idx >= t.pawns.length || this.dice === null) return false;
     const opt = this.optionFor(t, idx, this.dice);
     if (!opt) return false;
@@ -348,35 +385,24 @@ export class LudoLogic {
     this.deadline = at + ms;
   }
 
-  /** Who rolls for a team this turn: teammates alternate; a connected one is preferred. */
-  private pickRoller(t: Team): number {
-    const n = t.members.length;
-    for (let k = 0; k < n; k++) {
-      const id = t.members[(t.turns + k) % n]!;
-      if (this.isConnected(id)) return id;
-    }
-    return t.members[t.turns % n]!;
-  }
-
-  private startTurn(teamIndex: number, bonus: boolean, at: number): void {
-    const t = this.teams[teamIndex]!;
-    this.current = teamIndex;
+  private startTurn(seatIndex: number, bonus: boolean, at: number): void {
+    const t = this.seats[seatIndex]!;
+    this.current = seatIndex;
     this.bonus = bonus;
     if (!bonus) {
       this.sixes = 0;
-      this.roller = this.pickRoller(t);
-      t.turns++;
+      this.roller = t.player;
     }
     this.dice = null;
     this.options = [];
     this.lastPass = null;
     this.set('roll', at, this.isConnected(this.roller) ? ROLL_MS : AWAY_MS);
-    this.emit({ type: 'turn', team: t.index, player: this.roller, bonus });
+    this.emit({ type: 'turn', seat: t.index, player: this.roller, bonus });
   }
 
   private next(at: number, bonus: boolean): void {
     if (bonus) this.startTurn(this.current, true, at);
-    else this.startTurn((this.current + 1) % this.teams.length, false, at);
+    else this.startTurn((this.current + 1) % this.seats.length, false, at);
   }
 
   private doRoll(at: number, auto: boolean): void {
@@ -388,12 +414,12 @@ export class LudoLogic {
       if (value === 6) s.sixes++;
     }
     this.set('rolling', at, DICE_MS);
-    this.emit({ type: 'roll', team: this.current, player: this.roller, value, auto });
+    this.emit({ type: 'roll', seat: this.current, player: this.roller, value, auto });
   }
 
   private resolveRoll(at: number): void {
     const value = this.dice ?? 1;
-    const t = this.team;
+    const t = this.seat;
     if (value === 6) this.sixes++;
     if (this.sixes >= 3) {
       this.pass('triple', at);
@@ -410,43 +436,44 @@ export class LudoLogic {
     }
     this.options = opts;
     this.set('pick', at, this.isConnected(this.roller) ? PICK_MS : AWAY_MS);
-    this.emit({ type: 'pick', team: t.index, player: this.roller, options: opts });
+    this.emit({ type: 'pick', seat: t.index, player: this.roller, options: opts });
   }
 
   private pass(reason: PassReason, at: number): void {
     this.lastPass = reason;
     this.set('pass', at, PASS_MS);
-    this.emit({ type: 'pass', team: this.current, player: this.roller, reason });
+    this.emit({ type: 'pass', seat: this.current, player: this.roller, reason });
   }
 
   /** One legal move for a pawn, or null. */
-  optionFor(t: Team, pawn: number, value: number): MoveOption | null {
+  optionFor(t: Seat, pawn: number, value: number): MoveOption | null {
+    const B = this.board;
     const from = t.pawns[pawn];
-    if (from === undefined || from === HOME) return null;
+    if (from === undefined || from === B.home) return null;
     let to: number;
     if (from === BASE) {
       if (value !== 6) return null;
       to = 0;
     } else {
       to = from + value;
-      if (to > HOME) return null;
+      if (to > B.home) return null;
     }
-    const abs = absOf(t.color, to);
-    const safe = abs !== null && SAFE_ABS.has(abs);
+    const abs = absOf(B, t.color, to);
+    const safe = abs !== null && B.safe.has(abs);
     const captures: Capture[] = [];
     if (abs !== null && !safe) {
-      for (const o of this.teams) {
+      for (const o of this.seats) {
         if (o === t) continue;
         o.pawns.forEach((p, i) => {
-          if (absOf(o.color, p) === abs) captures.push({ team: o.index, pawn: i, from: p });
+          if (absOf(B, o.color, p) === abs) captures.push({ seat: o.index, pawn: i, from: p });
         });
       }
     }
-    return { pawn, from, to, captures, exit: from === BASE, home: to === HOME, safe };
+    return { pawn, from, to, captures, exit: from === BASE, home: to === B.home, safe };
   }
 
   /** Legal moves, one per distinct starting square (pawns sharing a square move the same way). */
-  legalMoves(t: Team, value: number): MoveOption[] {
+  legalMoves(t: Seat, value: number): MoveOption[] {
     const seen = new Set<number>();
     const out: MoveOption[] = [];
     t.pawns.forEach((from, i) => {
@@ -460,13 +487,13 @@ export class LudoLogic {
   }
 
   private doMove(opt: MoveOption, at: number, auto: boolean): void {
-    const t = this.team;
+    const t = this.seat;
     const path: number[] = [];
     if (opt.exit) path.push(0);
     else for (let p = opt.from + 1; p <= opt.to; p++) path.push(p);
     t.pawns[opt.pawn] = opt.to;
     for (const c of opt.captures) {
-      const o = this.teams[c.team]!;
+      const o = this.seats[c.seat]!;
       o.pawns[c.pawn] = BASE;
       o.lost++;
     }
@@ -476,7 +503,7 @@ export class LudoLogic {
       s.steps += opt.exit ? 1 : opt.to - opt.from;
       if (opt.home) s.home++;
     }
-    const move: MoveInfo = { ...opt, team: t.index, player: this.roller, path, auto };
+    const move: MoveInfo = { ...opt, seat: t.index, player: this.roller, path, auto };
     this.lastMove = move;
     this.options = [];
     const ms = path.length * HOP_MS + (opt.captures.length ? CAPTURE_MS : 0) + SETTLE_MS;
@@ -485,11 +512,11 @@ export class LudoLogic {
   }
 
   private afterMove(at: number): void {
-    const t = this.team;
+    const t = this.seat;
     if (this.homeCount(t) === t.pawns.length) {
       this.winner = t.index;
       this.set('finale', at, FINALE_MS);
-      this.emit({ type: 'finish', team: t.index });
+      this.emit({ type: 'finish', seat: t.index });
       return;
     }
     this.next(at, this.dice === 6);
@@ -515,7 +542,7 @@ export function bestOption(options: readonly MoveOption[]): MoveOption {
 }
 
 export interface Standing {
-  team: number;
+  seat: number;
   rank: number;
   home: number;
   /** Sum of all pawn progress (base counts as 0). */
@@ -524,19 +551,19 @@ export interface Standing {
 
 /** Winner first, then pawns home, then distance covered. Ties share a rank. */
 export function standings(L: LudoLogic): Standing[] {
-  const rows = L.teams.map((t) => ({
-    team: t.index,
+  const rows = L.seats.map((t) => ({
+    seat: t.index,
     win: L.winner === t.index ? 1 : 0,
     home: L.homeCount(t),
     progress: t.pawns.reduce((s, p) => s + Math.max(0, p), 0),
   }));
-  rows.sort((a, b) => b.win - a.win || b.home - a.home || b.progress - a.progress || a.team - b.team);
+  rows.sort((a, b) => b.win - a.win || b.home - a.home || b.progress - a.progress || a.seat - b.seat);
   const out: Standing[] = [];
   rows.forEach((r, i) => {
     const prev = rows[i - 1];
     const same = prev && prev.win === r.win && prev.home === r.home && prev.progress === r.progress;
     const rank = same ? out[i - 1]!.rank : i + 1;
-    out.push({ team: r.team, rank, home: r.home, progress: r.progress });
+    out.push({ seat: r.seat, rank, home: r.home, progress: r.progress });
   });
   return out;
 }

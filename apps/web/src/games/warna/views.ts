@@ -1,13 +1,14 @@
 /**
- * Phone screens of Petualangan Warna (pure). Playing, the phone is held sideways: the standard
- * joystick on the left, LOMPAT (held, so a short press is a short hop) as the big right button,
- * plus TUKAR when one person steers two characters, TANDA ("here!") in a group, and ULANG to
- * vote for a restart.
+ * Phone screens of Petualangan Warna (pure). Picking: the Host chooses a world, then a stage of
+ * it (locked stages greyed). Playing, the phone is held sideways (owner 2026-11-22, after
+ * Roblox): the joystick on the left half and the whole right half as LOMPAT, with small pills
+ * top right: TUKAR when one person steers two characters (TANDA in a group), ? for a hint
+ * (pulsing when the group seems stuck), LEWATI for the Host after a long time, and ULANG.
  */
 import type { ControllerView, MenuOption, PadButton } from '@hoorah/protocol';
-import { LEVELS, type Slot } from './levels';
-import type { WarnaMatch } from './logic';
-import { formatClock, LEVEL_TEXT, levelName, SLOT_NAME, SLOT_SYMBOL, STR, stars } from './strings';
+import { BIOMES, biomeOf, LEVELS, type Slot } from './levels';
+import { isOpen, type Progress, secondFruit, type WarnaMatch, worldStars } from './logic';
+import { BIOME_TEXT, formatClock, levelName, SLOT_NAME, SLOT_SYMBOL, STR, stars } from './strings';
 
 /** Colours on the phone: the same four as the stage. */
 export const SLOT_HEX: Record<Slot, string> = { 0: '#F2453D', 1: '#2F7DF6', 2: '#22B35E', 3: '#FFC928' };
@@ -35,44 +36,96 @@ const RESTART: PadButton = {
   tone: 'cream',
   press: 'tap',
 };
+const SKIP: PadButton = {
+  id: 'skip',
+  label: STR.btnSkip,
+  icon: 'skip',
+  tone: 'orange',
+  press: 'tap',
+};
+
+function hintButton(pulse: boolean): PadButton {
+  return {
+    id: 'hint',
+    label: STR.btnHint,
+    sub: STR.btnHintSub,
+    icon: 'hint',
+    tone: pulse ? 'yellow' : 'cream',
+    press: 'tap',
+    cooldownMs: 600,
+    ...(pulse ? { pulse: true } : {}),
+  };
+}
 
 export interface ViewContext {
   hostId: number | null;
   hostName: string;
-  /** Best stars per level id remembered on this screen. */
-  best: Record<string, number>;
+  /** Best stars per stage id remembered on this screen. */
+  progress: Progress;
 }
 
-function pickView(m: WarnaMatch, me: number, ctx: ViewContext): ControllerView {
-  const options: MenuOption[] = LEVELS.map((lv, i) => ({
-    id: lv.id,
-    label: `${i + 1}. ${levelName(lv.id)}`,
-    sub: `${LEVEL_TEXT[lv.id]?.sub ?? ''} · ${STR.pickBest(ctx.best[lv.id] ?? 0)}`,
-    thumb: `lvl-${lv.id}`,
-  }));
-  const view: Extract<ControllerView, { kind: 'menu' }> = {
+function worldMenu(m: WarnaMatch, progress: Progress): Extract<ControllerView, { kind: 'menu' }> {
+  const options: MenuOption[] = BIOMES.map((b) => {
+    const st = worldStars(b.id, progress);
+    return {
+      id: `w:${b.id}`,
+      label: BIOME_TEXT[b.id].name,
+      sub: b.ready ? `${BIOME_TEXT[b.id].sub} · ${STR.worldStars(st.got, st.of)}` : STR.soon,
+      thumb: `biome-${b.id}`,
+      ...(b.ready ? {} : { disabled: true, badge: STR.soon }),
+    };
+  });
+  return {
     kind: 'menu',
     eyebrow: STR.pickEyebrow,
     title: STR.pickTitle,
     hint: STR.pickHint(m.stages),
     options,
+    selected: `w:${m.world}`,
+    confirm: { id: 'next', label: STR.pickNext, style: 'yellow' },
+  };
+}
+
+function levelMenu(m: WarnaMatch, progress: Progress): Extract<ControllerView, { kind: 'menu' }> {
+  const options: MenuOption[] = biomeOf(m.world).levels.map((lv) => {
+    const open = isOpen(lv, progress);
+    const best = progress[lv.id];
+    return {
+      id: lv.id,
+      label: STR.levelLabel(lv.number),
+      sub: open ? `${levelName(lv.id)}${best !== undefined ? ` · ${stars(best)}` : ''}` : STR.levelLocked,
+      thumb: `lvl-${lv.id}`,
+      ...(open ? {} : { disabled: true, badge: STR.levelLocked }),
+    };
+  });
+  return {
+    kind: 'menu',
+    eyebrow: STR.levelEyebrow(BIOME_TEXT[m.world].name),
+    title: STR.levelTitle,
+    hint: STR.levelHint,
+    options,
     selected: LEVELS[m.pick]?.id,
     confirm: { id: 'start', label: STR.pickStart, style: 'yellow' },
+    back: { id: 'back', label: STR.pickBack },
   };
+}
+
+function pickView(m: WarnaMatch, me: number, ctx: ViewContext): ControllerView {
+  const view = m.pickStep === 'world' ? worldMenu(m, ctx.progress) : levelMenu(m, ctx.progress);
   if (me === ctx.hostId) return view;
-  const { confirm: _c, hint: _h, ...rest } = view;
+  const { confirm: _c, back: _b, hint: _h, ...rest } = view;
   return { ...rest, locked: true, waiting: STR.pickWaiting(ctx.hostName) };
 }
 
 function otherColors(m: WarnaMatch, mine: Slot): string {
-  const k = m.world?.colors ?? 2;
+  const k = m.sim?.colors ?? 2;
   const out: string[] = [];
   for (let s = 0; s < k; s++) if (s !== mine) out.push(SLOT_NAME[s as Slot].toLowerCase());
   return out.join(', ');
 }
 
-function padView(m: WarnaMatch, me: number): ControllerView {
-  const w = m.world;
+function padView(m: WarnaMatch, me: number, ctx: ViewContext): ControllerView {
+  const w = m.sim;
   const key = m.charOf(me);
   const c = w && key >= 0 ? w.chars[key] : undefined;
   if (!w || !c) return watchView();
@@ -95,6 +148,8 @@ function padView(m: WarnaMatch, me: number): ControllerView {
     eyebrow = STR.soloEyebrow;
     hint = STR.hintSolo(SLOT_NAME[other]);
   } else buttons.push(PING);
+  buttons.push(hintButton(m.hintPulse()));
+  if (me === ctx.hostId && m.canSkip()) buttons.push(SKIP);
   buttons.push(RESTART);
   const stats = [
     { label: STR.statGems, value: `${gems.taken}/${gems.total}` },
@@ -113,7 +168,9 @@ function padView(m: WarnaMatch, me: number): ControllerView {
   return {
     kind: 'pad',
     mode: 'stick',
+    jumpZone: true,
     color: SLOT_HEX[slot],
+    ...(c.sub === 1 ? { fruit: secondFruit(m.person(me)?.fruit) } : {}),
     title: `${SLOT_NAME[slot]} ${SLOT_SYMBOL[slot]}`,
     eyebrow,
     stats,
@@ -144,13 +201,13 @@ export function viewFor(m: WarnaMatch, me: number, ctx: ViewContext): Controller
       };
     }
     case 'play':
-      return m.inCast(me) ? padView(m, me) : watchView();
+      return m.inCast(me) ? padView(m, me, ctx) : watchView();
     case 'clear': {
       const s = m.lastScore();
       return {
         kind: 'message',
         eyebrow: STR.stageOf(m.stage + 1, m.order.length).toUpperCase(),
-        title: STR.clearPhoneTitle,
+        title: s?.skipped ? STR.skippedTitle : STR.clearPhoneTitle,
         subtitle: s ? STR.clearPhoneSub(stars(s.stars), formatClock(s.time)) : undefined,
         tone: 'good',
         avatarOf: me,

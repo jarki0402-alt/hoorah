@@ -360,7 +360,7 @@ function TapView({ v }: { v: V<'tap'> }) {
     <div
       class="ctrl landscape-split tap-view"
       style={{
-        boxShadow: `inset 10px 0 0 ${v.teamColor}`,
+        boxShadow: `inset 0 0 0 6px ${v.teamColor}`,
         '--team': v.teamColor,
       }}
     >

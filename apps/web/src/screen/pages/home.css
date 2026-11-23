@@ -1,337 +1,256 @@
-/* Home of the main screen (HomePage.tsx), authored on the 1280×720 stage. The rows stack
-   downwards and the whole column glides (transform only, cheap on Smart TVs); taller stages
-   (16:10, 4:3) simply show more rows. */
+/* Home of the main screen (HomePage.tsx), authored on the 1280×720 stage. Everything sits on one
+   screen: the hero takes whatever height is left, so 16:10 and 4:3 show more of the art while
+   the shelf tabs and the two card rows keep their size and place at the bottom. */
 
 .home .scrim-bottom {
-  /* Rows cover most of the screen: the art fades out higher than on a single-row layout. */
-  background: linear-gradient(0deg, var(--ink) 0, var(--ink) 38%, rgba(17, 18, 20, 0) 72%);
+  /* Solid under the tabs and cards, fading out behind the hero copy. */
+  background: linear-gradient(0deg, var(--ink) 0, var(--ink) 400px, rgba(17, 18, 20, 0) 520px);
 }
 
-.home-dim {
-  position: absolute;
-  inset: 0;
-  background: rgba(17, 18, 20, 0.35);
-  transition: background 0.45s ease;
-}
-
-.home-dim.deep {
-  background: rgba(17, 18, 20, 0.62);
-}
-
-.home-viewport {
+.home-body {
   position: absolute;
   left: 0;
   right: 0;
   top: 76px;
   bottom: 0;
-  overflow: hidden;
-}
-
-.home-scroll {
-  position: relative;
-  padding: 14px 0 48px;
-  transition: transform 0.45s var(--ease-out);
-  will-change: transform;
-}
-
-/* ------------------------------------------------------------ posters */
-
-.home-posters {
   display: flex;
-  gap: 20px;
-  height: 232px;
-  margin-bottom: 26px;
-  padding: 0 48px;
+  flex-direction: column;
 }
 
-.poster {
-  position: relative;
+/* ------------------------------------------------------------ hero */
+
+.home-hero {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
-  min-width: 0;
-  padding: 0;
-  overflow: hidden;
-  border: none;
-  border-radius: 22px;
-  text-align: left;
-  color: var(--ink);
-  transition: transform 0.22s var(--ease-pop);
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 0 48px 14px;
 }
 
-.poster.focusable.focused {
-  box-shadow:
-    0 0 0 3px var(--ink),
-    0 0 0 6px #fff,
-    0 18px 30px rgba(0, 0, 0, 0.45);
-}
-
-.poster-copy {
-  position: relative;
-  z-index: 1;
+.home-hero-copy {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  padding: 24px 26px;
-  min-width: 0;
+  gap: 6px;
+  max-width: 600px;
+  text-shadow: 0 1px 8px rgba(17, 18, 20, 0.8);
+  animation: fade-in 0.25s ease;
 }
 
-.poster-eyebrow {
-  font-size: 12px;
+.home-hero-eyebrow {
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.14em;
+  color: var(--yellow);
 }
 
-.poster-title {
-  font-size: 46px;
-  font-weight: 800;
-  line-height: 0.92;
+.home-hero-chips {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.poster-text {
-  max-width: 330px;
+.home-hero-chips .mood-pill {
+  font-size: 13px;
+  padding: 3px 11px;
+}
+
+.home-hero-players {
   font-size: 15px;
-  font-weight: 600;
-  line-height: 1.35;
+  font-weight: 700;
+  color: var(--text-2);
 }
 
-.poster-cta {
+.home-hero-players.short {
+  color: var(--yellow);
+}
+
+.home-hero-title {
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 3px 0 var(--ink);
+}
+
+.home-hero-line {
+  margin: 0;
+  max-width: 600px;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-hero-sub {
+  margin: 0;
+  max-width: 540px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--text-3);
+}
+
+/* ------------------------------------------------------------ quick starts */
+
+.home-quick {
+  display: flex;
+  gap: 12px;
+}
+
+.quick {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-top: auto;
-  padding: 9px 16px;
+  gap: 9px;
+  height: 44px;
+  padding: 0 18px 0 14px;
+  border: none;
   border-radius: 999px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
+  color: var(--ink);
+}
+
+.quick-party {
+  background: var(--orange);
+}
+
+.quick-random {
+  background: var(--yellow);
+}
+
+.quick-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 13px;
   color: #fff;
   background: var(--ink);
 }
 
-/* Mode Pesta: solid orange with the lineup fanned out like cards on a table. */
-.poster-party {
-  flex: 1.9 1 0;
-  background: var(--orange);
-}
-
-.poster-party .poster-copy {
-  flex: 0 0 52%;
-}
-
-.poster-lineup {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-}
-
-.lineup-card {
-  position: absolute;
-  left: calc(3% + var(--i) * 24%);
-  top: calc(26px + var(--i) * 12px);
-  border-radius: 12px;
-  box-shadow:
-    0 0 0 3px var(--ink),
-    0 10px 18px rgba(0, 0, 0, 0.3);
-  transform: rotate(calc(-7deg + var(--i) * 7deg));
+.quick-die {
+  width: 24px;
+  height: 24px;
+  transform: rotate(10deg);
   transition: transform 0.3s var(--ease-pop);
 }
 
-.poster-party.focused .lineup-card {
-  transform: rotate(calc(-9deg + var(--i) * 9deg)) translateY(-6px);
+.quick-random.is-spin .quick-die {
+  animation: home-roll 0.3s linear infinite;
 }
 
-.lineup-no {
-  position: absolute;
-  left: -8px;
-  top: -8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 800;
-  color: var(--ink);
-  background: var(--yellow);
-  box-shadow: 0 0 0 3px var(--ink);
-}
-
-.lineup-names {
-  position: absolute;
-  left: 0;
-  right: 18px;
-  bottom: 16px;
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 800;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Acak!: yellow with a die; while it spins, a window shows the games flicking past. */
-.poster-random {
-  flex: 1 1 0;
-  background: var(--yellow);
-}
-
-.poster-random .poster-copy {
-  flex: 1;
-}
-
-/* The die sits top right: the idle text stays clear of it. */
-.poster-random.is-idle .poster-text {
-  max-width: calc(100% - 96px);
-}
-
-.poster-random .poster-title {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.random-die {
-  position: absolute;
-  right: 22px;
-  top: 22px;
-  width: 92px;
-  height: 92px;
-  transform: rotate(12deg);
-  transition: transform 0.4s var(--ease-pop);
-}
-
-.poster-random.focused .random-die {
-  transform: rotate(-8deg) scale(1.06);
-}
-
-.random-window {
-  position: absolute;
-  right: 22px;
-  bottom: 22px;
-  border-radius: 12px;
-  box-shadow: 0 0 0 3px var(--ink);
-}
-
-.poster-random.is-spin .random-window {
-  animation: home-flick 0.12s ease-out;
-}
-
-.poster-random.is-done .random-window {
-  animation: home-land 0.45s var(--ease-pop);
-}
-
-.poster-random.is-spin .poster-title,
-.poster-random.is-done .poster-title {
-  font-size: 30px;
-  line-height: 1.05;
-  white-space: normal;
-}
-
-@keyframes home-flick {
-  from {
-    transform: translateY(-10px);
-    opacity: 0.4;
+@keyframes home-roll {
+  to {
+    transform: rotate(370deg);
   }
 }
 
-@keyframes home-land {
-  from {
-    transform: scale(0.86);
-  }
-}
+/* ------------------------------------------------------------ shelf tabs */
 
-/* ------------------------------------------------------------ rows */
-
-.home-row {
-  margin-bottom: 22px;
-  padding-left: 48px;
-}
-
-.home-row-head {
+.home-shelf {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
-  height: 30px;
-  margin-bottom: 6px;
-  padding-right: 48px;
+  gap: 6px;
+  height: 52px;
+  padding: 0 48px;
 }
 
-.home-row-title {
+.home-shelf-tab {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 20px;
-  font-weight: 800;
-  white-space: nowrap;
+  gap: 7px;
+  height: 38px;
+  padding: 0 15px;
+  border: none;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.08);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
-.mood-text-heboh {
-  color: #ff8a5c;
+.home-shelf-tab.on {
+  color: var(--ink);
+  background: #fff;
 }
 
-.mood-text-otak {
-  color: #8cc2ff;
-}
-
-.mood-text-ramai {
-  color: var(--yellow);
-}
-
-.mood-text-santai {
-  color: var(--green-text);
-}
-
-.home-row-sub {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
+.home-shelf-count {
   font-size: 13px;
-  color: var(--text-3);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 800;
+  opacity: 0.6;
 }
 
-/* The focused game's name and tagline sit at the right end of its row heading. */
-.home-focus {
-  display: flex;
+.home-shelf-hint {
   flex: 0 1 auto;
-  align-items: baseline;
-  gap: 8px;
   min-width: 0;
   margin-left: auto;
   overflow: hidden;
   font-size: 14px;
-  white-space: nowrap;
-  animation: fade-in 0.25s ease;
-}
-
-.home-focus-title {
-  flex: none;
-  color: #fff;
-}
-
-.home-focus-tagline {
-  min-width: 0;
-  overflow: hidden;
+  font-weight: 600;
   color: var(--text-3);
   text-overflow: ellipsis;
-}
-
-.card-players {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-2);
   white-space: nowrap;
-  animation: fade-in 0.2s ease;
 }
 
-.card-players.short {
-  color: var(--yellow);
+/* ------------------------------------------------------------ grid */
+
+.home-grid-viewport {
+  flex: none;
+  /* Two card rows (126px art + title) and room for the focus ring. */
+  height: 360px;
+  overflow: hidden;
+}
+
+.home-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 14px 48px 0;
+  transition: transform 0.4s var(--ease-out);
+  will-change: transform;
+}
+
+.home-grid-row {
+  display: grid;
+  grid-template-columns: repeat(5, 224px);
+  gap: 16px;
+  transition: opacity 0.3s ease;
+}
+
+.home-grid-row.off {
+  opacity: 0;
+}
+
+.home-grid-row .card {
+  width: 224px;
+  gap: 9px;
+}
+
+.home-grid-row .card-title {
+  font-size: 16px;
+}
+
+/* Games that need more (or fewer) players than are in the room step back a little. */
+.card.short:not(.focused) {
+  opacity: 0.6;
 }
 
 .tag.card-badge-baru {
@@ -345,62 +264,4 @@
 .tag.card-badge-segera {
   color: #fff;
   background: var(--ink);
-}
-
-/* ------------------------------------------------------------ all games */
-
-.home-all .home-row-head {
-  height: 40px;
-  margin-bottom: 10px;
-  padding: 0 48px;
-}
-
-.home-gtabs {
-  display: flex;
-  flex: none;
-  gap: 4px;
-}
-
-.home-gtab {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 14px;
-  border: none;
-  border-radius: 999px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-2);
-  background: rgba(255, 255, 255, 0.08);
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-
-.home-gtab.on {
-  color: var(--ink);
-  background: #fff;
-}
-
-.home-gtab-count {
-  font-size: 12px;
-  font-weight: 800;
-  opacity: 0.6;
-}
-
-.home-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  padding: 0 48px;
-}
-
-.home-grid-row {
-  display: grid;
-  grid-template-columns: repeat(5, 224px);
-  gap: 16px;
-}
-
-.home-grid .card {
-  width: 224px;
 }

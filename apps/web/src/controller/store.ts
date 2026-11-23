@@ -55,6 +55,8 @@ export interface PlatformState {
   recent?: string[];
   /** Tab of the main screen's game list. */
   tab?: string;
+  /** The main screen shows the game's tutorial: who already pressed "Paham!". */
+  tutorial?: { ready: number[] };
 }
 export const platform = signal<PlatformState>({
   page: 'join',
@@ -81,6 +83,16 @@ export type PassState =
   | { s: 'ok'; pass: RoomPass }
   | { s: 'error'; reason: PassReject };
 export const passState = signal<PassState>({ s: 'idle' });
+/** The pending Host offer this phone is part of (it made it, or it was asked), from the server. */
+export const hostOffer = signal<{ from: number; to: number } | null>(null);
+/** A short notice about the Host role on this phone: a new Host, or how this phone's offer ended. */
+export type HostNotice = {
+  id: number;
+  kind: 'now' | 'declined' | 'expired' | 'cancelled';
+  who: number;
+  name: string;
+};
+export const hostNotice = signal<HostNotice | null>(null);
 
 export const me = computed(() => players.value.find((p) => p.id === meId.value) ?? null);
 export const hostPlayer = computed(() => players.value.find((p) => p.isHost) ?? null);
@@ -245,6 +257,7 @@ export function leave(): void {
     players.value = [];
     stage.value = 'code';
     error.value = null;
+    hostOffer.value = null;
   });
 }
 
@@ -281,6 +294,8 @@ function onServer(m: ServerMsg): void {
       batch(() => {
         meId.value = m.id;
         players.value = m.players;
+        // A reconnect ends any offer on the server side.
+        hostOffer.value = null;
         screenOnline.value = m.screenOnline;
         roomSeats.value = m.maxPlayers;
         roomPass.value = m.pass;
@@ -309,9 +324,63 @@ function onServer(m: ServerMsg): void {
       if (m.ch === 'p') onPlatform(m.data);
       else if (m.ch === 'g') onGame(m.data);
       return;
+    case 'hostOffer':
+      hostOffer.value = { from: m.from, to: m.to };
+      if (m.to === meId.value) haptic([30, 40, 30]);
+      return;
+    case 'hostOfferEnd':
+      onHostOfferEnd(m);
+      return;
+    case 'hostChanged':
+      showHostNotice('now', m.id);
+      if (m.id === meId.value) haptic([20, 30, 20]);
+      return;
     default:
       return;
   }
+}
+
+/* ------------------------------------------------------------------ Host offers */
+
+/** This phone withdrew or replaced its own offer: the "cancelled" answer needs no notice. */
+let quietCancel = false;
+let noticeSeq = 0;
+
+function showHostNotice(kind: HostNotice['kind'], id: number): void {
+  const name = players.value.find((p) => p.id === id)?.name ?? 'Pemain';
+  hostNotice.value = { id: ++noticeSeq, kind, who: id, name };
+}
+
+function onHostOfferEnd(m: Extract<ServerMsg, { t: 'hostOfferEnd' }>): void {
+  const cur = hostOffer.value;
+  if (cur && cur.from === m.from && cur.to === m.to) hostOffer.value = null;
+  if (m.from !== meId.value) return;
+  if (m.result === 'cancelled' && quietCancel) {
+    quietCancel = false;
+    return;
+  }
+  // Accepted is announced by `hostChanged` to everyone.
+  if (m.result !== 'accepted') showHostNotice(m.result, m.to);
+}
+
+/** The Host asks player `id` to take over (they must accept on their phone). */
+export function offerHost(id: number): void {
+  haptic(12);
+  if (hostOffer.value) quietCancel = true;
+  net?.send({ t: 'hostOffer', id });
+}
+
+/** The Host withdraws its pending offer. */
+export function cancelHostOffer(): void {
+  haptic(12);
+  quietCancel = true;
+  net?.send({ t: 'hostOfferCancel' });
+}
+
+/** The asked player answers the pending offer. */
+export function replyHostOffer(accept: boolean): void {
+  haptic(accept ? 20 : 12);
+  net?.send({ t: 'hostReply', accept });
 }
 
 function onPassAnswer(m: Extract<ServerMsg, { t: 'pass' }>): void {
@@ -351,6 +420,9 @@ function onPlatform(data: unknown): void {
           ? { recent: p.recent.filter((x): x is string => typeof x === 'string').slice(0, 8) }
           : {}),
         ...(typeof p.tab === 'string' ? { tab: p.tab } : {}),
+        ...(p.tutorial && Array.isArray(p.tutorial.ready)
+          ? { tutorial: { ready: p.tutorial.ready.filter((x): x is number => typeof x === 'number') } }
+          : {}),
       };
       if (leavingGame || enteringGame) view.value = null;
     });
@@ -392,6 +464,12 @@ export function setScreenTab(tab: string): void {
 export function host(cmd: HostCommand): void {
   haptic(12);
   net?.send({ t: 'relay', ch: 'p', to: 'screen', data: { k: 'host', cmd } });
+}
+
+/** "Paham!" during a game's tutorial on the main screen. */
+export function understood(): void {
+  haptic(20);
+  net?.send({ t: 'relay', ch: 'p', to: 'screen', data: { k: 'understood' } });
 }
 
 export function react(r: Reaction): void {

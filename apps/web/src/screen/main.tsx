@@ -9,6 +9,7 @@ import './screen.css';
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { ensureGfxProfile } from '../games/common/gfx';
+import { autoHideCursor } from '../shared/cursor';
 import { KeepAwake } from '../shared/device';
 import { NetBanner, Reactions, Toasts } from './components';
 import { toggleFullscreen } from './fullscreen';
@@ -18,7 +19,8 @@ import { GamePage } from './pages/GamePage';
 import { HomePage } from './pages/HomePage';
 import { JoinPage } from './pages/JoinPage';
 import { ResultsPage } from './pages/ResultsPage';
-import { audioOn, initAudio, notice, page, startNet, unlockAudio } from './store';
+import { audioOn, initAudio, notice, page, startNet, tutorial, unlockAudio } from './store';
+import { TutorialOverlay } from './tutorial/TutorialOverlay';
 
 /**
  * The whole TV UI is authored at 1280x720 and scaled to fit any screen (720p, 1080p, 4K, laptops).
@@ -55,6 +57,7 @@ function App() {
       {p === 'detail' && <DetailPage />}
       {p === 'game' && <GamePage />}
       {p === 'results' && <ResultsPage />}
+      {tutorial.value && (p === 'game' || p === 'detail') && <TutorialOverlay run={tutorial.value} />}
       <Toasts />
       <Reactions />
       <NetBanner />
@@ -89,6 +92,7 @@ const firstInput = () => {
 const GESTURES = ['pointerdown', 'touchend', 'keydown'] as const;
 for (const ev of GESTURES) window.addEventListener(ev, firstInput, true);
 bindKeyboard(firstInput);
+autoHideCursor(document);
 window.addEventListener('keydown', (e) => {
   if (e.key === 'f' || e.key === 'F') toggleFullscreen();
 });

@@ -54,6 +54,8 @@ const keepAsHeldFor = signal<string | null>(null);
 export const gameOrientation = computed<Orientation | null>(() => {
   const p = platform.value;
   if (stage.value !== 'room' || p.page !== 'game' || !p.gameId) return null;
+  // "Cara main" on the main screen: the phone only shows Paham!, held any way (no rotate prompt).
+  if (p.tutorial) return null;
   const game = GAMES[p.gameId as GameId];
   if (!game) return null;
   return game.orientation === 'Mendatar' ? 'landscape' : 'portrait';

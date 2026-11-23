@@ -1,4 +1,5 @@
 import { boardBody, pawnBody } from '../../games/ludo/board-art';
+import { boardFor } from '../../games/ludo/logic';
 import { fruitMarkup } from './fruits';
 import { seeded, svgDoc } from './svg';
 
@@ -62,7 +63,7 @@ export function ludoSvg(): string {
   const body = [
     table(),
     // The board, tilted on the right.
-    `<g transform="rotate(-9 492 188)"><svg x="292" y="-14" width="400" height="400" viewBox="-0.5 -0.5 16 16">${boardBody([0, 1, 2, 3], 4)}</svg></g>`,
+    `<g transform="rotate(-9 492 188)"><svg x="292" y="-14" width="400" height="400" viewBox="-0.5 -0.5 16 16">${boardBody(boardFor(4), [0, 1, 2, 3], 4)}</svg></g>`,
     // Pawns on the board (rough board coordinates after the tilt).
     pawn(372, 150, 0.95, 0, '1'),
     pawn(468, 58, 0.95, 1, '2'),

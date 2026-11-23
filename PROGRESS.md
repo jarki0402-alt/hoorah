@@ -52,6 +52,8 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 10. **STUN + TURN Cloudflare (diskusi 2026-11-22, belum dikerjakan):** STUN `stun.cloudflare.com` (gratis tanpa batas) + TURN Cloudflare (gratis 1.000 GB/bulan, lalu $0,05/GB) untuk HP yang gagal tersambung langsung; data tidak lewat VM (tidak mengganggu Suwwara, data keluar VM turun), DNS Hoorah tetap awan abu-abu. Server membuat kredensial TURN sementara per room lewat API (rahasia di `.env`), STUN sendiri jadi cadangan selama uji lalu port 3478 bisa ditutup. Pengaman: server berhenti memberi kredensial TURN bila perkiraan pemakaian bulan ini mendekati 800 GB, pemakaian TURN tampil di admin, indikator persen sambungan langsung vs TURN. Pemilik perlu membuat TURN key di dashboard Cloudflare (menu Realtime).
 
+11. **[SELESAI 2026-11-22, lihat Log] Tutorial singkat di semua game (disetujui pemilik 2026-11-22).** Di layar utama sebelum ronde pertama: 3–4 langkah bergambar (aset game sendiri, panah/gerakan, satu kalimat), HP mini yang menyorot tombol, kartu asal-usul "Terinspirasi dari ..., bedanya ..." (boleh menyebut nama game asli sebagai teks, tanpa logo/aset). Muncul otomatis hanya pertama kali per game per perangkat layar, lalu lewat tombol "Cara main" (detail game + menu jeda). Host bisa Lewati; tombol "Paham!" di setiap HP, tutorial selesai saat semua menekan. Satu mesin bersama, isi per game berupa data, animasi SVG/CSS tanpa video. Gelombang 2: mesin + 5 contoh (Ular Tangga, Petualangan Warna, Kampung Siluman, Bajaj Rush, Kuis Nusantara), dinilai pemilik dulu; Gelombang 3–4: 25 sisanya. Latihan tombol di HP ditunda. Commit/push dan TURN Cloudflare ditunda sampai pembaruan besar (keputusan pemilik 2026-11-22: fokus lokal).
+
 ## Format entri
 
 ```markdown
@@ -65,6 +67,175 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 ```
 
 ## Log
+
+### 2026-11-23 · Commit semua pekerjaan lokal + catatan rancangan produksi
+
+**Apa yang diubah:** semua perubahan sejak `18d6481` di-commit (push oleh pemilik). `PLAN.md` bab 3a mencatat diskusi produksi yang ditahan: nama, game gratis, skema Pass, harga, QRIS di layar utama, update tanpa ganggu pemain, build di GitHub, TURN Cloudflare.
+**Alasan:** pemilik minta commit sekarang dan harga disimpan dulu sebelum masuk PRD.
+**File:** `PLAN.md`, `PROGRESS.md` (dokumen); commit mencakup seluruh perubahan kode 2026-11-22.
+**Verifikasi:** `npm run check` (lint + typecheck + tes unit + build) lulus sebelum commit. Docker tidak dijalankan ulang karena kode tidak berubah sejak pemeriksaan 2026-11-22. `docker/.env.example` tidak ikut commit (menunggu pemilik memeriksa isinya).
+**Selanjutnya / catatan:** pemilik `git push`; langkah Cloudflare (TURN key) oleh pemilik; build di GitHub dan kode TURN menunggu "eksekusi".
+
+### 2026-11-23 · PLAN.md: catatan serah terima antarsesi
+
+**Apa yang diubah:** file baru `PLAN.md` berisi keadaan sekarang, yang sudah selesai sejak commit `18d6481`, yang akan dikerjakan (ketajaman kanvas 9 game Phaser + 10 game Three.js, Petualangan Warna lanjutan, commit), yang belum terealisasi (status Antrean + catatan tersisa), dan skema yang sudah diterapkan (pindah Host, Ludo segi-N, Petualangan Warna, Beranda, `deviceScale()`). `CLAUDE.md` menyuruh membaca `PLAN.md` di awal sesi.
+**Alasan:** pemilik akan membersihkan chat dan minta semua dicatat.
+**File:** `PLAN.md` (baru), `CLAUDE.md`, `PROGRESS.md`
+**Verifikasi:** hanya dokumen, tidak ada kode yang berubah.
+**Selanjutnya / catatan:** tunggu "eksekusi" untuk item di PLAN.md bab 3.
+
+### 2026-11-22 · Petualangan Warna baru, Ludo segi 5–8, pindah Host dengan persetujuan, Beranda baru
+
+**Apa yang diubah:**
+- **Petualangan Warna** (rancangan disetujui pemilik):
+  - Lompat selalu 2,5 petak, ditahan = lompat lagi saat mendarat. Coyote 0,15 s, buffer 0,20 s, kontrol udara +50%, lari penuh setelah joystick lewat 25%. Ada geser sudut atap dan naik tepi (0,3 petak).
+  - HP: setengah kanan layar = LOMPAT (opsi `jumpZone`, hanya game ini), dengan tombol kecil TUKAR/TANDA, ?, LEWATI, ULANG di kanan atas.
+  - Kejelasan: kabel tuas/tombol ke pintu, pembuka yang menyorot pintu keluar, petunjuk 2 tahap (? berdenyut setelah 45 s), papan bantu diam-diam setelah 3 kali jatuh di kolam yang sama, Host bisa Lewati level setelah 3 menit.
+  - Dunia + level: Hutan 1–30 baru (papan kayu tembus, jamur pantul), Gua 1–6 (ide 6 peta lama digambar ulang), Gurun/Salju/Awan "Segera hadir". Pilih dunia + level di HP Host, peta perjalanan 30 titik di layar utama, 3 bintang, kemajuan disimpan di browser layar utama (`hoorah.warna.progress.v2`). Gerbang warna dipasangkan untuk 3–4 warna.
+  - Latar Hutan dan Gua lebih hidup (lapisan paralaks, daun, sinar, kunang-kunang), gerak ambient dikurangi jika di bawah 45 FPS selama 3 s.
+- **Ludo**: tim dihapus. 2–4 pemain papan klasik, 5–8 pemain papan segi 5 sampai segi 8 (petak per sisi 11/9/7/7, 53–60 langkah pulang, klasik 56). 8 warna: merah, hijau, kuning, biru, merah muda, tosca, oranye, cokelat. Panel pemain menyesuaikan jumlah. Nama "test4" 3 kali di screenshot pemilik = nama kembar, bukan bug.
+- **Pindah Host dengan persetujuan**:
+  - Protokol: `hostOffer`/`hostOfferCancel`/`hostReply` dari HP; `hostOffer`/`hostOfferEnd`/`hostChanged` dari server; `LIMITS.hostOfferMs` 30 s.
+  - Server: maks 1 permintaan per room, hanya Host aktif yang boleh menawarkan, hanya target yang boleh menjawab, batal jika Host berganti atau salah satu keluar.
+  - HP: tombol "Ganti Host" di pad Host dan menu jeda, dialog Terima/Tolak.
+  - Toast di layar utama.
+- **Beranda**: satu layar tanpa gulir panjang. Hero game yang difokus, dua tombol cepat (Mode Pesta, Acak game), satu baris rak (Pas untuk kalian, Heboh, Adu Otak, Ramai-ramai, Santai, Semua) yang sama dengan grup di HP, grid 5×2 yang bergeser per baris. Poster besar dan baris bertumpuk (game muncul hingga 3 kali) dihapus.
+
+**Alasan:** permintaan pemilik 2026-11-22 ("eksekusi semua"): kontrol Petualangan Warna tidak enak (lompat harus ditahan), peta mepet dan membingungkan; Ludo 5+ pemain jadi beregu; perlu serah Host dengan persetujuan; Beranda berantakan dengan 30 game.
+
+**File:**
+- Petualangan Warna:
+  - baru: `apps/web/src/games/warna/{maps-hutan,maps-gua,palette}.ts`
+  - diubah: `levels.ts`, `reach.test.ts`, `world.ts`, `logic.ts`, `driver.ts`, `views.ts`, `hud.tsx`, `scene.ts`, `textures.ts`, `thumb.ts`, `strings.ts`, `tutorial.ts`, `warna.css`, `world.test.ts`, `logic.test.ts`
+  - `apps/web/src/controller/thumbs/warna.ts`
+- Ludo:
+  - `apps/web/src/games/ludo/{logic,geometry,board-art,colors,strings,store,screen,driver,brain,results,views,tutorial}.ts(x)`, `ludo.css`, `logic.test.ts`, `brain.test.ts`
+  - `apps/web/src/shared/art/ludo.ts`, `apps/web/src/shared/games.ts`
+- Pindah Host:
+  - `packages/protocol/src/{messages,validate,constants}.ts` + tes
+  - `apps/server/src/rooms.ts`, `apps/server/src/rooms.hostoffer.test.ts`
+  - `apps/web/src/controller/{hostoffer.tsx,store.ts,strings.ts,room.tsx,ingame.tsx,controller.css,pad.tsx,pad.css}`
+  - `apps/web/src/screen/{store.ts,strings.ts}`
+  - `e2e/host-offer.spec.ts`, `e2e/hoorah.spec.ts`
+- Beranda: `apps/web/src/screen/pages/{HomePage.tsx,home.css}`, `apps/web/src/screen/homeFocus.ts`, `apps/web/src/shared/{homeRows.ts,homeRows.test.ts}`
+- Dokumen: `PRD-Hoorah.md` (Ludo, Petualangan Warna, ROLE-02), `PROGRESS.md`
+
+**Verifikasi:**
+- `npm run check` lulus: 94 file, 1858 tes, build. Dua teks tutorial (Ludo, Warna) terlalu panjang dan sudah dipendekkan.
+- `npm run e2e` lulus 9/9, termasuk `host-offer.spec.ts` baru.
+- `npm run docker:up` exit 0, `/health` `{"ok":true}`. Teks baru ("Ganti Host", "segi 5", "Pas untuk kalian", "Bawa semua ke pintu warnanya") ditemukan di aset container.
+- Beranda: screenshot 16:9, 16:10, 4:3 tanpa tumpang tindih.
+- Ludo: dicek visual 5/7/8 pemain di 16:9, 16:10, 4:3.
+- Petualangan Warna: dicek di 1280×720 + Pixel 7. Belum dicek di 16:10 dan 4:3, maupun di HP/layar sungguhan.
+
+**Selanjutnya / catatan:**
+- Petualangan Warna:
+  - urutan kerja sama (siapa menahan tombol mana) belum dicek mesin, hanya ditinjau manual;
+  - aturan "maks 3 lompatan berbahaya berturut-turut" belum ditegakkan, belum ada pemecah otomatis;
+  - Gua 7–30, Gurun, Salju, Awan menyusul setelah pemilik mencoba Hutan.
+- Ludo: tema HP masih 4 warna klasik (hiasan saja).
+- Vitest butuh Node 22 (Node 20 di PATH default gagal start).
+
+### 2026-11-22 · Perbaikan: Dapur masih pecah di laptop (skala layar utama tidak terhitung)
+
+**Apa yang diubah:** penyebab sebenarnya: game berjalan di iframe di dalam `.tv-stage` yang diperbesar layar utama dengan CSS transform (dasar 1280 px, mis. 1,5x di layar 1080p, 1,18x di MacBook). Dapur hanya melihat ukuran iframe (1280 px) dan devicePixelRatio, jadi kanvasnya terlalu kecil lalu diregangkan browser. Perubahan sebelumnya malah membuat laptop 1080p DPR 1 lebih buram (kanvas 1280 px, dulu 1920). Sekarang `deviceScale()` baru di `common/stage.ts` ikut menghitung pembesaran iframe (kotak `frameElement` di layar / lebar iframe, aman jika bukan same-origin). Skala dibulatkan ke atas per 0,25 (lebih besar sedikit tetap tajam), dicek ulang tiap detik karena layar utama bisa memperbesar tanpa event resize di iframe. Pengaman dilonggarkan: di bawah 40 FPS selama 4 detik.
+**File:** `apps/web/src/games/common/stage.ts`, `apps/web/src/games/dapur/{textures.ts,main.tsx}`, `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus (93 file, 1754 tes, build). `npm run docker:up` exit 0, `/health` ok. Probe Playwright di Docker: 1920x1080 DPR 1 kanvas 1920x1080 (pas layar); 1512x982 DPR 2 kanvas 3200x2080 (layar fisik 3024). Chromium dengan GPU Mac: 60 FPS di 3200x2080, pengaman tidak turun, close-up tajam tanpa piksel. Chromium tanpa GPU: turun sendiri ke 2560 (pengaman bekerja).
+**Berikutnya:** game kanvas lain (Phaser: Rusun, Tarik; Three.js: Bajaj, Lari, Juragan, Obby, dll.) kemungkinan punya masalah regangan yang sama; menunggu keputusan pemilik.
+
+### 2026-11-22 · Dapur Heboh selalu HD + pengaman otomatis
+
+**Apa yang diubah:** pembatas resolusi menurut level grafis 3D (`common/gfx`) dibuang khusus Dapur (2D ringan): kanvas selalu setajam layar, maksimal 3x (panel 4K); tekstur 3x bila layar butuh lebih dari 2x. Pengaman: jika FPS di bawah 45 selama 3 detik berturut-turut (tab tersembunyi tidak dihitung), ketajaman turun satu tingkat (3 → 2,5 → 2 → 1,5), lalu diberi jeda 2 detik. Tidak pernah di bawah 1,5 (setelan lama, 1920x1080), jadi Smart TV yang browsernya 1080p tidak terpengaruh. Hanya berlaku selama game berjalan, tidak disimpan.
+**Alasan:** pemilik 2026-11-22: Dapur harus HD di perangkat apa pun.
+**File:** `apps/web/src/games/dapur/{textures.ts,main.tsx}`, `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus (93 file, 1754 tes, build). `npm run docker:up` exit 0, `/health` ok. Playwright di Docker 1440x900 DPR 2: kanvas mulai 2560x1600 (HD), di Chromium headless tanpa GPU (FPS 18–28) turun sendiri ke 1920x1200 setelah permainan berjalan, tanpa error. Belum dicoba di perangkat asli.
+**Berikutnya:** pemilik mencoba di laptop dan Smart TV.
+
+### 2026-11-22 · Dapur Heboh HD dipasang ke game
+
+**Apa yang diubah:** desain "Dapur Heboh HD" (disetujui pemilik) dipasang ke game, tetap 2D (SVG dirender sekali jadi tekstur, Phaser):
+- Semua alat digambar ulang 3/4: bayangan lantai, sisi depan dengan kaki gelap, permukaan atas dengan kilap tepi. Peti kayu bahan, kompor gelap dengan wajan, wajan besar, penggorengan minyak, talenan + pisau, bak cuci + keran, rak piring, gelas, tong sampah, mesin soda, loket antar krem-oranye dengan slot putus-putus.
+- Papan nama di setiap alat (KOMPOR, WAJAN, PENGGORENG, TALENAN, CUCI PIRING, PIRING, GELAS, SAMPAH, MINUMAN, LOKET ANTAR, nama bahan), font Baloo, di tepi atas meja supaya tetap terbaca di kolom samping yang bertumpuk. Teks di `strings.ts`.
+- Status masak: cincin di atas alat (putih + busur hijau saat masak, centang hijau saat siap, merah + "!" + asap sebelum gosong); potong (busur oranye) dan cuci (busur biru) juga cincin. Api menjilat dari bawah wajan saat menyala, gelembung minyak di penggorengan. Lampu indikator lama dihapus.
+- Bawaan koki: gelembung dengan cincin warna pemain.
+- Panah penanda alat: di samping alat jika koki berdiri di sebelahnya, supaya tidak menutupi papan nama alat di atasnya.
+- **Ketajaman (penyebab "pecah"):** kanvas dulu selalu 1,5x panggung, jadi di laptop retina/4K gambarnya diperbesar dan buram. Sekarang resolusi kanvas mengikuti piksel layar sungguhan (skala panggung x devicePixelRatio, ikut berubah saat layar penuh), dibatasi per level grafis `common/gfx` (rendah 1,5 = sama seperti dulu untuk Smart TV, sedang 2, tinggi 2,5). Tekstur 3x untuk layar beresolusi tinggi, 2x selain itu. Di layar 720p kanvas malah lebih kecil dari dulu (lebih ringan).
+**File:** `apps/web/src/games/dapur/{art.ts,scene.ts,textures.ts,main.tsx,strings.ts}`, `apps/web/src/shared/art/dapur.ts`, `PROGRESS.md`.
+**Verifikasi:** `npx tsc --noEmit -p apps/web` dan `npx biome check` lulus; `npm run check` lulus (93 file, 1754 tes, build). `npm run docker:up` exit 0, `/health` `{"ok":true}`, teks "CUCI PIRING" ada di aset `dapur-*.js` container. Dimainkan otomatis (Playwright) di Docker: 1920x1080, 1440x900 DPR 2, 1024x768 (DPR 1 dan 2): papan nama terbaca semua, api + cincin status muncul saat koki komputer memasak, tanpa error halaman. E2E `solo: Dapur Heboh` lulus. FPS di Chromium headless (render perangkat lunak) 21–32, bukan ukuran perangkat sungguhan. Belum dicoba di Smart TV/laptop asli.
+**Berikutnya:** pemilik mencoba di laptop dan Smart TV. Jika ada perangkat yang tersendat, buka `?diag=1` untuk menurunkan level grafis.
+
+### 2026-11-22 · Desain ulang Dapur Heboh HD di kanvas (belum dikodekan)
+
+**Apa yang diubah:** papan baru "Dapur Heboh HD" di kanvas Claude Design (halaman Desain 30 game): dapur 2D sudut pandang 3/4 yang tampak 3D (meja dengan permukaan atas + sisi depan + bayangan lembut, karakter berbayang), papan nama jelas di tiap alat (KOMPOR, PENGGORENG, TALENAN, CUCI PIRING, PIRING, MINUMAN, SAMPAH, PEMADAM, LOKET ANTAR), status masak (cincin hijau, centang siap, merah + asap gosong), bawaan koki di gelembung, deretan close-up alat. Kode game belum diubah, menunggu persetujuan pemilik.
+**File:** kanvas `S55SjiGKSmm9RRQmVTfyH6` (`project/Dapur-HD.dc.html`, `project/canvas.json`), `PROGRESS.md`.
+**Verifikasi:** papan dirender lokal (Chromium) dan diperiksa visual sebelum dipasang. Tidak ada perubahan kode.
+**Berikutnya:** jika disetujui, ganti gambar Dapur Heboh dengan sprite SVG yang dirender sekali jadi tekstur (tetap 2D, 60 fps).
+
+### 2026-11-22 · Ular Tangga 100 kotak, Nyebrang tanpa tombol panah, garis tepi kartu dihapus
+
+**Apa yang diubah:**
+- Ular Tangga memakai papan 1–100 sebagai bawaan (`automode.ts`; papan dan batas giliran 108 sudah ada, perkiraan 6–10 menit). Tutorial Ular Tangga menyebut 100.
+- Nyebrang: HP seperti Lari Terus, tanpa tombol panah (`keys: false`), seluruh layar zona usap, ketuk = maju.
+- Garis warna di tepi kartu (ciri tampilan "AI", dilarang pemilik) dihapus di semua game dan HP, diganti cincin penuh: Tarik (tim), Balap Karung (papan nama), Penyusup (kartu dinding), Lari Terus (baris peringkat + hasil), Ludo (tim), Ular Tangga (pemain aktif), Rebut Wilayah (feed), Petualangan Warna (legenda), Bajaj (panel mode/sirkuit), pilihan menu HP, tampilan ketuk tim. Aturan dicatat di CLAUDE.md (Desain) dan memori.
+**File:** `apps/web/src/shared/automode.ts`, `games/ular/tutorial.ts`, `games/nyebrang/views.ts`, `games/{tarik,karung,wilayah}/hud.css`, `games/penyusup/penyusup.css`, `games/lari/lari.css`, `games/ludo/ludo.css`, `games/ular/ular.css`, `games/warna/warna.css`, `games/bajaj/bajaj.css`, `controller/controller.css`, `controller/views.tsx`, `CLAUDE.md`, `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus (1754 tes, build). Ular Tangga 100 dicek di Docker pada 1920x1080, 1680x1050, 1024x768: angka terbaca, kartu pemain aktif bercincin penuh. Nyebrang: tes unit lulus; tampilan HP tidak dicek visual (konfigurasi sama dengan Lari Terus). `npm run docker:up` exit 0.
+**Berikutnya:** desain ulang Dapur Heboh (HD 2D tampak 3D, label jelas) di kanvas Claude Design, menunggu persetujuan pemilik sebelum kode.
+
+### 2026-11-22 · Joystick mengikuti jempol (bawaan) + ukuran tombol menyesuaikan HP
+
+**Apa yang diubah:** joystick bawaan kini "Mengikuti jempol" (alas terseret di belakang jempol setelah melewati jarak, balik arah langsung terasa), kecepatan penuh di 56 px (sebelumnya 84 px, alas tetap), tetap tidak lepas selama jempol menempel. Versi setelan Lab naik ke 4: setelan joystick lama di HP dibuang supaya semua pemain dapat bawaan baru. Ukuran tombol di pojok kanan kini mengikuti layar dan jumlah tombol (variabel di `.pad-stick-wrap.bn-N`): 1 tombol 104–150 px, 2 tombol 92–132 / 74–104 px, 3 tombol 86–120 / 66–92 px (mendatar menurut tinggi layar, tegak menurut lebar); label ikut membesar; zona joystick tegak dimulai di bawah tombol yang sebenarnya. Menggantikan blok "tombol tunggal" sebelumnya.
+**Alasan:** pemilik 2026-11-22: lebih suka joystick mengikuti jempol, tombol 1 jangan kecil, 2–3 tombol diperbesar, sesuai layout HP.
+**File:** `apps/web/src/shared/controls.ts`, `shared/controls.test.ts`, `controller/pad.tsx`, `controller/pad.css`, `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus. Dicek di app Docker (WebKit iPhone, mendatar + tegak): Bom Oper OPER ±120 px; Petualangan Warna LOMPAT ±96 px, TUKAR/ULANG ±68 px (sebelumnya 84/58), tidak bertabrakan. `npm run docker:up` exit 0, `/health` ok.
+**Berikutnya:** pemilik mencoba di HP. Usulan merapikan teks di atas layar HP (baris info di samping Jeda) masih di antrean. Ular Tangga 100 kotak: menunggu keputusan.
+
+### 2026-11-22 · Tombol aksi tunggal di HP lebih besar (OPER Bom Oper)
+
+**Apa yang diubah:** tombol aksi yang sendirian di pojok kanan (`.pad-buttons.n-1`) kini 112–136 px (HP mendatar pendek 108–124 px, tegak 112 px), sebelumnya 84–96 px; label ikut membesar. Berlaku untuk game joystick dengan satu tombol: Bom Oper (OPER), Lantai Runtuh (DORONG), Obby (LOMPAT), Ular Arena (NGEBUT). Game dengan 2–3 tombol tidak berubah.
+**Alasan:** pemilik 2026-11-22: tombol OPER terlalu kecil.
+**File:** `apps/web/src/controller/pad.css`, `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus. Dicek di app Docker (WebKit iPhone mendatar, ronde Bom Oper berjalan): tombol OPER ±120 px, tidak menabrak joystick. `npm run docker:up` exit 0, `/health` ok.
+**Berikutnya:** pemilik mencoba di HP; ukuran bisa disetel lagi.
+
+### 2026-11-22 · Cara main: tutorial singkat di ke-30 game
+
+**Apa yang diubah:** mesin tutorial (`shared/tutorial/{types,draw,index}.ts`), tampilan layar utama (`screen/tutorial/{TutorialOverlay,PhoneMock}.tsx`, `tutorial.css`): kartu asal-usul + 3–4 langkah beranimasi (SVG/CSS, transform/opacity saja) dengan HP mini yang menyorot kontrol (joystick, tombol, ketuk/tahan, usap, pilihan, panah, ketik, papan catur, lihat). Muncul otomatis sebelum game pertama kali dimainkan di layar itu (iframe game baru dimuat sesudahnya), tersimpan per perangkat (`prefs` `tutorials`). Selesai saat semua HP menekan "Paham!", Host menekan "Lewati cara main" (HP / OK remote), atau langkah habis. Tombol "Cara main" di halaman detail dan layar jeda (mode lihat). Protokol: `page.tutorial.ready`, pesan `understood`, perintah Host `tutorial-skip`. HP: tampilan `TutorialPhone` bergaya netral. Isi tutorial ke-30 game (`games/<id>/tutorial.ts`, ditulis 4 agen paralel + 2 contoh) dengan label tombol asli dari tiap game; semua adegan dicek visual lewat lembar kontak. e2e: helper `passTutorial` (Host melewati). Keputusan dicatat di PRD 6.5.
+**Alasan:** permintaan pemilik 2026-11-22.
+**File:** `apps/web/src/shared/tutorial/*` (baru), `screen/tutorial/*` (baru), `screen/{store.ts,main.tsx,strings.ts,screen.css,pages/GamePage.tsx,pages/DetailPage.tsx}`, `controller/{tutorial.tsx (baru),room.tsx,store.ts,strings.ts,controller.css}`, `packages/protocol/src/messages.ts`, `games/*/tutorial.ts` (30 baru), `controller/screenmode.ts`, `e2e/hoorah.spec.ts`, `PRD-Hoorah.md`, `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus (93 file, 1754 tes termasuk 30 tes tutorial: jumlah langkah, panjang teks, tanpa em dash, SVG sah). Overlay dicoba di app Docker sungguhan (Chromium layar + WebKit iPhone): 16:9, 16:10, 4:3 rapi; "Paham!" menutup tutorial dan game dimuat. e2e penuh: 7/8 lulus, alur penuh gagal karena layar "Putar HP-mu" menutupi tombol tutorial di game mendatar (bug nyata) → diperbaiki (`controller/screenmode.ts`: tidak minta putar selama tutorial), alur penuh diulang: lulus (2,4 mnt). `npm run docker:up` exit 0, `/health` ok, teks baru ada di aset container.
+**Berikutnya:** pemilik mencoba di perangkat sungguhan; teks/adegan tutorial bisa disetel per game.
+
+### 2026-11-22 · Suara Kampung Siluman (pilihan pemilik: semua usulan A) + detak jantung terus berdetak
+
+**Apa yang diubah:** suara malam pindah ke modul bersama `shared/night-sounds.ts` (dipakai mesin audio dan Lab). Kampung Siluman: malam tiba `night` (gong panjang + jangkrik), giliran Siluman `growl` jadi auman ±3 dtk, Dukun `genta` (genta 3 kali; `bell` lama tetap untuk game lain), Tabib `flute` jadi suling panjang bergema, ayam `rooster` dibuat ulang mengikuti bentuk kokok asli (suara serak banyak harmoni, 3 resonansi, luncuran nada tiap suku kata, nada bawah serak, goyangan nada, suku kata terakhir panjang ±1,6 dtk; tetap tanpa file audio), setelah ayam: `kentongan` bila ada korban, `birds` bila malam aman; akhir: `win-village` / `win-siluman`. **Detak jantung** (`heart`, lebih keras dan berat, musik diredam): mulai setelah auman, berdetak terus selama giliran Siluman sampai semua Siluman memilih (`silumanChosen` baru di logika), makin cepat menjelang waktu habis (940 → 520 ms). Lab tab Suara kini memutar suara persis seperti di game. Keputusan dicatat: tutorial (antrean 11), nama game asli boleh disebut sebagai teks.
+**Alasan:** pilihan pemilik 2026-11-22.
+**File:** `apps/web/src/shared/night-sounds.ts` (baru), `shared/audio.ts`, `shared/music/adaptive.ts`, `packages/sdk/src/bridge.ts`, `games/siluman/{main.tsx,logic.ts,logic.test.ts}`, `lab/{sound.tsx,strings.ts,lab.css}` (`lab/siluman-sounds.ts` dihapus, isinya pindah ke modul bersama), `CLAUDE.md`, `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus (92 file, 1724 tes, build). `npm run docker:up` exit 0, `/health` `{"ok":true}`, suara baru ada di aset container. Suara belum dinilai pemilik di perangkat; e2e tidak dijalankan (alur layar/HP tidak berubah).
+**Berikutnya:** pemilik menilai ayam baru di `/lab/` → Suara (jika masih kurang mirip: opsi file rekaman CC0, perlu izin). Lalu Gelombang 2 tutorial.
+
+### 2026-11-22 · Kursor layar utama tidak mengganggu + usulan suara Kampung Siluman di Lab
+
+**Apa yang diubah:**
+- Kursor di layar utama (laptop/Smart TV dengan pointer) hilang setelah 2,5 dtk diam atau saat tombol/remote ditekan, muncul lagi begitu mouse bergerak; berlaku juga di dalam iframe game (`shared/cursor.ts`, dipasang di `screen/main.tsx` dan `GamePage` saat iframe dimuat).
+- Beranda tidak lagi meluncur sendiri karena kursor: fokus dari hover ditandai (`focus(id, true)`, `focusFromPointer()`), dan halaman hanya meluncur untuk remote/keyboard/roda mouse/HP. Hover hanya memindah fokus jika mouse benar-benar bergerak (event mouse palsu saat halaman bergeser di bawah kursor diabaikan).
+- Lab `/lab/` tab baru **Suara**: usulan suara Kampung Siluman (Malam tiba, Giliran Siluman/Dukun/Tabib, Pagi tiba, plus usulan baru: kentongan tanda bahaya, detak jantung, burung pagi, warga menang, siluman menang), masing-masing tombol "Sekarang" vs Usulan A/B. Game belum diubah, menunggu pilihan pemilik.
+
+**Alasan:** permintaan pemilik 2026-11-22.
+**File:** `apps/web/src/shared/cursor.ts` (baru), `screen/{nav.ts,nav.test.ts (baru),components.tsx,main.tsx,pages/GamePage.tsx,pages/HomePage.tsx}`, `lab/{siluman-sounds.ts (baru),sound.tsx (baru),main.tsx,strings.ts,lab.css}`, `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus (92 file, 1724 tes, build). `npm run docker:up` exit 0, `/health` `{"ok":true}`, kode kursor dan tab Suara ada di aset container. e2e tidak dijalankan (hanya hover mouse yang berubah; klik tetap sama). Belum dicoba di Smart TV.
+**Berikutnya:** pemilik memilih suara di `/lab/` → Suara, lalu pilihan dipindah ke `shared/audio.ts` dan dipakai Kampung Siluman.
+
+### 2026-11-22 · Joystick lebih leluasa, Petualangan Warna tanpa tumpuk pemain
+
+**Apa yang diubah:**
+- Joystick (semua game joystick, opsi A pemilik): pangkal muncul di tempat jempol menyentuh dan diam di situ; jangkauan kenop 52 → 84 px (Lab 40–140); lingkaran selalu digambar utuh di dalam layar walau jempol mendarat di tepi (keluaran tetap dihitung dari titik sentuh asli); kenop membal balik saat dilepas. Versi setelan Lab naik ke 3: setelan joystick lama tersimpan di HP dibuang.
+- Petualangan Warna: karakter tidak bisa lagi berdiri di atas karakter lain (saling tembus), penghargaan "Tiang Kokoh" dan statistik `carried` dihapus. Peta disesuaikan dengan lompatan asli (2,4 petak): Tombol Injak (balok tengah 3 → 2 petak, sebelumnya menutup jalan ke pintu), Kotak, Menara, Besar (permata dipindah ke jangkauan). Tes baru `reach.test.ts` memeriksa semua permata, pintu, tombol injak, dan tuas bisa dicapai satu karakter tanpa ditumpuk, dan memastikan batas lompatan tes cocok dengan simulasi.
+- HP Petualangan Warna: kolam 4 warna di bawah dihapus (terlihat seperti tombol dan menumpuk dengan petunjuk); di main sendiri avatar HP mengikuti karakter yang sedang dikendalikan (field baru `fruit` di tampilan `pad`).
+
+**Alasan:** permintaan pemilik 2026-11-22 (tangkapan layar level 2 dan HP).
+**File:** `apps/web/src/shared/controls.ts`, `shared/controls.test.ts`, `controller/pad.tsx`, `controller/pad.css`, `controller/common.tsx`, `packages/protocol/src/messages.ts`, `apps/web/src/games/warna/{world,logic,driver,views,results,strings,levels,controller-theme}.ts`, `games/warna/{world,logic}.test.ts`, `games/warna/reach.test.ts` (baru), `PROGRESS.md`.
+**Verifikasi:** `npm run check` lulus (91 file, 1723 tes, build). `npm run docker:up` exit 0, `/health` `{"ok":true}`; peta baru dan `radius:84` ada di aset container. e2e tidak dijalankan (alur layar/HP tidak berubah, hanya field opsional baru). Belum dicoba di HP sungguhan.
+**Berikutnya:** pemilik mencoba rasa joystick 84 px; bisa disetel di `/lab/`. Perubahan ini belum di-commit.
 
 ### 2026-11-22 · Perbaikan gambar Kampung Siluman di beranda
 

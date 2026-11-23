@@ -40,6 +40,12 @@ export type ClientMsg =
   | { t: 'status'; page: PlatformPage; gameId: string | null; direct?: number }
   | { t: 'ping'; id: number; ct: number }
   | { t: 'host'; id: number }
+  /** Host phone only: ask player `id` to take over as Host (they must accept). */
+  | { t: 'hostOffer'; id: number }
+  /** Host phone only: withdraw its pending offer. */
+  | { t: 'hostOfferCancel' }
+  /** The asked phone only: answer the pending offer. */
+  | { t: 'hostReply'; accept: boolean }
   | { t: 'kick'; id: number }
   | { t: 'leave' };
 
@@ -90,7 +96,19 @@ export type ServerMsg =
   | { t: 'pong'; id: number; ct: number; st: number }
   | { t: 'screen'; online: boolean }
   | { t: 'error'; code: ErrorCode; fatal: boolean }
-  | { t: 'kicked' };
+  | { t: 'kicked' }
+  /** A Host offer is pending (sent to the Host who made it and to the asked player). */
+  | { t: 'hostOffer'; from: number; to: number }
+  /** The pending Host offer is over (sent to both sides). */
+  | { t: 'hostOfferEnd'; from: number; to: number; result: HostOfferResult }
+  /** The Host role moved because an offer was accepted (sent to the screen and every phone). */
+  | { t: 'hostChanged'; id: number; from: number };
+
+/**
+ * How a Host offer ended: accepted, declined, no answer in time, or withdrawn (the Host cancelled,
+ * the Host role moved another way, or either side left).
+ */
+export type HostOfferResult = 'accepted' | 'declined' | 'expired' | 'cancelled';
 
 /* ---------------- Nearby screens (`GET /api/nearby`) ---------------- */
 
@@ -155,6 +173,8 @@ export type PlatformToController =
       recent?: string[];
       /** Tab of the game list on the main screen's home ('fit' or a category id). */
       tab?: string;
+      /** The main screen shows the game's "Cara main" before its first round: who pressed "Paham!". */
+      tutorial?: { ready: number[] };
     }
   | { k: 'reaction'; from: number; r: Reaction }
   | { k: 'vibrate'; pattern: number | number[] };
@@ -175,6 +195,7 @@ export const HOST_COMMANDS = [
   'music-off',
   'sound-on',
   'sound-off',
+  'tutorial-skip',
 ] as const;
 export type HostCommand = (typeof HOST_COMMANDS)[number];
 
@@ -186,7 +207,9 @@ export type ControllerToPlatform =
   | { k: 'tab'; tab: string }
   | { k: 'react'; r: Reaction }
   | { k: 'start' }
-  | { k: 'host'; cmd: HostCommand };
+  | { k: 'host'; cmd: HostCommand }
+  /** "Paham!" during a game's tutorial (any player). */
+  | { k: 'understood' };
 
 /* ---------------- Game channel (`g`) ---------------- */
 
@@ -290,6 +313,8 @@ export interface PadButton {
    * filling back up; presses during the rest are ignored on the phone. The game still enforces it.
    */
   cooldownMs?: number;
+  /** Draw attention to the button (a gentle pulse), e.g. a hint that is ready. */
+  pulse?: boolean;
 }
 export type PadButtonIcon =
   | 'hand'
@@ -303,7 +328,9 @@ export type PadButtonIcon =
   | 'run'
   | 'light'
   | 'dark'
-  | 'door';
+  | 'door'
+  | 'hint'
+  | 'skip';
 
 export type DriveItemIcon = 'boost' | 'oil' | 'horn' | 'shield' | 'durian' | 'firecracker' | 'box';
 export type GestureIcon = 'knife' | 'spoon' | 'pan' | 'hand' | 'fire' | 'shaker' | 'pestle' | 'roll';
@@ -705,6 +732,8 @@ type ControllerViewBody =
       mode: 'steer' | 'dpad' | 'swipe' | 'stick';
       /** The player's colour. */
       color: string;
+      /** Avatar when the phone steers a character other than the player's own (solo: the second one). */
+      fruit?: Fruit;
       /** Short status line, e.g. "Panjang 42" or "Wilayah 18%". */
       title: string;
       eyebrow?: string;
@@ -739,6 +768,11 @@ type ControllerViewBody =
        * edges red and vibrates on strong beats. See `padHeart`.
        */
       heart?: number;
+      /**
+       * `stick` mode: the whole right half of the pad holds the main (`big`, `hold`) button, drawn
+       * large in the corner as a guide; the other buttons become small pills in the top right.
+       */
+      jumpZone?: boolean;
     }
   | {
       /**

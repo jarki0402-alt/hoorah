@@ -118,8 +118,10 @@ describe('the night', () => {
     expect(g.m.dukunPick).toBeNull();
     g.m.nightPick(sil.id, sil.id, g.at());
     expect(g.m.silumanPicks.size).toBe(0);
+    expect(g.m.silumanChosen).toBe(false);
     g.m.nightPick(sil.id, warga.id, g.at());
     expect(g.m.silumanPicks.get(sil.id)).toBe(warga.id);
+    expect(g.m.silumanChosen).toBe(true);
   });
 
   it('takes the siluman victim at dawn unless the Tabib protected them', () => {

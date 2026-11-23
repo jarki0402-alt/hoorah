@@ -113,6 +113,17 @@ describe('parseClientMsg', () => {
     expect(parseClientMsg('{"t":"host","id":2}')).toEqual({ t: 'host', id: 2 });
     expect(parseClientMsg('{"t":"leave"}')).toEqual({ t: 'leave' });
   });
+
+  it('validates Host offers', () => {
+    expect(parseClientMsg('{"t":"hostOffer","id":3}')).toEqual({ t: 'hostOffer', id: 3 });
+    expect(parseClientMsg('{"t":"hostOffer","id":0}')).toBeNull();
+    expect(parseClientMsg('{"t":"hostOffer","id":"3"}')).toBeNull();
+    expect(parseClientMsg('{"t":"hostOfferCancel"}')).toEqual({ t: 'hostOfferCancel' });
+    expect(parseClientMsg('{"t":"hostReply","accept":true}')).toEqual({ t: 'hostReply', accept: true });
+    expect(parseClientMsg('{"t":"hostReply","accept":false}')).toEqual({ t: 'hostReply', accept: false });
+    expect(parseClientMsg('{"t":"hostReply","accept":1}')).toBeNull();
+    expect(parseClientMsg('{"t":"hostReply"}')).toBeNull();
+  });
 });
 
 describe('binary input', () => {

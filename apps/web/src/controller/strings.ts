@@ -60,6 +60,7 @@ export const STR = {
   slingWeak: 'Lemah',
   stickLabel: 'Joystick: seret ke arah tujuan',
   stickAnywhere: 'Sentuh separuh kiri layar, lalu geser',
+  jumpZoneHelp: 'Tekan di mana saja di sisi ini',
   carrying: 'Dibawa',
   radarYou: 'KAMU',
   heartFar: 'jauh',
@@ -119,4 +120,33 @@ export const STR = {
     `Kursi terisi ${used}/${max}. Pemain baru ikut mulai giliran atau game berikutnya.`,
   seatsPass: (used: number, max: number, until: string) =>
     `Kursi terisi ${used}/${max}. Hoorah Pass aktif sampai ${until}.`,
+
+  hostSwap: 'Ganti Host',
+  hostSwapTitle: 'Jadikan Host',
+  hostSwapLead: 'Pilih pemain. Host pindah setelah dia menerima di HP-nya.',
+  hostSwapEmpty: 'Belum ada pemain lain yang tersambung.',
+  hostMake: 'Jadikan Host',
+  hostWaiting: (name: string) => `Menunggu jawaban ${name}…`,
+  hostWaitingSub: 'Kamu tetap Host sampai dia menerima.',
+  hostCancel: 'Batal',
+  hostClose: 'Tutup',
+  hostAskTitle: 'Jadi Host?',
+  hostAsk: (name: string) => `${name} ingin menjadikanmu Host. Host memilih game dan mengatur room.`,
+  hostAccept: 'Terima',
+  hostDecline: 'Tolak',
+  hostNow: (name: string) => `${name} sekarang Host`,
+  hostNowMe: 'Kamu sekarang Host',
+  hostDeclined: (name: string) => `${name} menolak`,
+  hostNoAnswer: 'Tidak ada jawaban',
+  hostOfferGone: 'Permintaan Host dibatalkan',
 };
+
+/** The phone while the main screen shows a game's "Cara main". */
+export const TUTORIAL = {
+  title: 'Cara main',
+  lead: 'Lihat layar utama sebentar.',
+  ok: 'Paham!',
+  done: 'Siap! Menunggu yang lain…',
+  count: (n: number, total: number) => `${n} dari ${total} pemain sudah paham`,
+  skip: 'Lewati cara main',
+} as const;

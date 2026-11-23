@@ -29,13 +29,15 @@ const NIGHT_SONG = 'siluman-malam';
 
 const CUE_SOUND: Record<IntroCue, string> = {
   siluman: 'growl',
-  dukun: 'bell',
+  dukun: 'genta',
   tabib: 'flute',
   weker: 'weker',
   rooster: 'rooster',
 };
 
-const CALL_SOUND: Record<NightRole, string> = { siluman: 'growl', dukun: 'bell', tabib: 'flute' };
+const CALL_SOUND: Record<NightRole, string> = { siluman: 'growl', dukun: 'genta', tabib: 'flute' };
+/** Room for the roar before the first heartbeat of the siluman's turn. */
+const HEART_AFTER_CALL_MS = 2_600;
 
 function randomSeed(): number {
   const buf = new Uint32Array(1);
@@ -58,6 +60,8 @@ class SilumanDriver implements ScreenModel {
   private raf = 0;
   private interval = 0;
   private lastTickKey = '';
+  /** When the next heartbeat is due (performance.now ms); 0 = not beating. */
+  private nextHeart = 0;
   private lastTally = 0;
   private hurry = false;
   private intensity: MusicIntensity = 0;
@@ -96,8 +100,30 @@ class SilumanDriver implements ScreenModel {
     const events = this.match.tick(this.game.now());
     if (events.length) this.handle(events);
     this.clockSounds();
+    this.heartbeat();
     this.tallySounds();
     this.frame.emit();
+  }
+
+  /**
+   * Heartbeat through the siluman's turn (owner 2026-11-22): it never stops until every siluman
+   * has picked a victim, and beats faster as the turn runs out.
+   */
+  private heartbeat(): void {
+    const m = this.match;
+    if (m.held || m.calling !== 'siluman' || m.silumanChosen) {
+      this.nextHeart = 0;
+      return;
+    }
+    const now = performance.now();
+    if (this.nextHeart === 0) {
+      this.nextHeart = now + HEART_AFTER_CALL_MS;
+      return;
+    }
+    if (now < this.nextHeart) return;
+    const left = Math.max(0, Math.min(1, m.msLeft() / TIMING.turnMs));
+    this.game.sfx('heart');
+    this.nextHeart = now + 520 + 420 * left;
   }
 
   /** Tick-tock: sparse through a night turn and dense in its last 5 s; the last seconds by day. */
@@ -244,13 +270,14 @@ class SilumanDriver implements ScreenModel {
         this.setSong(null);
         break;
       case 'night':
-        this.game.sfx('gong');
+        this.game.sfx('night');
         this.setSong(NIGHT_SONG);
         break;
       case 'dawn':
         this.game.sfx('rooster');
         this.setSong(DAY_SONG);
-        if (m.dawnVictim !== null) this.later(() => this.game.sfx('stinger-fall'), 1_200);
+        // After the crow: the alarm kentongan for a victim, morning birds for a quiet night.
+        this.later(() => this.game.sfx(m.dawnVictim !== null ? 'kentongan' : 'birds'), 2_400);
         break;
       case 'hunt':
         this.game.sfx('tension');
@@ -285,11 +312,9 @@ class SilumanDriver implements ScreenModel {
       }
       case 'final':
         this.setSong(DAY_SONG);
-        if (m.winner === 'siluman') {
-          this.game.sfx('growl');
-          this.later(() => this.game.sfx('stinger-win'), 700);
-        } else {
-          this.game.sfx('win');
+        if (m.winner === 'siluman') this.game.sfx('win-siluman');
+        else {
+          this.game.sfx('win-village');
           this.later(celebrate, 300);
         }
         break;

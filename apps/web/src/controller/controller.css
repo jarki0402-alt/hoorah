@@ -683,7 +683,9 @@ html:not([data-game]) .eyebrow.soft {
 .host-bricks {
   align-self: stretch;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Four keys, or five with the Host's "Ganti Host": always one even row. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -2404,7 +2406,6 @@ html.has-pill .ctrl {
   background: var(--surface);
   box-shadow:
     inset 0 0 0 2px var(--line),
-    inset 6px 0 0 var(--opt),
     0 4px 0 var(--surface-3);
   touch-action: pan-x pan-y;
 }
@@ -2413,7 +2414,6 @@ html.has-pill .ctrl {
   background: var(--surface-2);
   box-shadow:
     inset 0 0 0 3px var(--opt),
-    inset 6px 0 0 var(--opt),
     0 4px 0 var(--surface-3);
 }
 
@@ -3658,4 +3658,89 @@ html.fit-compact .ig-tiles {
   align-self: flex-start;
   font-weight: 800;
   color: var(--yellow);
+}
+
+/* "Cara main" on the main screen: the phone only offers Paham! (and Lewati for the Host). */
+.tu-phone-view {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.tu-phone-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, 100%);
+}
+
+.tu-phone-eyebrow {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--yellow, #ffc928);
+}
+
+.tu-phone-card .title {
+  margin: 0;
+}
+
+.tu-phone-card .big-btn {
+  width: 100%;
+}
+
+.tu-ok {
+  min-height: 72px;
+  font-size: 26px;
+}
+
+.tu-count {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- Host hand-over */
+
+.host-swap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.host-swap-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+
+.host-swap-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.host-swap-btn {
+  flex: none;
+  width: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  font-size: 15px;
+}
+
+.host-notice {
+  z-index: 90;
 }

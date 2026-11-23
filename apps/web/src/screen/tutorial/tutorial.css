@@ -1,0 +1,449 @@
+/* "Cara main" overlay on the main screen. Authored on the 1280x720 stage; the stage grows taller
+   on 16:10 and 4:3, so the body centres in the space left between header and footer. Animations
+   use transform and opacity only (smooth on Smart TVs). */
+
+.tu-overlay {
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 44px 22px;
+  gap: 14px;
+  background: var(--ink);
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+.tu-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.tu-eyebrow {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--yellow);
+}
+
+.tu-title {
+  margin: 2px 0 0;
+  font-size: 42px;
+  line-height: 1;
+}
+
+.tu-dots {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.tu-dots span {
+  position: relative;
+  width: 46px;
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+
+.tu-dots span.done {
+  background: var(--yellow);
+}
+
+.tu-dots span i {
+  position: absolute;
+  inset: 0;
+  background: var(--yellow);
+  transform-origin: left center;
+  animation: tu-fill linear forwards;
+}
+
+@keyframes tu-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.tu-loading {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  font-size: 20px;
+}
+
+.tu-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-rows: auto auto;
+  gap: 16px 26px;
+  align-content: center;
+  animation: tu-enter 0.35s ease-out;
+}
+
+@keyframes tu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.tu-stage {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tu-scene {
+  /* 836 x 470 on the 1280x720 stage: fits between header and footer even on 16:9. */
+  width: min(100%, 836px);
+  aspect-ratio: 16 / 9;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #1e1f23;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+.tu-scene > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tu-origin-art > div,
+.tu-origin-art img {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.tu-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+
+.tu-phone-label,
+.tu-origin-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.tu-origin-label {
+  font-size: 22px;
+  color: var(--yellow);
+}
+
+.tu-phone svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.tu-text {
+  grid-column: 1 / -1;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.tu-text.origin {
+  font-size: 27px;
+  font-weight: 700;
+  color: var(--text-2, #e4e5e8);
+}
+
+.tu-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--yellow);
+  color: var(--ink);
+  font-size: 24px;
+}
+
+.tu-foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-height: 44px;
+}
+
+.tu-ready {
+  display: flex;
+  gap: 6px;
+}
+
+.tu-player {
+  position: relative;
+  opacity: 0.45;
+  transition: opacity 0.2s;
+}
+
+.tu-player.ok {
+  opacity: 1;
+}
+
+.tu-tick {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #22b35e;
+  color: #fff;
+}
+
+.tu-hint {
+  flex: 1;
+  font-size: 17px;
+  color: var(--text-3);
+}
+
+.tu-key {
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------- scene animations */
+
+.tu-move {
+  animation: tu-move var(--dur, 2.4s) ease-in-out var(--delay, 0s) infinite alternate;
+}
+
+@keyframes tu-move {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(var(--dx, 0), var(--dy, 0));
+  }
+}
+
+.tu-slide {
+  animation: tu-slide var(--dur, 2.4s) ease-in-out var(--delay, 0s) infinite;
+}
+
+@keyframes tu-slide {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  80% {
+    transform: translate(var(--dx, 0), var(--dy, 0));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx, 0), var(--dy, 0));
+    opacity: 0;
+  }
+}
+
+.tu-hop {
+  animation: tu-hop var(--dur, 1.2s) cubic-bezier(0.3, 0, 0.7, 1) var(--delay, 0s) infinite;
+}
+
+@keyframes tu-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(var(--dy, -40px));
+  }
+}
+
+.tu-bob {
+  animation: tu-bob var(--dur, 2s) ease-in-out var(--delay, 0s) infinite alternate;
+}
+
+@keyframes tu-bob {
+  from {
+    transform: translateY(-5px);
+  }
+  to {
+    transform: translateY(5px);
+  }
+}
+
+.tu-pulse {
+  animation: tu-pulse var(--dur, 1.2s) ease-in-out var(--delay, 0s) infinite;
+}
+
+@keyframes tu-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+.tu-spin {
+  animation: tu-spin var(--dur, 3s) linear infinite;
+}
+
+@keyframes tu-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tu-appear {
+  opacity: 0;
+  animation: tu-appear var(--dur, 3s) ease-out var(--delay, 0s) infinite;
+}
+
+@keyframes tu-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  15%,
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.tu-shake {
+  animation: tu-shake var(--dur, 0.5s) ease-in-out infinite;
+}
+
+@keyframes tu-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-4deg);
+  }
+  75% {
+    transform: rotate(4deg);
+  }
+}
+
+.tu-tap {
+  opacity: 0;
+  animation: tu-tap 1.1s ease-out var(--delay, 0s) infinite;
+}
+
+@keyframes tu-tap {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.4);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+.tu-arrow path {
+  animation: tu-dash 0.9s linear infinite;
+}
+
+@keyframes tu-dash {
+  to {
+    stroke-dashoffset: -26;
+  }
+}
+
+/* Phone mock pieces. */
+.tu-press {
+  animation: tu-press 1.1s ease-in-out infinite;
+}
+
+.tu-press.fast {
+  animation-duration: 0.45s;
+}
+
+@keyframes tu-press {
+  0%,
+  60%,
+  100% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(0.88);
+  }
+}
+
+.tu-orbit {
+  animation: tu-spin 2.4s linear infinite;
+}
+
+.tu-hold {
+  animation: tu-hold 1.8s linear infinite;
+}
+
+@keyframes tu-hold {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.tu-caret {
+  animation: tu-caret 1s steps(1) infinite;
+}
+
+@keyframes tu-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tu-overlay svg * {
+    animation: none !important;
+  }
+
+  .tu-overlay .tu-appear {
+    opacity: 1;
+  }
+}

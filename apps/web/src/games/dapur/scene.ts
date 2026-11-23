@@ -17,11 +17,10 @@ import type { Face } from '../../shared/art/fruits';
 import {
   contentSpot,
   feetY,
-  flameSpot,
   fruitColor,
+  heatSpot,
   KITCHEN_H,
   KITCHEN_W,
-  lightSpot,
   rowTop,
   ST_INSET,
   ST_MARGIN,
@@ -141,7 +140,6 @@ export class DapurScene extends Phaser.Scene {
       size: 13,
       radius: 12,
     });
-    this.makeDisc();
     this.gLow = this.add.graphics().setDepth(1);
     this.gHigh = this.add.graphics().setDepth(DEPTH_TOP);
     this.setViewSize(this.viewW, this.viewH);
@@ -162,7 +160,8 @@ export class DapurScene extends Phaser.Scene {
     this.textures.addCanvas(key, pillCanvas(text, opts));
   }
 
-  private makeDisc(): void {
+  /** The carry bubble behind a held item: a cream disc with a ring in the cook's colour. */
+  private makeDisc(key: string, ring: string): void {
     const s = 36 * TEX;
     const canvas = document.createElement('canvas');
     canvas.width = s;
@@ -177,8 +176,13 @@ export class DapurScene extends Phaser.Scene {
       ctx.beginPath();
       ctx.arc(s / 2, s / 2, s / 2 - TEX, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = ring;
+      ctx.lineWidth = 3 * TEX;
+      ctx.beginPath();
+      ctx.arc(s / 2, s / 2, s / 2 - 2.5 * TEX, 0, Math.PI * 2);
+      ctx.stroke();
     }
-    this.textures.addCanvas('dp-disc', canvas);
+    this.textures.addCanvas(key, canvas);
   }
 
   /* ------------------------------------------------------------------ setup */
@@ -220,7 +224,7 @@ export class DapurScene extends Phaser.Scene {
         .setOrigin(0, 0)
         .setScale(1 / TEX);
       this.stationImgs[s.id] = img;
-      if (flameSpot(s.kind)) this.cookerG.set(s.id, this.add.graphics());
+      if (heatSpot(s.kind)) this.cookerG.set(s.id, this.add.graphics());
     }
     for (const sp of this.chefSprites.values()) this.destroyChef(sp);
     this.chefSprites.clear();
@@ -457,13 +461,13 @@ export class DapurScene extends Phaser.Scene {
     }
     // Chop progress.
     if (s.kind === 'board' && s.item?.k === 'food' && (s.item.chop ?? 0) > 0)
-      this.bar(left + 8, top - 18, s.item.chop ?? 0, 0x22b35e);
+      this.ring(left + 40, top - 20, s.item.chop ?? 0, 'work');
     // Washing at the sink.
     if (s.kind === 'sink') {
       for (const c of m.chefs) {
         if (c.target !== s.id || (c.busy !== 'wash' && c.busy !== 'clean')) continue;
         const full = c.busy === 'wash' ? WASH_MS : CLEAN_MS;
-        this.bar(left + 8, top - 18, c.jobMs / full, 0x5aa8d8);
+        this.ring(left + 40, top - 20, c.jobMs / full, 'wash');
       }
     }
     if (s.fire) this.drawFire(s, left, top, base, t);
@@ -485,31 +489,42 @@ export class DapurScene extends Phaser.Scene {
     const burn = m.tuning.burnMs;
     const warnFrom = burn === null ? 2 : 1 + (burn - WARN_MS) / burn;
     const warn = hot && level >= warnFrom;
-    const ring = flameSpot(s.kind);
-    const light = lightSpot(s.kind);
-    if (ring && hot) {
-      const color = warn ? 0xf2453d : 0xff7a3d;
-      const flick = 0.75 + 0.25 * Math.sin(t / 60 + s.id);
-      g.lineStyle(9, color, 0.25 * flick);
-      g.strokeCircle(left + ring.x, top + ring.y, ring.r + 3);
-      g.lineStyle(4, color, 1);
-      g.strokeCircle(left + ring.x, top + ring.y, ring.r);
-    }
-    if (light) {
-      g.fillStyle(hot ? (warn ? 0xf2453d : 0xff7a3d) : 0x4a4d55, 1);
-      g.fillCircle(left + light.x, top + light.y, 4);
+    const heat = heatSpot(s.kind);
+    if (heat && hot) {
+      const hx = left + heat.x;
+      const hy = top + heat.y;
+      if (heat.look === 'flame') {
+        // Flame tongues peeking out under the front rim of the pan.
+        for (let i = 0; i < 7; i++) {
+          const a = (Math.PI * (i + 0.5)) / 7;
+          const k = 0.7 + 0.3 * Math.sin(t / 55 + i * 1.7 + s.id);
+          const fx = hx - Math.cos(a) * heat.rx * 0.92;
+          const fy = hy + Math.sin(a) * heat.ry + 3;
+          g.fillStyle(warn ? 0xf2453d : i % 2 ? 0xff5a1f : 0xffc928, 1);
+          g.fillEllipse(fx, fy - 4 * k, 6, 11 * k);
+        }
+      } else {
+        // Oil bubbles rising and popping.
+        for (let i = 0; i < 5; i++) {
+          const f = (t / 700 + i / 5) % 1;
+          const bx = hx - heat.rx * 0.7 + ((i * 37) % 10) * heat.rx * 0.14;
+          const by = hy - heat.ry * 0.4 + ((i * 13) % 7) * heat.ry * 0.12;
+          g.fillStyle(0xfff3c4, 0.9 * (1 - f));
+          g.fillCircle(bx, by, 1.5 + f * 3);
+        }
+      }
     }
     if (level > 0 && level < 1) {
-      this.bar(left + 8, top - 28, level, 0xffc928);
+      this.ring(left + 40, top - 22, level, 'cook');
     } else if (warn) {
       const p = (level - warnFrom) / (2 - warnFrom);
-      this.bar(left + 8, top - 28, 1 - p, 0xf2453d);
+      this.ring(left + 40, top - 22, 1 - p, 'burn');
       this.smoke(left + 50, top + 4, t, 0x5a5d66);
       if (Math.floor(t / 400) % 2 === 0 || p < 0.5)
-        this.pill('dp-pill-burn', left + 40, top - 46, DEPTH_TOP + 1);
+        this.pill('dp-pill-burn', left + 40, top - 54, DEPTH_TOP + 1);
     } else if (level >= 1 && level < 2) {
-      // Done: a full green bar so the team sees it is ready.
-      this.bar(left + 8, top - 28, 1, 0x22b35e);
+      // Done: a green tick so the team sees it is ready.
+      this.ring(left + 40, top - 22, 1, 'done');
     }
   }
 
@@ -537,6 +552,45 @@ export class DapurScene extends Phaser.Scene {
       const f = (t / 1100 + i / 3) % 1;
       this.gHigh.fillStyle(color, 0.55 * (1 - f));
       this.gHigh.fillCircle(x + Math.sin(f * 5 + i) * 6 + (i - 1) * 8, y - f * 42, 6 + f * 9);
+    }
+  }
+
+  /**
+   * Status disc over a station (HD board): a white disc with a progress arc while cooking,
+   * chopping or washing, a green tick when done, a red disc with "!" counting down before it burns.
+   */
+  private ring(cx: number, cy: number, p: number, state: 'cook' | 'work' | 'wash' | 'done' | 'burn'): void {
+    const g = this.gHigh;
+    const f = Math.max(0, Math.min(1, p));
+    g.fillStyle(0x000000, 0.22);
+    g.fillCircle(cx, cy + 2, 14);
+    if (state === 'done') {
+      g.fillStyle(0x22b35e, 1);
+      g.fillCircle(cx, cy, 14);
+      g.lineStyle(3.5, 0xffffff, 1);
+      g.beginPath();
+      g.moveTo(cx - 6, cy);
+      g.lineTo(cx - 2, cy + 4.5);
+      g.lineTo(cx + 6.5, cy - 4.5);
+      g.strokePath();
+      return;
+    }
+    const burn = state === 'burn';
+    g.fillStyle(burn ? 0xf2453d : 0xffffff, 1);
+    g.fillCircle(cx, cy, 14);
+    g.lineStyle(4, burn ? 0xb3261e : 0xe2e4e8, 1);
+    g.strokeCircle(cx, cy, 10);
+    if (f > 0.01) {
+      const color = burn ? 0xffffff : state === 'wash' ? 0x2f8cff : state === 'work' ? 0xff8a2e : 0x22b35e;
+      g.lineStyle(4, color, 1);
+      g.beginPath();
+      g.arc(cx, cy, 10, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2, false);
+      g.strokePath();
+    }
+    if (burn) {
+      g.fillStyle(0xffffff, 1);
+      g.fillRoundedRect(cx - 1.6, cy - 6, 3.2, 8, 1.6);
+      g.fillCircle(cx, cy + 5, 1.8);
     }
   }
 
@@ -668,7 +722,10 @@ export class DapurScene extends Phaser.Scene {
     if (c.held) {
       const hx = wx + 22 * sp.flip;
       const hy = wy - 30 + sp.body.y;
-      this.img('dp-disc', hx, hy, 34, wy + 0.2);
+      // Carry bubble ringed in the cook's colour, so everyone sees whose hands are full.
+      const disc = `dp-disc-${c.color}`;
+      if (!this.textures.exists(disc)) this.makeDisc(disc, c.color);
+      this.img(disc, hx, hy, 38, wy + 0.2);
       this.item(c.held, hx, hy, 28, wy + 0.3);
     }
     // Filling soda: a little bar over the head.
@@ -699,8 +756,21 @@ export class DapurScene extends Phaser.Scene {
     const w = s.w * TILE_W - ST_INSET * 2;
     this.gHigh.lineStyle(3, color, 0.9);
     this.gHigh.strokeRoundedRect(left + ST_INSET - 1.5, top - 1.5, w + 3, 59, 11);
-    const ax = left + (s.w * TILE_W) / 2;
     const bob = Math.sin(t / 180) * 2;
+    // Cook beside the station (side columns): the arrow sits on the floor next to it, pointing in,
+    // so it never covers the name plate of the station above.
+    const side = c.x < s.x ? -1 : c.x > s.x + s.w ? 1 : 0;
+    if (side !== 0) {
+      const d = -side;
+      const sx = side < 0 ? left + ST_INSET - 12 - bob : left + s.w * TILE_W - ST_INSET + 12 + bob;
+      const sy = top + 28;
+      this.gHigh.fillStyle(0x111214, 1);
+      this.gHigh.fillTriangle(sx - 9 * d, sy - 11, sx - 9 * d, sy + 11, sx + 6 * d, sy);
+      this.gHigh.fillStyle(color, 1);
+      this.gHigh.fillTriangle(sx - 7 * d, sy - 8, sx - 7 * d, sy + 8, sx + 3 * d, sy);
+      return;
+    }
+    const ax = left + (s.w * TILE_W) / 2;
     const below = c.y < s.y && c.x >= s.x && c.x <= s.x + s.w;
     const tall = s.kind === 'soda' ? 50 : s.kind === 'basket' ? 30 : 12;
     const ay = below ? top + 88 + bob : top - tall - bob;

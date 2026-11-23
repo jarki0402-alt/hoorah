@@ -825,3 +825,9 @@ body {
   background: var(--yellow);
   white-space: nowrap;
 }
+
+.pause-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}

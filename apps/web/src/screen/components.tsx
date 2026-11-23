@@ -2,6 +2,7 @@ import { formatRoomCode } from '@hoorah/protocol';
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useMemo } from 'preact/hooks';
 import qrcode from 'qrcode-generator';
+import { pointerMoved } from '../shared/cursor';
 import { Avatar, Icon, Logo, LogoMark } from '../shared/ui';
 import { formatUntil } from '../shared/when';
 import { canFullscreen, isFullscreen } from './fullscreen';
@@ -49,9 +50,9 @@ export function FocusButton({ id, class: cls = '', style, children, ...rest }: F
       class={`focusable ${cls} ${isFocused ? 'focused' : ''}`}
       style={style}
       aria-label={rest['aria-label']}
-      onMouseEnter={() => focus(id)}
+      onMouseEnter={() => pointerMoved() && focus(id, true)}
       onClick={() => {
-        focus(id);
+        focus(id, true);
         press('ok');
       }}
     >
@@ -107,7 +108,7 @@ export function SoundButton() {
       class={`chip glass focusable ${focused.value === 'sound' ? 'focused' : ''}`}
       style={{ border: 'none', padding: locked ? '7px 12px' : 8, cursor: 'pointer' }}
       aria-label={locked ? 'Nyalakan suara' : muted.value ? 'Nyalakan suara' : 'Matikan suara'}
-      onMouseEnter={() => focus('sound')}
+      onMouseEnter={() => pointerMoved() && focus('sound', true)}
       onClick={pressSound}
     >
       <Icon name={locked || muted.value ? 'mute' : 'volume'} size={17} color="#DADCE0" />
@@ -125,7 +126,7 @@ export function FullscreenButton({ label = false }: { label?: boolean }) {
       class={`chip glass focusable ${focused.value === 'fullscreen' ? 'focused' : ''}`}
       style={{ border: 'none', padding: label ? '7px 12px' : 8, cursor: 'pointer' }}
       aria-label={on ? 'Keluar layar penuh' : 'Layar penuh'}
-      onMouseEnter={() => focus('fullscreen')}
+      onMouseEnter={() => pointerMoved() && focus('fullscreen', true)}
       onClick={pressFullscreen}
     >
       <Icon name={on ? 'compress' : 'expand'} size={17} color="#DADCE0" />
@@ -140,7 +141,7 @@ export function InviteButton() {
     <button
       type="button"
       class={`chip glass invite-chip focusable ${focused.value === 'invite' ? 'focused' : ''}`}
-      onMouseEnter={() => focus('invite')}
+      onMouseEnter={() => pointerMoved() && focus('invite', true)}
       onClick={() => setInviting(true)}
     >
       <Icon name="plus" size={16} color="#111214" />

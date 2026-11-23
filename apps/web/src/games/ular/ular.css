@@ -589,7 +589,7 @@
   transform: translateX(-10px);
   box-shadow:
     0 5px 0 #6b4423,
-    inset 8px 0 0 var(--pc);
+    inset 0 0 0 3px var(--pc);
 }
 
 .ul-prow.is-offline {

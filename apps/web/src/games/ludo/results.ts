@@ -1,17 +1,17 @@
 /** Final ranking, awards and the GameResult for the shell. Pure. */
 import type { GameAward, GameIcon, GameResult } from '@hoorah/sdk';
 import { type LudoLogic, type PlayerStats, standings } from './logic';
-import { joinNames, STR } from './strings';
+import { STR } from './strings';
 
-/** "Budi" for a one-player colour, "Tim Merah" for a pair. */
-export function teamTitle(L: LudoLogic, team: number, name: (id: number) => string): string {
-  const t = L.teams[team]!;
-  return t.members.length > 1 ? STR.team(t.color) : name(t.members[0]!);
+/** The name of the player on a seat. */
+export function seatTitle(L: LudoLogic, seat: number, name: (id: number) => string): string {
+  const t = L.seats[seat];
+  return t ? name(t.player) : STR.unknownPlayer;
 }
 
 export function headline(L: LudoLogic, name: (id: number) => string): string {
   const top = standings(L)[0];
-  return top ? STR.resultTitle(teamTitle(L, top.team, name)) : STR.resultTitle(STR.unknownPlayer);
+  return top ? STR.resultTitle(seatTitle(L, top.seat, name)) : STR.resultTitle(STR.unknownPlayer);
 }
 
 interface AwardDef {
@@ -54,26 +54,17 @@ export function buildResult(L: LudoLogic, name: (id: number) => string): GameRes
   const rows = standings(L);
   const ranking: GameResult['ranking'] = [];
   for (const r of rows) {
-    const t = L.teams[r.team]!;
-    const captures = t.members.reduce((s, id) => s + (L.stats.get(id)?.captures ?? 0), 0);
-    for (const id of t.members) {
-      ranking.push({
-        playerId: id,
-        rank: r.rank,
-        score: r.home * 100 + r.progress,
-        label: STR.rankLabel(r.home, L.pawnCount, captures),
-      });
-    }
+    const t = L.seats[r.seat]!;
+    ranking.push({
+      playerId: t.player,
+      rank: r.rank,
+      score: r.home * 100 + r.progress,
+      label: STR.rankLabel(r.home, L.pawnCount, L.stats.get(t.player)?.captures ?? 0),
+    });
   }
-  const teams = L.teams.some((t) => t.members.length > 1);
-  const winner = rows[0] ? L.teams[rows[0].team] : undefined;
-  const subtitle =
-    teams && winner
-      ? `${STR.resultSubtitle(L.pawnCount)} · ${joinNames(winner.members.map(name))}`
-      : STR.resultSubtitle(L.pawnCount);
   return {
     title: headline(L, name),
-    subtitle,
+    subtitle: STR.resultSubtitle(L.pawnCount),
     ranking,
     awards: pickAwards(L.participants.map((id) => L.stats.get(id)!)),
   };

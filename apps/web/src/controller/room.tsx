@@ -3,6 +3,7 @@ import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Avatar, Icon } from '../shared/ui';
 import { StatusRow } from './common';
+import { HostOfferLayer, HostSwapSheet } from './hostoffer';
 import { HostMenu, MenuPill, PlayerMenu } from './ingame';
 import {
   canFullscreen,
@@ -29,6 +30,7 @@ import {
 } from './store';
 import { STR } from './strings';
 import { useControllerTheme } from './themes';
+import { TutorialPhone } from './tutorial';
 import { GameView } from './views';
 
 /* ------------------------------------------------------------------ lobby */
@@ -77,9 +79,17 @@ function Lobby() {
 
 function Footer({ bricks = false }: { bricks?: boolean }) {
   const [confirm, setConfirm] = useState(false);
+  const [swap, setSwap] = useState(false);
+  const isHost = me.value?.isHost ?? false;
   return (
     <>
       <div class={bricks ? 'host-bricks-foot' : 'ctrl-footer'}>
+        {isHost && (
+          <button type="button" class="foot-pill" onClick={() => setSwap(true)}>
+            <Icon name="crown" size={18} stroke={2.2} />
+            {STR.hostSwap}
+          </button>
+        )}
         <button
           type="button"
           role="switch"
@@ -97,6 +107,7 @@ function Footer({ bricks = false }: { bricks?: boolean }) {
         </button>
       </div>
       {confirm && <LeaveSheet onClose={() => setConfirm(false)} />}
+      {swap && <HostSwapSheet onClose={() => setSwap(false)} />}
     </>
   );
 }
@@ -342,23 +353,26 @@ export function RoomView() {
     if (pg.paused || !inGame) setHostOpening(false);
     if (!inGame) setPlayerMenu(false);
   }, [pg.paused, inGame]);
-  const hostMenu = isHost && inGame && (pg.paused || hostOpening);
+  const learning = inGame && pg.tutorial !== undefined;
+  const hostMenu = isHost && inGame && !learning && (pg.paused || hostOpening);
   const menuOpen = hostMenu || playerMenu;
   // A dark night screen (Kampung Siluman) shows nothing lit, not even the menu pill.
   const nightDark = v?.kind === 'message' && v.dark === true;
-  const showPill = inGame && !menuOpen && !nightDark;
+  const showPill = inGame && !menuOpen && !nightDark && !learning;
   // The pill sits at the top centre, above the game controls, never on top of them.
   useEffect(() => {
     document.documentElement.classList.toggle('has-pill', showPill);
     return () => document.documentElement.classList.remove('has-pill');
   }, [showPill]);
-  const playing = inGame && !menuOpen;
+  const playing = inGame && !menuOpen && !learning;
   const watching = pg.page === 'results' && v !== null && !isHost;
   // While the phone shows the game's own screens it wears that game's theme; menus, the Host
   // pad, the lobby and setup stay in the neutral Hoorah style.
   useControllerTheme(playing || watching ? (pg.gameId ?? null) : null);
   let content: JSX.Element;
-  if (hostMenu) {
+  if (learning) {
+    content = <TutorialPhone ready={pg.tutorial?.ready ?? []} gameTitle={pg.gameTitle} />;
+  } else if (hostMenu) {
     content = <HostMenu onClose={() => setHostOpening(false)} />;
   } else if (playerMenu) {
     content = <PlayerMenu onClose={() => setPlayerMenu(false)} onLeave={() => setLeaving(true)} />;
@@ -389,6 +403,7 @@ export function RoomView() {
         />
       )}
       {leaving && <LeaveSheet onClose={() => setLeaving(false)} />}
+      <HostOfferLayer />
       <Overlays />
     </>
   );

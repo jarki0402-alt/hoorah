@@ -6,6 +6,7 @@ import {
   type ErrorCode,
   type Fruit,
   generateRoomCode,
+  type HostOfferResult,
   isRoomCode,
   LIMITS,
   type NearbyRoom,
@@ -62,6 +63,14 @@ interface Room {
   direct: number;
   /** Most seats taken at once, for the usage numbers when the room closes. */
   peakPlayers: number;
+  /** The Host asked another player to take over and is waiting for the answer (at most one). */
+  hostOffer: HostOffer | null;
+}
+
+interface HostOffer {
+  from: number;
+  to: number;
+  at: number;
 }
 
 /** Wrong room codes one address may try per minute before joining is refused for a while. */
@@ -208,6 +217,18 @@ export class RoomManager {
         this.broadcastPlayers(room);
         return;
       }
+      case 'hostOffer':
+        this.offerHost(conn, b, msg.id);
+        return;
+      case 'hostOfferCancel': {
+        const offer = room.hostOffer;
+        if (b.role !== 'controller' || !offer || offer.from !== b.id) return;
+        this.endHostOffer(room, 'cancelled');
+        return;
+      }
+      case 'hostReply':
+        this.replyHostOffer(conn, b, msg.accept);
+        return;
       case 'kick': {
         if (!this.canManage(b) || (b.role === 'controller' && b.id === msg.id)) {
           this.fail(conn, 'not_allowed', false);
@@ -322,6 +343,7 @@ export class RoomManager {
         }
       }
       if (changed) this.broadcastPlayers(room);
+      if (room.hostOffer && now - room.hostOffer.at >= LIMITS.hostOfferMs) this.endHostOffer(room, 'expired');
     }
     for (const map of [this.roomCreations, this.joinFailures, this.passFailures]) {
       for (const [ip, times] of map) {
@@ -409,6 +431,7 @@ export class RoomManager {
         gameId: null,
         direct: 0,
         peakPlayers: players.size,
+        hostOffer: null,
       });
     }
   }
@@ -524,6 +547,7 @@ export class RoomManager {
       gameId: null,
       direct: 0,
       peakPlayers: 0,
+      hostOffer: null,
     };
     this.rooms.set(code, room);
     this.bindings.set(conn, { room, role: 'screen' });
@@ -727,9 +751,73 @@ export class RoomManager {
   }
 
   private broadcastPlayers(room: Room): void {
+    // Every change of host or seats passes here: an offer whose sides changed is over.
+    if (room.hostOffer && !this.hostOfferValid(room, room.hostOffer)) this.endHostOffer(room, 'cancelled');
     const msg: ServerMsg = { t: 'players', players: this.playerList(room) };
     room.screen?.send(msg);
     this.toControllers(room, msg);
+  }
+
+  /* ------------------------------------------------------------------ Host offers */
+
+  /** The Host phone asks player `to` to take over. Replaces the Host's earlier pending offer. */
+  private offerHost(conn: Conn, b: Binding, to: number): void {
+    const room = b.room;
+    if (b.role !== 'controller' || room.hostId !== b.id || to === b.id) {
+      this.fail(conn, 'not_allowed', false);
+      return;
+    }
+    if (!room.players.get(to)?.conn) {
+      this.fail(conn, 'bad_request', false);
+      return;
+    }
+    if (room.hostOffer) this.endHostOffer(room, 'cancelled');
+    room.hostOffer = { from: b.id, to, at: this.opts.now() };
+    const msg: ServerMsg = { t: 'hostOffer', from: b.id, to };
+    conn.send(msg);
+    room.players.get(to)?.conn?.send(msg);
+  }
+
+  /** The asked player answers. Only they may, and only while the offer still holds. */
+  private replyHostOffer(conn: Conn, b: Binding, accept: boolean): void {
+    const room = b.room;
+    const offer = room.hostOffer;
+    if (b.role !== 'controller' || !offer || offer.to !== b.id) {
+      this.fail(conn, 'not_allowed', false);
+      return;
+    }
+    if (!this.hostOfferValid(room, offer)) {
+      this.endHostOffer(room, 'cancelled');
+      return;
+    }
+    if (!accept) {
+      this.endHostOffer(room, 'declined');
+      return;
+    }
+    this.endHostOffer(room, 'accepted');
+    room.hostId = offer.to;
+    this.broadcastPlayers(room);
+    const changed: ServerMsg = { t: 'hostChanged', id: offer.to, from: offer.from };
+    room.screen?.send(changed);
+    this.toControllers(room, changed);
+  }
+
+  /** Both sides still connected and the offering player still Host. */
+  private hostOfferValid(room: Room, offer: HostOffer): boolean {
+    return (
+      room.hostId === offer.from &&
+      (room.players.get(offer.from)?.conn ?? null) !== null &&
+      (room.players.get(offer.to)?.conn ?? null) !== null
+    );
+  }
+
+  private endHostOffer(room: Room, result: HostOfferResult): void {
+    const offer = room.hostOffer;
+    if (!offer) return;
+    room.hostOffer = null;
+    const msg: ServerMsg = { t: 'hostOfferEnd', from: offer.from, to: offer.to, result };
+    room.players.get(offer.from)?.conn?.send(msg);
+    room.players.get(offer.to)?.conn?.send(msg);
   }
 
   private toControllers(room: Room, msg: ServerMsg): void {

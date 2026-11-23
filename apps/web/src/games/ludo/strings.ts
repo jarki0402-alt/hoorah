@@ -1,14 +1,13 @@
 /** Every player-facing Ludo string (Indonesian) lives here. */
 import type { ColorId } from './logic';
 
-const COLOR_NAMES = ['Merah', 'Hijau', 'Kuning', 'Biru'] as const;
+const COLOR_NAMES = ['Merah', 'Hijau', 'Kuning', 'Biru', 'Merah Muda', 'Tosca', 'Oranye', 'Cokelat'] as const;
 
 export const STR = {
   noShell: 'Buka Ludo dari layar utama Hoorah.',
   logo: 'LUDO',
   unknownPlayer: 'Pemain',
   color: (c: ColorId) => COLOR_NAMES[c],
-  team: (c: ColorId) => `Tim ${COLOR_NAMES[c]}`,
   modeChip: (pawns: number) => (pawns >= 4 ? 'NORMAL · 4 BIDAK' : 'KILAT · 2 BIDAK'),
 
   /* main screen */
@@ -25,7 +24,7 @@ export const STR = {
   overEyebrow: 'SELESAI',
   rulesLines: ['Dapat 6 untuk keluar kandang', 'Angka 6 dapat lempar lagi', 'Bintang dan petak start aman'],
   firstTurn: (name: string) => `Giliran pertama: ${name}`,
-  teamsNote: 'Main beregu: rekan setim bergantian melempar dadu.',
+  boardNote: (sides: number) => `${sides} pemain, papan segi ${sides}: setiap orang warna sendiri.`,
   homeStat: (home: number, total: number) => `${home}/${total} pulang`,
   offline: 'Terputus',
   autoTag: 'otomatis',
@@ -64,22 +63,18 @@ export const STR = {
   phoneTripleTitle: 'Tiga kali 6!',
   phoneTripleSub: 'Giliranmu hangus.',
   phoneWatchEyebrow: (color: string) => `GILIRAN ${color.toUpperCase()}`,
-  phoneMateEyebrow: 'GILIRAN TIMMU',
   phoneWatchRoll: 'sedang melempar dadu',
   phoneWatchPick: (n: number) => `dapat ${n}, memilih bidak`,
   phoneWatchMove: (n: number) => `dapat ${n}`,
   phoneYourColor: 'Warnamu',
-  phoneYourTeam: 'Timmu',
   phoneHome: 'Bidak pulang',
   phoneIntroEyebrow: 'LUDO',
   phoneIntroTitle: 'Siap-siap!',
   phoneIntroSub: (color: string) => `Kamu main ${color}.`,
-  phoneIntroTeam: (color: string, mate: string) => `Kamu main ${color} bersama ${mate}.`,
   phoneSpectator: 'Kamu menonton',
   phoneSpectatorSub: 'Ikut main di ronde berikutnya.',
   phoneCaptured: 'Bidakmu dimakan!',
   phoneWinTitle: 'Kamu juara!',
-  phoneTeamWin: 'Tim kamu juara!',
   phoneRank: (rank: number) => `Peringkat ${rank}`,
   phoneFinalSub: (headline: string) => headline,
   phoneCaptures: 'Makan lawan',

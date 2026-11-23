@@ -23,6 +23,8 @@ export const LIMITS = {
   idleRoomMs: 30 * 60_000,
   /** Host role moves to someone else after the host has been gone this long. */
   hostHandoverMs: 30_000,
+  /** A Host offer nobody answered ends after this. */
+  hostOfferMs: 30_000,
   /** Client heartbeat interval. */
   heartbeatMs: 2_000,
   /** Messages per second a single socket may send before being throttled. */

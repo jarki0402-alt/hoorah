@@ -19,8 +19,8 @@ export interface StickTuning {
   /** Response curve: output = travel^curve. Below 1 reaches speed sooner, above 1 is finer. */
   curve: number;
   /**
-   * false (default, as in Roblox): the base stays where the thumb landed and the knob stops at the
-   * radius. true: past the radius the base is dragged along behind the thumb.
+   * true (default, owner 2026-11-22): past the radius the base is dragged along behind the thumb.
+   * false: the base stays where the thumb landed and the knob stops at the radius.
    */
   follow: boolean;
 }
@@ -79,7 +79,9 @@ export interface ControlTuning {
 }
 
 export const CONTROL_DEFAULTS: Readonly<ControlTuning> = Object.freeze({
-  stick: Object.freeze({ radius: 52, dead: 0.14, curve: 1, follow: false }),
+  // Owner 2026-11-22: the base follows the thumb (turning back answers at once) and full speed
+  // comes after a short 56 px push; the stick never lets go while the thumb is down.
+  stick: Object.freeze({ radius: 56, dead: 0.12, curve: 1, follow: true }),
   swipe: Object.freeze({ distance: 26, flickDistance: 14, flickSpeed: 0.55, tapPx: 12, tapMs: 260 }),
   haptic: Object.freeze({ tickGap: 70, flash: 'auto' as FlashMode, releaseFallback: true }),
   // About 0.75 s in the air: up in 0.31 s, a 0.17 s float at the top, down in 0.27 s.
@@ -102,7 +104,7 @@ export const CONTROL_RANGES: {
   rusun: Record<keyof RusunTuning, Range>;
 } = {
   stick: {
-    radius: { min: 28, max: 96, step: 2 },
+    radius: { min: 40, max: 140, step: 2 },
     dead: { min: 0, max: 0.4, step: 0.01 },
     curve: { min: 0.5, max: 2, step: 0.05 },
   },
@@ -134,7 +136,7 @@ const STORE_KEY = 'hoorah.controls';
  * Version of the stored shape. Version 2 (2026-11-22) gave the jump a float and a faster fall:
  * a runner block saved before that described the old, too short jump and is dropped.
  */
-const STORE_VERSION = 2;
+const STORE_VERSION = 4;
 const FLASH_MODES: readonly FlashMode[] = ['auto', 'always', 'off'];
 
 function clamp(v: number, r: Range): number {
@@ -207,8 +209,10 @@ export function migrateStored(raw: unknown): unknown {
   if (raw === null || typeof raw !== 'object') return raw;
   const src = raw as Record<string, unknown>;
   if (src.version === STORE_VERSION) return raw;
-  const { runner: _oldJump, ...rest } = src;
-  return rest;
+  // v2 changed the jump; v3 and v4 changed the stick (now following the thumb), so an older stored
+  // stick goes and everyone gets the new default.
+  const { runner, stick: _oldStick, ...rest } = src;
+  return src.version === 2 || src.version === 3 ? { ...rest, runner } : rest;
 }
 
 function readStored(): unknown {

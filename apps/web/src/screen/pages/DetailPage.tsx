@@ -6,7 +6,7 @@ import { KeyArt } from '../../shared/keyart';
 import { Avatar, Icon, type IconName } from '../../shared/ui';
 import { FocusButton } from '../components';
 import { setFocusMap } from '../nav';
-import { connected, goHome, selected, sfx, startGame } from '../store';
+import { connected, goHome, openTutorial, selected, sfx, startGame, tutorial } from '../store';
 
 export function DetailPage() {
   const id = selected.value;
@@ -14,12 +14,16 @@ export function DetailPage() {
   // Same tag as the home cards: "Baru" only for the newest wave.
   const tag = cardTag(id);
 
+  const reading = tutorial.value !== null;
   useEffect(() => {
+    // "Cara main" open on top: it owns the remote until it closes.
+    if (reading) return;
     return setFocusMap(
       {
-        rows: [['play'], ['back']],
+        rows: [['play'], ['howto'], ['back']],
         onOk: (fid) => {
           if (fid === 'play') return startGame(id);
+          if (fid === 'howto') return openTutorial(id);
           if (fid === 'back') {
             sfx('back');
             return goHome();
@@ -33,7 +37,7 @@ export function DetailPage() {
       },
       'play',
     );
-  }, [id]);
+  }, [id, reading]);
 
   const mood = MOODS[g.mood];
   const list = connected.value;
@@ -144,6 +148,10 @@ export function DetailPage() {
         >
           <Icon name="play" size={16} color="#111214" />
           Main
+        </FocusButton>
+        <FocusButton id="howto" class="btn" style={{ padding: 9, fontSize: 14 }}>
+          <Icon name="tap" size={14} />
+          Cara main
         </FocusButton>
         <FocusButton id="back" class="btn" style={{ padding: 9, fontSize: 14 }}>
           Kembali

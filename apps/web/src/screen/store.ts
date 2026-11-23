@@ -67,6 +67,19 @@ export const activeGame = signal<ActiveGame | null>(null);
 export const lastResult = signal<{ gameId: GameId; result: GameResult } | null>(null);
 export const audioOn = signal(false);
 export const muted = signal(prefs.get('muted', false));
+
+/**
+ * "Cara main" on the main screen (owner 2026-11-22). `intro`: before a game's first round on this
+ * screen; the game loads once everyone pressed "Paham!", the Host skipped, or the steps ran out.
+ * `view`: opened again from the detail page or the pause screen, nothing waits on it.
+ */
+export interface TutorialRun {
+  id: GameId;
+  mode: 'intro' | 'view';
+  ready: number[];
+}
+export const tutorial = signal<TutorialRun | null>(null);
+const seenTutorials = new Set<string>(prefs.get<string[]>('tutorials', []));
 export const musicOn = signal(prefs.get('music', true));
 /** The join QR is on screen so more players can scan in (the Host's "Tambah pemain"). */
 export const inviting = signal(false);
@@ -157,6 +170,11 @@ function onServer(m: ServerMsg): void {
     case 'players':
       onPlayers(m.players);
       return;
+    case 'hostChanged': {
+      const p = players.value.find((x) => x.id === m.id);
+      if (p) toast(STR.hostNow(p.name), p);
+      return;
+    }
     case 'relay':
       if (m.ch === 'p') onPlatform(m.from, m.data);
       else if (m.ch === 'g') onGameAction(m.from, m.data);
@@ -225,6 +243,8 @@ function onPlatform(from: number, data: unknown): void {
     hostCommand(msg.cmd);
   } else if (msg.k === 'react' && ['cheer', 'clap', 'boo', 'rematch'].includes(msg.r)) {
     react(player, msg.r);
+  } else if (msg.k === 'understood') {
+    understood(player.id);
   }
 }
 
@@ -268,6 +288,9 @@ export function setHomeTab(tab: HomeSection): void {
 /** The Host's in-game menu on the phone (pill at the top) drives the main screen. */
 function hostCommand(cmd: HostCommand): void {
   switch (cmd) {
+    case 'tutorial-skip':
+      finishTutorial();
+      return;
     case 'pause':
       togglePause(true);
       return;
@@ -341,6 +364,8 @@ export function sendPage(to: number | 'all' = 'all'): void {
     // The group in focus on the home screen, so the picker opens on the same games.
     tab: (home ? focusSection(focused.value) : null) ?? homeTab.value,
   };
+  const tu = tutorial.value;
+  if (tu?.mode === 'intro' && page.value === 'game') data.tutorial = { ready: tu.ready };
   if (gameId) {
     data.gameId = gameId;
     data.gameTitle = GAMES[gameId].title;
@@ -512,6 +537,7 @@ export function startGame(id: GameId = selected.value): void {
   recent.value = [id, ...recent.value.filter((r) => r !== id)].slice(0, 4);
   prefs.set('recent', recent.value);
   activeGame.value = { id, run: ++uid, ready: false, paused: false };
+  tutorial.value = seenTutorials.has(id) ? null : { id, mode: 'intro', ready: [] };
   audio.music(null);
   sfx('select');
   page.value = 'game';
@@ -555,9 +581,42 @@ export function restartGame(): void {
   if (id) startGame(id);
 }
 
+/* ------------------------------------------------------------------ tutorial */
+
+/** Ends the tutorial; an intro one is then marked seen on this screen and the game loads. */
+export function finishTutorial(): void {
+  const tu = tutorial.value;
+  if (!tu) return;
+  if (tu.mode === 'intro') {
+    seenTutorials.add(tu.id);
+    prefs.set('tutorials', [...seenTutorials]);
+  }
+  tutorial.value = null;
+  sfx('select');
+  sendPage();
+}
+
+/** Opens a game's tutorial again ("Cara main" on the detail page or the pause screen). */
+export function openTutorial(id: GameId): void {
+  tutorial.value = { id, mode: 'view', ready: [] };
+  sfx('select');
+}
+
+/** "Paham!" from a phone: once every connected player pressed it, the game starts. */
+function understood(id: number): void {
+  const tu = tutorial.value;
+  if (tu?.mode !== 'intro' || tu.ready.includes(id)) return;
+  const ready = [...tu.ready, id];
+  tutorial.value = { ...tu, ready };
+  sfx('tick');
+  if (connected.value.every((p) => ready.includes(p.id))) finishTutorial();
+  else sendPage();
+}
+
 export function quitGame(): void {
   // Leaving a game mid-party ends the party.
   party.value = null;
+  tutorial.value = null;
   inviting.value = false;
   activeGame.value = null;
   lastViews.clear();

@@ -10,7 +10,13 @@ import { Director } from './director';
 import { Hud } from './hud';
 import { DapurScene } from './scene';
 import { STR } from './strings';
-import { loadCommonTextures, RENDER_SCALE } from './textures';
+import {
+  loadCommonTextures,
+  lowerRenderScale,
+  pickResolution,
+  RENDER_SCALE,
+  updateRenderScale,
+} from './textures';
 
 function layer(stage: HTMLElement, className: string): HTMLDivElement {
   const el = document.createElement('div');
@@ -24,6 +30,11 @@ function showError(stage: HTMLElement): void {
   const el = layer(stage, 'dp-error');
   el.textContent = STR.loadError;
 }
+
+/** Frame rate below which the kitchen counts as stuttering, and for how long before stepping down. */
+const SLOW_FPS = 40;
+const SLOW_SECONDS = 4;
+const GRACE_SECONDS = 2;
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
@@ -41,6 +52,7 @@ async function boot(): Promise<void> {
   }
   // Labels are drawn with the brand font, so wait for it before rasterizing.
   await fonts;
+  pickResolution();
   let textures: Map<string, HTMLCanvasElement>;
   try {
     textures = await loadCommonTextures();
@@ -78,10 +90,38 @@ async function boot(): Promise<void> {
     hud.setOrigin(o.x, o.y);
   };
   fit(stageWidth(), stageHeight());
-  onResize((h, w) => {
-    phaser.scale.resize(w * RENDER_SCALE, h * RENDER_SCALE);
-    fit(w, h);
+  // The canvas follows the device pixels the stage covers, so it is re-sized both when the stage
+  // shape changes and when only its scale does (entering fullscreen, moving to another monitor).
+  const applySize = () => {
+    phaser.scale.setZoom(1 / RENDER_SCALE);
+    phaser.scale.resize(stageWidth() * RENDER_SCALE, stageHeight() * RENDER_SCALE);
+    fit(stageWidth(), stageHeight());
+  };
+  onResize(() => {
+    updateRenderScale();
+    applySize();
   });
+  window.addEventListener('resize', () => {
+    if (updateRenderScale()) applySize();
+  });
+  // Every second: follow the shell's scale, then the safety net: a device that stays below SLOW_FPS
+  // for SLOW_SECONDS in a row drops one sharpness step and gets a short grace period to settle.
+  // Hidden tabs do not count.
+  let slow = 0;
+  window.setInterval(() => {
+    if (document.hidden) {
+      slow = 0;
+      return;
+    }
+    // The shell can rescale the game without resizing its iframe (fullscreen, window drag):
+    // follow it here, since no resize event reaches this page then.
+    if (updateRenderScale()) applySize();
+    slow = phaser.loop.actualFps < SLOW_FPS ? slow + 1 : Math.min(slow, 0);
+    if (slow >= SLOW_SECONDS && lowerRenderScale()) {
+      slow = -GRACE_SECONDS;
+      applySize();
+    }
+  }, 1000);
 
   new Director(game, scene, hud, phaser).start();
   await nextFrame();
