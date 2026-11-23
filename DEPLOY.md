@@ -2,11 +2,11 @@
 
 Panduan langkah demi langkah. **Mac** = perintah di laptop, di folder proyek. **VM** = perintah lewat SSH di VM Google Cloud, sebagai pengguna `fajarrizky04febriano` (bukan root; jangan tambahkan `sudo` kecuali tertulis).
 
-**Alur:** Mac `git push` → (GitHub memeriksa kode) → VM `/home/fajarrizky04febriano/hoorah/deploy/vm/update.sh` menarik kode, **membangun image di VM** (seperti Suwwara), memasang file web, dan me-restart server Hoorah.
+**Alur:** Mac `git push` → GitHub memeriksa kode lalu **membangun image** (`ghcr.io/jarki0402-alt/hoorah:sha-<commit>`, ±5–10 menit) → VM `/home/fajarrizky04febriano/hoorah/deploy/vm/update.sh` menarik kode, **mengambil image yang sudah jadi** (tidak membangun apa pun di VM, keputusan pemilik 2026-11-23), memasang file web, dan me-restart server Hoorah.
 
 - Folder Hoorah di VM: `/home/fajarrizky04febriano/hoorah`. File web untuk nginx: `/srv/hoorah` (di luar folder home, karena nginx tidak boleh membaca isi `/home`).
 - nginx di VM (milik Suwwara) hanya **ditambah** satu situs `hoorah.fajarrizky.my.id`. File Suwwara tidak diubah, dan nginx cukup di-*reload*, jadi Suwwara tidak putus.
-- Build butuh ±1 GB memori sesaat (diukur di Linux: `npm ci` puncak ±245 MB, build web puncak ±716 MB, berurutan; dengan 700 MB tanpa swap build mati kehabisan memori). VM sudah punya swap dari Suwwara (langkah 2b, cukup dicek). `update.sh` menolak build kalau RAM tersedia + swap kosong di bawah 1000 MB, supaya Suwwara tidak ikut tumbang.
+- VM tidak membangun image, jadi tidak ada lonjakan memori dan Suwwara tidak melambat saat update. Build darurat di VM (hanya kalau GitHub bermasalah, `HOORAH_BUILD_LOCAL=1`) tetap butuh RAM tersedia + swap kosong minimal 1000 MB (langkah 2b).
 - Server Hoorah dibatasi 320 MB RAM saat berjalan (`deploy/vm/compose.yaml`).
 
 ```
@@ -155,14 +155,12 @@ MAX_PLAYERS=2
 ```
 Simpan: `Ctrl+O`, `Enter`, `Ctrl+X`. Admin hanya dibuat saat server **pertama kali** menyala (langkah 8 untuk membuat/reset sesudahnya).
 
-Build dan jalankan (5–15 menit pertama kali, berikutnya lebih cepat karena `npm ci` tersimpan di cache):
+Ambil image dan jalankan (pastikan build commit terakhir di tab **Actions** GitHub sudah hijau, dan package sudah Public, lihat 6a):
 ```bash
 /home/fajarrizky04febriano/hoorah/deploy/vm/update.sh
 curl -s http://127.0.0.1:8790/health          # {"ok":true,...}
 ```
-Selama build, Suwwara bisa sedikit lebih lambat (CPU dan swap terpakai). Lakukan saat sepi.
-
-Kalau sebelumnya sempat menjalankan versi lama panduan ini (image dari GitHub), cukup jalankan `update.sh` yang baru; image lama ikut dibersihkan.
+Kalau image belum ada (GitHub masih membangun), `update.sh` menunggu sampai 15 menit sambil mengecek tiap 20 detik.
 
 ---
 
@@ -221,16 +219,21 @@ Lalu buka `https://hoorah.fajarrizky.my.id` di laptop (layar utama) dan scan QR 
 
 ## 6. Update rutin
 
+### 6a. Sekali saja: package image dibuat Public
+Setelah push pertama yang membangun image (job `image` di tab **Actions** hijau): GitHub → foto profil → **Your profile** → tab **Packages** → `hoorah` → **Package settings** (kanan bawah) → **Danger Zone: Change visibility** → **Public** → ketik `hoorah` → konfirmasi. Image tidak berisi rahasia (`.env` tidak ikut), dan repo-nya memang publik. Tanpa ini VM tidak bisa mengambil image tanpa login.
+
+### 6b. Setiap update
 1. **Mac**: `git add -A && git commit -m "..." && git push origin main`
-2. **VM**:
+2. **GitHub**: tab **Actions** → run terbaru, tunggu job `check` dan `image` hijau (±5–10 menit). Boleh langsung lanjut ke langkah 3: `update.sh` menunggu sendiri.
+3. **VM**:
 ```bash
 /home/fajarrizky04febriano/hoorah/deploy/vm/update.sh
 ```
-`update.sh` menjalankan `git pull`, memeriksa memori, membangun image baru (`hoorah-server:<commit>`), menyalin file web ke `/srv/hoorah/web-<commit>`, memindahkan tautan `current`, lalu me-restart server. Kalau server baru tidak sehat dalam ±1 menit, versi sebelumnya otomatis dipulihkan. Pemain di room tidak dikeluarkan (room disimpan sebelum restart dan dipulihkan sesudahnya).
+`update.sh` menjalankan `git pull`, mengambil image commit itu dari GitHub (menunggu kalau belum selesai dibangun) dan menandainya `hoorah-server:<commit>`, menyalin file web ke `/srv/hoorah/web-<commit>`, memindahkan tautan `current`, lalu me-restart server. Kalau server baru tidak sehat dalam ±1 menit, versi sebelumnya otomatis dipulihkan. Pemain di room tidak dikeluarkan (room disimpan sebelum restart dan dipulihkan sesudahnya).
 
-3. **Hanya kalau `git pull` menampilkan perubahan di `deploy/nginx/`**: ulangi 5d (`cp` dua file → `sudo nginx -t` → `sudo systemctl reload nginx`).
+4. **Hanya kalau `git pull` menampilkan perubahan di `deploy/nginx/`**: ulangi 5d (`cp` dua file → `sudo nginx -t` → `sudo systemctl reload nginx`).
 
-Cache build disimpan supaya build berikutnya cepat. Jangan `docker builder prune` setiap update; cek disk sesekali dengan `df -h /`, dan baru kalau di atas ±80%: `docker builder prune -f --filter until=720h`.
+Hanya image versi sekarang dan sebelumnya yang disimpan; sisanya dibersihkan otomatis. Kalau pernah build darurat di VM, cache build-nya bisa dibersihkan saat disk di atas ±80% (`df -h /`): `docker builder prune -f --filter until=720h`.
 
 ## 7. Kembali ke versi sebelumnya
 **VM**
@@ -278,8 +281,10 @@ Cloudflare → DNS → record `hoorah` jadi awan **oranye**, lalu Security → *
 ## Masalah umum
 | Gejala | Penyebab / tindakan |
 | --- | --- |
-| `update.sh`: "Memori kurang untuk build" | Swap Suwwara sedang terpakai banyak: tunggu Suwwara sepi lalu ulangi, atau tambah swap kedua (langkah 2b). Paksa (risiko kehabisan memori): `HOORAH_FORCE_BUILD=1 /home/fajarrizky04febriano/hoorah/deploy/vm/update.sh` |
-| Build berhenti dengan `killed`, `exit code 137`, atau `signal: killed` | Kehabisan memori: cek `free -h` (swap aktif?), tutup yang tidak perlu, jalankan lagi |
+| `update.sh`: "GitHub menolak: package hoorah masih Private" | Langkah 6a: jadikan package Public, ulangi |
+| `update.sh`: "Image ... belum ada setelah 15 menit" | Build GitHub gagal atau belum jalan: buka tab **Actions**, lihat job `image`. Perbaiki di Mac, push lagi |
+| `update.sh`: "Memori kurang untuk build" (hanya build darurat `HOORAH_BUILD_LOCAL=1`) | Tunggu Suwwara sepi lalu ulangi, atau tambah swap kedua (langkah 2b). Paksa (risiko kehabisan memori): `HOORAH_BUILD_LOCAL=1 HOORAH_FORCE_BUILD=1 /home/fajarrizky04febriano/hoorah/deploy/vm/update.sh` |
+| Build darurat berhenti dengan `killed`, `exit code 137`, atau `signal: killed` | Kehabisan memori: cek `free -h` (swap aktif?), tutup yang tidak perlu, jalankan lagi |
 | `update.sh`: "Folder /srv/hoorah belum ada" | `sudo mkdir -p /srv/hoorah && sudo chown fajarrizky04febriano /srv/hoorah` |
 | `update.sh`: `git pull` gagal ("not possible to fast-forward") | Ada perubahan lokal di VM: `cd /home/fajarrizky04febriano/hoorah && git status`, kembalikan dengan `git checkout -- <file>` (file `.env` aman, tidak dilacak git) |
 | `update.sh`: server tidak sehat, otomatis rollback | Baca log yang dicetak; biasanya `.env` salah ketik. Perbaiki, jalankan lagi |
@@ -288,4 +293,4 @@ Cloudflare → DNS → record `hoorah` jadi awan **oranye**, lalu Security → *
 | `certbot`: "Timeout during connect" / "unauthorized" | DNS belum ke VM atau awan masih oranye: `dig +short`, tunggu 2 menit, ulangi |
 | Domain Hoorah memakai sertifikat Suwwara (nama tidak cocok) | Situs Hoorah belum dipasang/di-reload (5d) |
 | `stun-check`: TIDAK ADA JAWABAN / HP selalu lewat server | Aturan `hoorah-stun` (langkah 3) belum ada, jaringan salah, atau server Hoorah mati |
-| Suwwara melambat | Wajar sebentar saat build. Kalau terus: `docker stats --no-stream`, kirim angkanya; batas Hoorah ada di `deploy/vm/compose.yaml` (`mem_limit`) |
+| Suwwara melambat | Update tidak membangun apa pun lagi di VM. Kalau terus: `docker stats --no-stream`, kirim angkanya; batas Hoorah ada di `deploy/vm/compose.yaml` (`mem_limit`) |

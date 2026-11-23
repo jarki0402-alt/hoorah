@@ -39,7 +39,8 @@ Rincian lengkap per entri ada di `PROGRESS.md` → Log.
    - Cek di 1920×1080 DPR 1, 1512×982 DPR 2, dan Smart TV (performa).
 2. **Petualangan Warna lanjutan** (setelah pemilik mencoba Hutan): Gua 7–30, lalu Gurun, Salju, Awan (masing-masing 30 level, sekarang "Segera hadir").
 3. **Commit sudah dibuat 2026-11-23, push dilakukan pemilik.** `docker/.env.example` sengaja tidak ikut (pemilik periksa isinya dulu, lalu commit sendiri).
-4. **Build image di GitHub Actions + GHCR** (pemilik condong setuju 2026-11-23, menunggu "eksekusi"; membalik keputusan 2026-11-16 build di VM). VM cukup `docker pull`.
+4. **[SELESAI 2026-11-23] Build image di GitHub Actions + GHCR**, VM cukup `docker pull` (lihat Log). Menunggu pemilik push + package Public + `update.sh` di VM.
+4a. **Update di titik aman** (server terima protokol N dan N-1, reload hanya di lobi/beranda, file web per versi): menunggu "eksekusi".
 5. **STUN + TURN Cloudflare** (lihat bab 3a), kode menunggu "eksekusi".
 
 ## 3a. Rancangan produksi yang dibahas 2026-11-23 (ditahan, belum masuk PRD)

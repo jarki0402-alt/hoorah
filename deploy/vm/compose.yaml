@@ -6,8 +6,8 @@ name: hoorah
 
 services:
   server:
-    # Built on this VM by update.sh (docker/Dockerfile, target release) and tagged current; the one before is
-    # kept as hoorah-server:previous for rollback.sh.
+    # Built by GitHub Actions (docker/Dockerfile, target release), pulled by update.sh and tagged current; the one
+    # before is kept as hoorah-server:previous for rollback.sh.
     image: hoorah-server:current
     environment:
       MAX_PLAYERS: ${MAX_PLAYERS:-2}

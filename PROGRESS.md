@@ -68,6 +68,14 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-23 · Image dibangun di GitHub Actions, VM hanya mengambil (tahap A)
+
+**Apa yang diubah:** workflow `Check` sekarang punya job kedua `image` (hanya push ke `main`, setelah lint/typecheck/tes lulus) yang membangun `docker/Dockerfile` target `release` dan mendorongnya ke `ghcr.io/jarki0402-alt/hoorah` dengan tag `latest` dan `sha-<7 karakter commit>` (cache GitHub Actions). `deploy/vm/update.sh` tidak lagi membangun: setelah `git pull`, ia mengambil `sha-<commit HEAD>`, menunggu sampai 15 menit kalau GitHub masih membangun (cek tiap 20 dtk, `HOORAH_IMAGE_WAIT`), langsung berhenti dengan petunjuk kalau package masih Private, lalu menandai image `hoorah-server:<commit>` dan memasang seperti sebelumnya (file web, tautan `current`, cek sehat, rollback otomatis, bersih-bersih). Build di VM tetap ada sebagai jalan darurat `HOORAH_BUILD_LOCAL=1` (dengan cek memori 1000 MB lama). `DEPLOY.md` (alur, langkah 4, 6a package Public, 6b update, masalah umum), komentar `docker/Dockerfile` dan `deploy/vm/compose.yaml`, serta `CLAUDE.md` (tabel stack + aturan server) diperbarui.
+**Alasan:** keputusan pemilik 2026-11-23: build di VM membebani Suwwara (RAM + swap ±1 GB sesaat). Membalik keputusan 2026-11-16.
+**File:** `.github/workflows/check.yml`, `deploy/vm/update.sh`, `deploy/vm/compose.yaml`, `docker/Dockerfile`, `DEPLOY.md`, `CLAUDE.md`, `PLAN.md`, `PROGRESS.md`
+**Verifikasi:** `bash -n deploy/vm/update.sh` lulus. `update.sh` diuji di Mac dengan `docker`/`curl`/`sleep` tiruan: (1) image belum ada lalu muncul → menunggu, tag `hoorah-server:<commit>`, salin web, pasang (berhenti di `mv -T` yang khusus Linux, sama seperti sebelumnya); (2) "denied" → pesan package Private, keluar; (3) tidak pernah muncul → pesan tab Actions setelah batas waktu. YAML workflow dan compose VM valid (`ruby -ryaml`, `docker compose config -q`). Image target `release` dibangun lokal, `/web` berisi 9 entri. `npm run docker:up` → `http://192.168.0.104:1010/health` = `{"ok":true,...}`. Job GitHub `image` belum diverifikasi sampai pemilik push.
+**Selanjutnya / catatan:** pemilik push, cek tab Actions, jadikan package Public (DEPLOY.md 6a), lalu `update.sh` di VM. Berikutnya tahap A2 (update di titik aman + protokol N/N-1), lalu Cloudflare.
+
 ### 2026-11-23 · Commit semua pekerjaan lokal + catatan rancangan produksi
 
 **Apa yang diubah:** semua perubahan sejak `18d6481` di-commit (push oleh pemilik). `PLAN.md` bab 3a mencatat diskusi produksi yang ditahan: nama, game gratis, skema Pass, harga, QRIS di layar utama, update tanpa ganggu pemain, build di GitHub, TURN Cloudflare.

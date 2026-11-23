@@ -33,8 +33,8 @@ HEALTHCHECK --interval=15s --timeout=3s --retries=3 CMD node -e "fetch('http://1
 CMD ["node", "--disable-warning=ExperimentalWarning", "server.js"]
 
 # ---------- release (the VM): the server plus the web files, one versioned image ----------
-# Built on the VM by deploy/vm/update.sh, which runs the server from it and copies /web out for the VM's own
-# nginx (deploy/nginx/).
+# Built by GitHub Actions (.github/workflows/check.yml, ghcr.io/jarki0402-alt/hoorah:sha-<commit>). deploy/vm/update.sh
+# pulls it, runs the server from it and copies /web out for the VM's own nginx (deploy/nginx/).
 FROM server AS release
 COPY --from=build /app/apps/web/dist /web
 
