@@ -11,7 +11,7 @@ import { THUMBS } from '../../controller/thumbs/penyusup';
 import type { Face } from '../../shared/art/fruits';
 import { svgUrl } from '../../shared/art/svg';
 import { Avatar } from '../../shared/ui';
-import { MAX_VOTES, type PenyusupMatch, type Seat } from './logic';
+import { MAX_VOTES, type PenyusupScene, type SceneSeat } from './logic';
 import { LANG_NAME, MODE_NAME, ROLE_NAME, STR } from './strings';
 
 /** Per-frame callbacks, driven by the driver's loop. */
@@ -29,12 +29,15 @@ export class FrameBus {
   }
 }
 
+/** What a seat token needs to draw a player. */
+export type SeatInfo = Pick<PlayerInfo, 'id' | 'name' | 'color' | 'look'>;
+
 export interface ScreenModel {
-  match: PenyusupMatch;
+  match: PenyusupScene;
   version: ReadonlySignal<number>;
   frame: FrameBus;
   hostId: () => number | null;
-  info(id: number): PlayerInfo | undefined;
+  info(id: number): SeatInfo | undefined;
 }
 
 const RING_R = 54;
@@ -83,7 +86,7 @@ function Clock({ model, big = false }: { model: ScreenModel; big?: boolean }) {
 
 type TokenState = 'idle' | 'now' | 'done' | 'out' | 'ok' | 'watch';
 
-function Token({ info, n, state, face }: { info: PlayerInfo; n: number; state: TokenState; face?: Face }) {
+function Token({ info, n, state, face }: { info: SeatInfo; n: number; state: TokenState; face?: Face }) {
   return (
     <div class={`ps-token is-${state}`}>
       <span class="ps-token-n">{n}</span>
@@ -224,7 +227,7 @@ function Deal({ model }: { model: ScreenModel }) {
   );
 }
 
-function names(model: ScreenModel, ids: number[]): string {
+function names(model: ScreenModel, ids: readonly number[]): string {
   return ids.map((id) => model.info(id)?.name ?? '?').join(', ');
 }
 
@@ -357,7 +360,7 @@ function Reveal({ model }: { model: ScreenModel }) {
   const id = m.tally?.out ?? null;
   const s = id !== null ? m.seat(id) : undefined;
   const info = id !== null ? model.info(id) : undefined;
-  if (!s || !info) return null;
+  if (!s || !info || !s.role) return null;
   return (
     <div class="ps-center ps-reveal">
       <div class="ps-eyebrow">{STR.revealEyebrow}</div>
@@ -443,8 +446,8 @@ function RoundEnd({ model }: { model: ScreenModel }) {
   );
 }
 
-function GainRow({ seat, info }: { seat: Seat; info: PlayerInfo | undefined }) {
-  if (!info) return null;
+function GainRow({ seat, info }: { seat: SceneSeat; info: SeatInfo | undefined }) {
+  if (!info || !seat.role) return null;
   return (
     <div class={`ps-gain is-${seat.role}`}>
       <Avatar look={info.look} ring={info.color} size={34} />

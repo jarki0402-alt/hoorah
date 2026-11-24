@@ -8,13 +8,14 @@
  */
 import type { ControllerToGame } from '@hoorah/protocol';
 import { connect, type HoorahGame, type MusicIntensity } from '@hoorah/sdk';
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { render } from 'preact';
 import { celebrate } from '../../shared/confetti';
 import { fontsReady, mountStage } from '../common/stage';
 import { type IntroCue, type NightRole, type Phase, type SilumanEvent, SilumanMatch, TIMING } from './logic';
+import { applyMirror, MirrorScene, type SilumanMirror, toMirror } from './mirror';
 import { buildResult } from './results';
-import { FrameBus, type ScreenModel, SilumanScreen } from './screen';
+import { FrameBus, type ScreenModel, type SeatInfo, SilumanBackdrop, SilumanScreen } from './screen';
 import { STR } from './strings';
 import { viewFor } from './views';
 import './siluman.css';
@@ -450,6 +451,10 @@ async function boot(): Promise<void> {
   }
   const { stage } = mountStage(root);
   await fontsReady();
+  if (game.isMirror) {
+    bootMirror(game, stage);
+    return;
+  }
   const match = new SilumanMatch({ seed: randomSeed(), now: game.now(), players: presence(game) });
   const driver = new SilumanDriver(game, match);
   if (import.meta.env.DEV) (window as unknown as { __siluman?: SilumanMatch }).__siluman = match;
@@ -458,6 +463,70 @@ async function boot(): Promise<void> {
   game.music(DAY_SONG);
   driver.start();
   window.setInterval(() => driver.refresh(), 500);
+  publishMirror(game, driver);
+}
+
+/** Host's screen: send the display state to far-away screens on every stage change. */
+function publishMirror(game: HoorahGame, driver: SilumanDriver): void {
+  const send = () => {
+    if (!game.mirrored) return;
+    const m = driver.match;
+    game.publish(toMirror(m, game.now(), m.phaseElapsed(), m.held, driver.hostId(), game.allPlayers));
+  };
+  effect(() => {
+    void driver.version.value;
+    send();
+  });
+  game.on('mirrors', (on) => {
+    if (on) send();
+  });
+}
+
+/** Far-away screen: the stage model fed by the Host's published states (no rules, no phones). */
+class MirrorModel implements ScreenModel {
+  readonly version = signal(0);
+  readonly frame = new FrameBus();
+
+  constructor(readonly match: MirrorScene) {}
+
+  info = (id: number): SeatInfo | undefined => this.match.info(id);
+
+  hostId = (): number | null => this.match.host;
+
+  apply(next: SilumanMirror): void {
+    const prev = this.match.current.ph;
+    this.match.set(next);
+    this.version.value++;
+    // The Host's confetti for a kampung win (sounds and music arrive from the Host).
+    if (prev !== 'final' && next.ph === 'final' && next.w !== 'siluman') window.setTimeout(celebrate, 300);
+  }
+}
+
+function bootMirror(game: HoorahGame, stage: HTMLElement): void {
+  let model: MirrorModel | null = null;
+  game.on('mirror', (raw) => {
+    const state = applyMirror(raw);
+    if (!state) return;
+    if (model) {
+      model.apply(state);
+      return;
+    }
+    const scene = new MirrorScene(state, () => game.now());
+    if (game.paused) scene.setLocalPause(true);
+    const created = new MirrorModel(scene);
+    model = created;
+    game.on('pause', (paused) => scene.setLocalPause(paused));
+    render(<SilumanScreen model={created} />, stage);
+    const loop = () => {
+      created.frame.emit();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+    window.setInterval(() => created.frame.emit(), FALLBACK_TICK_MS);
+  });
+  // The kampung only until the Host's first state arrives.
+  render(<SilumanBackdrop />, stage);
+  game.ready();
 }
 
 void boot();

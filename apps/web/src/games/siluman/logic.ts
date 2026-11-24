@@ -152,11 +152,59 @@ export interface DayRecord {
 
 export interface Tally {
   /** Votes in reveal order: voter → target (0 = skip). */
-  order: { from: number; to: number }[];
+  order: Vote[];
   counts: { id: number; votes: number }[];
   skips: number;
   out: number | null;
   tie: boolean;
+}
+
+/** The seat fields the main screen draws. */
+export type SceneSeat = Pick<Seat, 'id' | 'present' | 'role' | 'alive' | 'ready' | 'locked'>;
+
+/**
+ * What the main screen reads: the live match on the Host's screen, or a far-away screen's replica
+ * built from the published display state (`mirror.ts`).
+ */
+export interface SilumanScene {
+  readonly phase: Phase;
+  readonly step: SetupStep;
+  readonly settings: Readonly<Settings>;
+  readonly night: number;
+  readonly winner: Side | null;
+  readonly dawnVictim: number | null;
+  readonly hunter: number | null;
+  readonly huntShot: number | null;
+  readonly defender: number | null;
+  readonly tally: {
+    readonly order: readonly Vote[];
+    readonly out: number | null;
+    readonly tie: boolean;
+  } | null;
+  readonly nights: readonly Pick<NightRecord, 'night' | 'victim' | 'attacked' | 'protected'>[];
+  readonly days: readonly Pick<DayRecord, 'day' | 'out'>[];
+  readonly table: readonly SceneSeat[];
+  readonly alive: readonly SceneSeat[];
+  readonly present: readonly SceneSeat[];
+  readonly calling: NightRole | null;
+  readonly introCue: IntroCue | null;
+  seat(id: number): SceneSeat | undefined;
+  msLeft(): number;
+  clockLength(): number;
+  tallyShown(): number;
+  marks(): Mark[];
+}
+
+/** One vote of the tally: voter to target (0 = skip). */
+export interface Vote {
+  from: number;
+  to: number;
+}
+
+/** Suspicion markers on one player (only the count shows on the main screen). */
+export interface Mark {
+  id: number;
+  n: number;
 }
 
 export type SilumanEvent =
@@ -239,7 +287,7 @@ export function tallyLength(votes: number): number {
   return ms + TIMING.tallyHoldMs;
 }
 
-export class SilumanMatch {
+export class SilumanMatch implements SilumanScene {
   phase: Phase = 'setup';
   step: SetupStep = 'roles';
   settings: Settings = { extras: 'dasar', talk: 'sedang' };
@@ -391,6 +439,11 @@ export class SilumanMatch {
     return [...map.entries()]
       .map(([id, by]) => ({ id, by }))
       .sort((a, b) => b.by.length - a.by.length || this.joinOf(a.id) - this.joinOf(b.id));
+  }
+
+  /** Suspicion counts per player for the main screen, most first. */
+  marks(): Mark[] {
+    return this.suspicions().map((x) => ({ id: x.id, n: x.by.length }));
   }
 
   /** Ranked standings (ties share a rank). */

@@ -123,6 +123,83 @@ export interface RoundOutcome {
   kosongId: number | null;
 }
 
+/**
+ * A seat as the main screen draws it. On a far-away mirror screen the role and word stay null
+ * until the Host's screen reveals them, so nothing secret crosses the network early.
+ */
+export interface SceneSeat {
+  readonly id: number;
+  readonly joinIndex: number;
+  readonly present: boolean;
+  readonly inRound: boolean;
+  readonly role: Role | null;
+  readonly word: string | null;
+  readonly alive: boolean;
+  readonly ready: boolean;
+  readonly locked: boolean;
+  readonly score: number;
+  readonly gained: number;
+}
+
+/** What the main-screen stage reads: the live match on the Host's screen, a replica on a mirror. */
+export interface PenyusupScene {
+  readonly phase: Phase;
+  readonly step: SetupStep;
+  readonly settings: Readonly<Settings>;
+  readonly round: number;
+  readonly rounds: number;
+  readonly isFinal: boolean;
+  readonly votes: number;
+  readonly roster: readonly SceneSeat[];
+  readonly table: readonly SceneSeat[];
+  readonly voters: readonly SceneSeat[];
+  readonly votersLeft: readonly SceneSeat[];
+  readonly speaker: number | null;
+  readonly spoken: readonly number[];
+  readonly upcoming: readonly number[];
+  readonly circuit: number;
+  readonly circuits: number;
+  readonly lastClue: { readonly id: number; readonly text: string } | null;
+  readonly clueWall: readonly { readonly id: number; readonly text: string }[];
+  readonly tally: Tally | null;
+  readonly guessed: { readonly text: string; readonly correct: boolean } | null;
+  readonly outcome: Omit<RoundOutcome, 'kosongId'> | null;
+  seat(id: number): SceneSeat | undefined;
+  standings(): { seat: SceneSeat; rank: number }[];
+  msLeft(): number;
+  phaseLength(): number;
+}
+
+/** Full length of a phase's clock, for rings (0 when the phase shows no ring). */
+export function clockLength(phase: Phase): number {
+  switch (phase) {
+    case 'deal':
+      return TIMING.dealMs;
+    case 'clue':
+      return TIMING.clueMs;
+    case 'vote':
+      return TIMING.voteMs;
+    case 'guess':
+      return TIMING.guessMs;
+    default:
+      return 0;
+  }
+}
+
+/** Seats ranked by score (ties share a rank, then join order). */
+export function rankStandings<T extends { score: number; joinIndex: number }>(
+  seats: readonly T[],
+): { seat: T; rank: number }[] {
+  const rows = seats.slice().sort((a, b) => b.score - a.score || a.joinIndex - b.joinIndex);
+  let rank = 0;
+  let prev = Number.NaN;
+  return rows.map((seat, i) => {
+    if (seat.score !== prev) rank = i + 1;
+    prev = seat.score;
+    return { seat, rank };
+  });
+}
+
 export type PenyusupEvent =
   | { type: 'phase'; phase: Phase }
   | { type: 'turn'; id: number }
@@ -199,7 +276,7 @@ export function clueProblem(clue: string, ownWord: string): 'empty' | 'own' | nu
   return null;
 }
 
-export class PenyusupMatch {
+export class PenyusupMatch implements PenyusupScene {
   readonly rounds: number;
   phase: Phase = 'setup';
   step: SetupStep = 'lang';
@@ -300,18 +377,15 @@ export class PenyusupMatch {
 
   /** The current clock's full length, for rings. */
   phaseLength(): number {
-    switch (this.phase) {
-      case 'deal':
-        return TIMING.dealMs;
-      case 'clue':
-        return TIMING.clueMs;
-      case 'vote':
-        return TIMING.voteMs;
-      case 'guess':
-        return TIMING.guessMs;
-      default:
-        return 0;
-    }
+    return clockLength(this.phase);
+  }
+
+  /**
+   * Server time the current clock ends (0 when none runs). Exact and stable between ticks, so a
+   * published copy only changes when the clock really moves. Meaningless while held.
+   */
+  clockEnd(): number {
+    return this.deadline > 0 ? Math.round(this.last + (this.deadline - this.t)) : 0;
   }
 
   /** Server time the current clock ends, for phone timers. */
@@ -334,14 +408,7 @@ export class PenyusupMatch {
 
   /** Ranked standings (ties share a rank). */
   standings(): { seat: Seat; rank: number }[] {
-    const rows = this.roster.slice().sort((a, b) => b.score - a.score || a.joinIndex - b.joinIndex);
-    let rank = 0;
-    let prev = Number.NaN;
-    return rows.map((seat, i) => {
-      if (seat.score !== prev) rank = i + 1;
-      prev = seat.score;
-      return { seat, rank };
-    });
+    return rankStandings(this.roster);
   }
 
   /* ------------------------------------------------------------------ roster */

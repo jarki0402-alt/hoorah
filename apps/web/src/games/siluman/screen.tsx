@@ -14,7 +14,15 @@ import { THUMBS } from '../../controller/thumbs/siluman';
 import { svgUrl } from '../../shared/art/svg';
 import { Avatar, Icon } from '../../shared/ui';
 import { kampungSvg, roosterSvg, wekerSvg } from './art';
-import { EXTRAS, type IntroCue, MIN_PLAYERS, type Role, type Seat, type SilumanMatch, TALKS } from './logic';
+import {
+  EXTRAS,
+  type IntroCue,
+  MIN_PLAYERS,
+  type Role,
+  type SceneSeat,
+  type SilumanScene,
+  TALKS,
+} from './logic';
 import {
   CALL_SUB,
   CUE_SUB,
@@ -43,12 +51,15 @@ export class FrameBus {
   }
 }
 
+/** What the main screen shows of a player. */
+export type SeatInfo = Pick<PlayerInfo, 'id' | 'name' | 'color' | 'look'>;
+
 export interface ScreenModel {
-  match: SilumanMatch;
+  match: SilumanScene;
   version: ReadonlySignal<number>;
   frame: FrameBus;
   hostId: () => number | null;
-  info(id: number): PlayerInfo | undefined;
+  info(id: number): SeatInfo | undefined;
 }
 
 const RING_R = 54;
@@ -489,7 +500,7 @@ function Final({ model }: { model: ScreenModel }) {
   );
 }
 
-function CastCard({ model, s }: { model: ScreenModel; s: Seat }) {
+function CastCard({ model, s }: { model: ScreenModel; s: SceneSeat }) {
   const info = model.info(s.id);
   if (!info) return null;
   return (
@@ -508,7 +519,7 @@ function Strip({ model }: { model: ScreenModel }) {
   const m = model.match;
   const seats = m.phase === 'setup' ? m.present : m.table;
   const marks = new Map(
-    m.phase === 'discuss' || m.phase === 'defense' ? m.suspicions().map((x) => [x.id, x.by.length]) : [],
+    m.phase === 'discuss' || m.phase === 'defense' ? m.marks().map((x) => [x.id, x.n]) : [],
   );
   const dense = seats.length > 10;
   return (
@@ -557,13 +568,9 @@ function Strip({ model }: { model: ScreenModel }) {
 const nightUrl = () => svgUrl('siluman:kampung:night', () => kampungSvg('night'));
 const dayUrl = () => svgUrl('siluman:kampung:day', () => kampungSvg('day'));
 
-export function SilumanScreen({ model }: { model: ScreenModel }) {
-  model.version.value;
-  const m = model.match;
-  const night = NIGHT_PHASES.has(m.phase);
-  const final = m.phase === 'final' || m.phase === 'ended';
+function Sky() {
   return (
-    <div class={`sl-root ${night ? 'is-night' : 'is-day'} is-${m.phase}`}>
+    <>
       <div class="sl-sky is-day-sky" style={{ backgroundImage: `url("${dayUrl()}")` }} aria-hidden="true" />
       <div
         class="sl-sky is-night-sky"
@@ -571,6 +578,27 @@ export function SilumanScreen({ model }: { model: ScreenModel }) {
         aria-hidden="true"
       />
       <div class="sl-shade" aria-hidden="true" />
+    </>
+  );
+}
+
+/** The kampung alone: a far-away screen before the Host's first state arrives. */
+export function SilumanBackdrop() {
+  return (
+    <div class="sl-root is-day is-setup">
+      <Sky />
+    </div>
+  );
+}
+
+export function SilumanScreen({ model }: { model: ScreenModel }) {
+  model.version.value;
+  const m = model.match;
+  const night = NIGHT_PHASES.has(m.phase);
+  const final = m.phase === 'final' || m.phase === 'ended';
+  return (
+    <div class={`sl-root ${night ? 'is-night' : 'is-day'} is-${m.phase}`}>
+      <Sky />
       <Header model={model} />
       <div class="sl-body">
         {m.phase === 'setup' && <Setup model={model} />}

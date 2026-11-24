@@ -121,9 +121,12 @@ describe('far-away main screen snapshot', () => {
 });
 
 describe('games a far-away screen can show (staged rollout)', () => {
-  it('marks exactly the eight games of the first stage', () => {
+  it('marks exactly the games released so far', () => {
     expect(CATALOG.filter(playsRemote).sort()).toEqual(
-      ['catur', 'congklak', 'eja', 'kata', 'kompak', 'kuis', 'ludo', 'ular'].sort(),
+      [
+        ...['catur', 'congklak', 'eja', 'kata', 'kompak', 'kuis', 'ludo', 'ular'],
+        ...['penyusup', 'siluman'],
+      ].sort(),
     );
   });
 

@@ -68,6 +68,26 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-24 · Main bareng teman jauh: Penyusup + Kampung Siluman
+
+**Apa yang diubah** (eksekusi pemilik 2026-11-24, paket cepat agar bisa langsung main bareng teman):
+- **Penyusup** dan **Kampung Siluman** bisa ditampilkan di layar teman jauh (`remote: true`). Masing-masing punya `mirror.ts` (`toMirror` murni, `applyMirror` memeriksa input, `MirrorScene`) dan stage yang sama dipakai A dan B lewat antarmuka scene (`PenyusupScene`, `SilumanScene`).
+- Rahasia tetap di HP: peran, kata, aksi malam, pilihan suara per orang, dan skor tengah ronde tidak pernah dikirim; peran/kata hanya saat layar A memang membukanya. Curiga di Kampung Siluman dikirim sebagai jumlah saja.
+- Jam memakai waktu server dan berhenti saat A ditahan atau B dijeda. Suara dan musik (termasuk intensitas dan tempo) diteruskan shell. Ukuran keadaan terbesar ±2 KB untuk 16 pemain.
+- Tes rollout di `screen/mirror.test.ts` sekarang memuat 10 game. Tes e2e baru `e2e/remote-games.spec.ts` (per game: Host + HP, layar B lewat link, game dimulai, cuplikan A dan B).
+
+**File:** `apps/web/src/games/penyusup/{mirror.ts,mirror.test.ts,logic.ts,screen.tsx,main.tsx}`, `apps/web/src/games/siluman/{mirror.ts,mirror.test.ts,logic.ts,screen.tsx,main.tsx}`, `apps/web/src/shared/games.ts`, `apps/web/src/screen/mirror.test.ts`, `e2e/remote-games.spec.ts`.
+
+**Verifikasi:**
+- `npx tsc --noEmit -p apps/web`: lulus. `npx biome check` file terkait: lulus.
+- `npx vitest run` penyusup, siluman, shared, screen: lulus (Penyusup 30 tes, Kampung Siluman 27 tes, rollout 7 tes).
+- `npx playwright test e2e/remote-games.spec.ts`: 2/2 lulus; cuplikan layar A dan B identik untuk kedua game.
+- `npm run check`, e2e penuh, dan `npm run docker:up` **tidak dijalankan** untuk commit ini: agen lain sedang mengubah folder Tarik, Bom, dan Juragan di pohon kerja yang sama. CI GitHub menjalankan lint, typecheck, tes, dan build untuk commit ini; Docker dijalankan setelah semua game paket ini selesai.
+
+**Berikutnya / sisa:**
+- Tarik Tambang, Bom Oper, dan Juragan menyusul.
+- Penyusup: teks "Rina memilih pengaturan di HP" bertumpuk dengan baris avatar di layar 1280x720 (sama di A dan B, masalah lama).
+
 ### 2026-11-24 · Main bareng teman jauh (dua layar utama, satu room) tahap 1 + 2
 
 **Apa yang diubah** (keputusan pemilik 2026-11-24, eksekusi tahap 1 dan 2):

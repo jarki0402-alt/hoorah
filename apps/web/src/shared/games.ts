@@ -797,6 +797,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'kuis',
     mood: 'ramai',
     available: true,
+    remote: true,
     badge: 'BARU',
     logoColor: '#FFC928',
     howTo: [
@@ -853,6 +854,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'kuis',
     mood: 'ramai',
     available: true,
+    remote: true,
     wave: 3,
     badge: 'BARU',
     logoColor: '#FFE7A3',
