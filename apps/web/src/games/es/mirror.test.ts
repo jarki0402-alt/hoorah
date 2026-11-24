@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { EndRow, FinalRow } from './hud';
 import { EsMatch, type PlayerInfo, TIMING } from './logic';
 import {
+  aimSecondsNow,
   applyMirror,
   type EsMirror,
   EVENT_KEEP_S,
@@ -12,11 +13,11 @@ import {
   type MirrorSource,
   MirrorTimeline,
   pose,
-  RENDER_DELAY_MS,
   type SkaterRow,
   TELEPORT_M,
   toMirror,
 } from './mirror';
+import { CLOCK_AHEAD_MAX_MS } from './playout';
 
 const FRUITS = ['semangka', 'alpukat', 'durian', 'nanas', 'jeruk', 'stroberi', 'mangga', 'rambutan'] as const;
 
@@ -290,11 +291,56 @@ describe('MirrorTimeline', () => {
     expect(tl.push(state(1000, 1, [row(1, 0, 0)]), 1200)).toBe(true);
     expect(tl.push(state(1000, 1, [row(1, 9, 0)]), 1210)).toBe(false);
     expect(tl.push(state(1075, 1.075, [row(1, 0.75, 0)]), 1275)).toBe(true);
-    expect(tl.lagMs).toBeCloseTo(200);
-    expect(tl.drawAt(1300)).toBeCloseTo(1300 - 200 - RENDER_DELAY_MS);
-    // Drawn at 1037.5: halfway between the two states.
-    const p = tl.sample(1037.5 + 200 + RENDER_DELAY_MS)!;
-    expect(p.skaters[0]!.x).toBeCloseTo(0.375);
+    expect(tl.lagMs).toBe(200);
+    // Shortest trip plus 1.5 state gaps (about 70 ms each, no jitter yet).
+    const now = 1037.5 + 200 + 106.875;
+    const at = tl.drawAt(now);
+    expect(now - at).toBeCloseTo(200 + 1.5 * (70 + 5 / 8), 6);
+    const p = tl.sample(now)!;
+    expect(p.skaters[0]!.x).toBeCloseTo((at - 1000) / 100, 6);
     expect(tl.latest?.at).toBe(1075);
+  });
+
+  it('keeps a direct link close behind and follows a route change without the floe jumping', () => {
+    const tl = new MirrorTimeline();
+    const trip = (t: number) => (t < 5000 ? 30 + ((t * 7) % 5) : 230 + ((t * 7) % 90));
+    const sent = Array.from({ length: 200 }, (_, i) => 1000 + i * 60);
+    let k = 0;
+    let lastX = Number.NEGATIVE_INFINITY;
+    let maxStep = 0;
+    let direct = Number.POSITIVE_INFINITY;
+    for (let now = 1000; now < 13_000; now += 16) {
+      while (k < sent.length && sent[k]! + trip(sent[k]!) <= now) {
+        const t = sent[k++]!;
+        tl.push(state(t, t / 1000, [row(1, t / 1000, 0)]), t + trip(t));
+      }
+      const p = tl.sample(now);
+      if (!p) continue;
+      const x = p.skaters[0]!.x;
+      if (lastX > Number.NEGATIVE_INFINITY) {
+        expect(x).toBeGreaterThanOrEqual(lastX - 1e-9);
+        maxStep = Math.max(maxStep, x - lastX);
+      }
+      lastX = x;
+      if (now >= 4000 && now < 5000) direct = Math.min(direct, tl.behindMs! - tl.lagMs!);
+    }
+    expect(maxStep).toBeLessThan(0.016 * 1.15);
+    expect(direct).toBeLessThan(120);
+    expect(tl.lagMs).toBeGreaterThanOrEqual(230);
+  });
+});
+
+describe('aim countdown at server time', () => {
+  it('counts the aim down on server time from the newest state, never below 1', () => {
+    const s = state(10_000, 20, [], { ph: 'aim', pt: 1.2 });
+    // 3.8 s left when the state was made.
+    expect(aimSecondsNow(s, 10_000)).toBe(4);
+    expect(aimSecondsNow(s, 10_900)).toBe(3);
+    expect(aimSecondsNow(s, 11_900)).toBe(2);
+    const late = state(10_000, 20, [], { ph: 'aim', pt: TIMING.aim - 0.5 });
+    expect(aimSecondsNow(late, 10_000 + CLOCK_AHEAD_MAX_MS * 5)).toBe(1);
+    // A paused Host holds the count; a Host already sliding shows 1 until the floe catches up.
+    expect(aimSecondsNow({ ...s, pz: true }, 11_900)).toBe(4);
+    expect(aimSecondsNow(state(10_000, 20, [], { ph: 'slide', pt: 0.1 }), 10_100)).toBe(1);
   });
 });

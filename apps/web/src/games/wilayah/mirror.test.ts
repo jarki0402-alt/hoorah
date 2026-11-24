@@ -13,13 +13,14 @@ import {
   type MirrorSource,
   type MirrorState,
   MirrorTimeline,
+  mirrorClocks,
   mirrorHud,
   newEvents,
   PACKET_MAX,
   poseAt,
-  RENDER_DELAY_MS,
   type WilayahMirror,
 } from './mirror';
+import { CLOCK_AHEAD_MAX_MS } from './playout';
 
 const COLORS = ['#F2453D', '#2F8CFF', '#22B35E', '#FFC928', '#FF8A3D', '#FF5C9A', '#14B8A6', '#C4C7CC'];
 const OFFSET = 5_000_000;
@@ -157,7 +158,7 @@ describe('wilayah mirror', () => {
         expect(Math.abs(back.trail.ys[i]! - r.trail.ys[i]!)).toBeLessThanOrEqual(1 / 16);
       }
     }
-    const hud = mirrorHud(s, s.left);
+    const hud = mirrorHud(s, mirrorClocks(s, s.t));
     expect(hud.rows.map((r) => r.id)).toEqual(standings.map((x) => x.runner.id));
     expect(hud.rows[0]!.share).toBe(1);
     expect(hud.overlay).toEqual({ kind: 'warning' });
@@ -180,7 +181,7 @@ describe('wilayah mirror', () => {
         }),
       ),
     );
-    const hud = mirrorHud(s, 0);
+    const hud = mirrorHud(s, { left: 0, overlay: null });
     expect(hud.overlay).toEqual({
       kind: 'timeUp',
       title: 'Pemain Ke 01 menguasai lantai!',
@@ -419,6 +420,7 @@ describe('wilayah mirror timeline', () => {
     unit: 3,
     phase: 'play',
     left: 100_000 - t,
+    goIn: 0,
     urgent: false,
     hint: false,
     hold: false,
@@ -457,10 +459,11 @@ describe('wilayah mirror timeline', () => {
     expect(line.push(base(1000, 10, 3.1), 1000 + lag)).toBe(true);
     expect(line.push(base(1070, 17, -3.1), 1070 + lag)).toBe(false);
     expect(line.lag).toBe(lag);
-    const span = line.sample(1035 + lag + RENDER_DELAY_MS);
+    // Trip 250 plus a buffer of 1.5 packet gaps (no jitter yet): 105.
+    const span = line.sample(1035 + lag + 105);
     if (!span) throw new Error('no span');
+    expect(line.behind).toBeCloseTo(lag + 105, 6);
     expect(span.k).toBeCloseTo(0.5, 5);
-    expect(span.left).toBeCloseTo(100_000 - 1035, 5);
     const pose = poseAt(span.a.runners[0]!, span.b.runners[0], span.k, { x: 0, y: 0, angle: 0 });
     expect(pose.x).toBeCloseTo(13.5, 5);
     // The heading turns the short way across PI.
@@ -469,6 +472,66 @@ describe('wilayah mirror timeline', () => {
     const after = line.sample(5000);
     expect(after?.a.t).toBe(1070);
     expect(after?.k).toBe(0);
+  });
+
+  it('follows a route change mid-game without the heads jumping or running backwards', () => {
+    const line = new MirrorTimeline();
+    // The head runs 1 cell per 100 ms. A direct link first, then a fall back to the relay.
+    const trip = (t: number) => (t < 4000 ? 30 + ((t * 7) % 5) : 260 + ((t * 7) % 60));
+    const sent = Array.from({ length: 200 }, (_, i) => i * 70);
+    let k = 0;
+    let lastX = Number.NEGATIVE_INFINITY;
+    let maxStep = 0;
+    const pose = { x: 0, y: 0, angle: 0 };
+    for (let now = 0; now < 13_000; now += 16) {
+      while (k < sent.length && sent[k]! + trip(sent[k]!) <= now) {
+        const t = sent[k++]!;
+        line.push(base(t, 10 + t / 100, 0), t + trip(t));
+      }
+      const span = line.sample(now);
+      if (!span) continue;
+      const x = poseAt(span.a.runners[0]!, span.b.runners[0], span.k, pose).x;
+      if (lastX > Number.NEGATIVE_INFINITY) {
+        expect(x).toBeGreaterThanOrEqual(lastX - 1e-9);
+        maxStep = Math.max(maxStep, x - lastX);
+      }
+      lastX = x;
+    }
+    // Never faster than a little over real time: 16 ms = 0.16 cells.
+    expect(maxStep).toBeLessThan(0.16 * 1.15);
+    expect(line.lag).toBeGreaterThanOrEqual(260);
+    expect(line.behind! - line.lag!).toBeLessThan(260);
+  });
+
+  it('runs the countdown and the round clock on server time from the newest packet', () => {
+    const play = base(10_000, 10, 0, { left: 60_000 });
+    expect(mirrorClocks(play, 10_400)).toEqual({ left: 59_600, overlay: null });
+    expect(mirrorClocks(play, 99_000).left).toBe(60_000 - CLOCK_AHEAD_MAX_MS);
+    expect(mirrorClocks({ ...play, hold: true }, 10_400).left).toBe(60_000);
+    const count = base(10_000, 10, 0, {
+      phase: 'countdown',
+      left: 180_000,
+      goIn: 1800,
+      overlay: { kind: 'count', value: 2 },
+    });
+    expect(mirrorClocks(count, 10_000).overlay).toEqual({ kind: 'count', value: 2 });
+    expect(mirrorClocks(count, 10_900).overlay).toEqual({ kind: 'count', value: 1 });
+    expect(mirrorClocks(count, 11_850)).toEqual({ left: 179_950, overlay: { kind: 'go' } });
+    expect(mirrorHud(count, mirrorClocks(count, 11_850)).overlay).toEqual({ kind: 'go' });
+    // Paused Host: the packet's own countdown.
+    expect(mirrorClocks({ ...count, hold: true }, 11_850).overlay).toBeNull();
+  });
+
+  it('carries the time to go from the Host and validates it', () => {
+    const sim = newSim(2);
+    sim.t = 1000;
+    sim.m.advance(sim.t);
+    const raw = sim.feed.pack(source(sim));
+    expect(raw.go).toBe(sim.m.goAt - 1000);
+    const s = wire(raw);
+    expect(mirrorClocks(s, s.t).overlay).toEqual({ kind: 'count', value: sim.m.countValue });
+    expect(applyMirror({ ...raw, go: -1 })).toBeNull();
+    expect(applyMirror({ ...raw, go: 1e9 })).toBeNull();
   });
 
   it('does not glide a respawned head across the floor', () => {

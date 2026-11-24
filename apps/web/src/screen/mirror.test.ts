@@ -226,7 +226,20 @@ describe('games a far-away screen can show (staged rollout)', () => {
     expect(CATALOG.filter(playsRemote).sort()).toEqual(
       [
         ...['catur', 'congklak', 'eja', 'kata', 'kompak', 'kuis', 'ludo', 'ular'],
-        ...['penyusup', 'siluman', 'juragan', 'tarik', 'bom', 'es', 'karung', 'runtuh', 'wilayah', 'kerupuk', 'rusun', 'langkah'],
+        ...[
+          'penyusup',
+          'siluman',
+          'juragan',
+          'tarik',
+          'bom',
+          'es',
+          'karung',
+          'runtuh',
+          'wilayah',
+          'kerupuk',
+          'rusun',
+          'langkah',
+        ],
       ].sort(),
     );
   });

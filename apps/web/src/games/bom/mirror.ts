@@ -2,21 +2,26 @@
  * Long-distance play: the display state the Host's main screen publishes for Bom Oper and how a
  * far-away main screen turns it back into a moving yard. Pure (no DOM, no SDK, no Three.js):
  * `toMirror` reads the running match, `applyMirror` validates untrusted JSON, `MirrorTimeline`
- * buffers the states and interpolates runners between them a little in the past, so the far-away
- * screen moves smoothly although the states arrive about 13 times a second.
+ * buffers the states and interpolates runners between them a little in the past (an adaptive
+ * delay, see `playout.ts`), so the far-away screen moves smoothly although the states arrive about
+ * 15 times a second.
  *
  * The fuse stays secret here too: only how much of it has burnt (0..1) crosses the network.
+ * `FuseClock` reads that share at server time (what the Host's bomb is at right then, not the
+ * delayed stage), from how fast it grew over the last states.
  */
 import { type Fruit, isFruit, type Look, parseLook } from '@hoorah/protocol';
 import { type ArenaId, isArenaId } from './arena';
 import type { Banner, IntroCard, PickCard, ScoreCard } from './hud';
 import type { BomMatch, Phase } from './logic';
+import { PlayoutClock, sinceStamp } from './playout';
 import type { ShowEvent } from './show';
 
-/** Host: periodic state while the chase runs (ms); events publish at once. */
-export const PUBLISH_MS = 75;
-/** Mirror: how far behind the newest state it draws (ms), to always have two to blend. */
-export const RENDER_DELAY_MS = 100;
+/**
+ * Host: periodic state while the chase runs (ms), every 4th frame at 60 fps; events publish at
+ * once. Not 50: the shell holds each publish 50 ms, so closer states would merge and halve the rate.
+ */
+export const PUBLISH_MS = 60;
 /** A runner that moved further than this between two states jumped (m): no blending. */
 export const TELEPORT_M = 4;
 /** Events kept in each state: at most this many, and none older than `EVENT_KEEP_S`. */
@@ -59,7 +64,7 @@ export interface EventEntry {
   e: ShowEvent;
 }
 
-/** Compact wire shape (short keys: it crosses the network about 13 times a second). */
+/** Compact wire shape (short keys: it crosses the network about 15 times a second). */
 export interface BomMirror {
   v: 1;
   /** Server ms the Host made this state (`game.now()`). */
@@ -448,13 +453,13 @@ export function pose(prev: BomMirror | null, a: BomMirror, b: BomMirror | null, 
 }
 
 /**
- * Mirror: the states received so far and the clock to draw them by. The draw time trails the
- * newest state by the measured delivery delay plus `RENDER_DELAY_MS`; the delay estimate rises
- * quickly when packets come late and falls slowly, so jitter rarely leaves nothing to blend to.
+ * Mirror: the states received so far and the clock to draw them by: a `PlayoutClock` keeps the
+ * draw time the shortest recent trip plus a buffer (following the state gap and jitter) behind
+ * server time, eased so a route change never makes the yard jump.
  */
 export class MirrorTimeline {
   private buf: BomMirror[] = [];
-  private lag: number | null = null;
+  private readonly clock = new PlayoutClock();
 
   /** Adds a state received at server time `now`; false if it is old or a repeat. */
   push(s: BomMirror, now: number): boolean {
@@ -462,9 +467,7 @@ export class MirrorTimeline {
     if (last && s.at <= last.at) return false;
     this.buf.push(s);
     if (this.buf.length > BUFFER) this.buf.shift();
-    const sample = Math.max(0, now - s.at);
-    if (this.lag === null) this.lag = sample;
-    else this.lag += (sample - this.lag) * (sample > this.lag ? 0.3 : 0.03);
+    this.clock.observe(s.at, now);
     return true;
   }
 
@@ -472,14 +475,19 @@ export class MirrorTimeline {
     return this.buf[this.buf.length - 1] ?? null;
   }
 
-  /** Estimated delivery delay (ms), null before the first state. */
+  /** Shortest recent delivery delay (ms), null before the first state. */
   get lagMs(): number | null {
-    return this.lag;
+    return this.clock.lagMs;
+  }
+
+  /** How far behind server time the yard was last drawn (ms), null before the first state. */
+  get behindMs(): number | null {
+    return this.clock.behindMs;
   }
 
   /** Server time the screen should show at local server time `now`. */
   drawAt(now: number): number {
-    return now - (this.lag ?? 0) - RENDER_DELAY_MS;
+    return this.clock.drawAt(now);
   }
 
   sample(now: number): Posed | null {
@@ -494,5 +502,56 @@ export class MirrorTimeline {
       }
     }
     return pose(buf[i - 1] ?? null, buf[i]!, buf[i + 1] ?? null, at);
+  }
+}
+
+/* ------------------------------------------------------------------ fuse at server time */
+
+/** Sim seconds of burning the rate is measured over before the fuse is read ahead. */
+const FUSE_BASE_S = 1;
+
+interface FuseMark {
+  round: number;
+  st: number;
+  burnt: number;
+}
+
+/**
+ * Mirror: the share of each fuse burnt at server time. The stage is drawn a little in the past, but
+ * the sputter should tell a far-away player how close the bomb is to going off right now, as the
+ * Host's bomb (and the holder's phone) has it. The fuse burns evenly in sim time, so its rate comes
+ * from the states themselves (the share burnt over sim time since the fuse was first seen lit).
+ */
+export class FuseClock {
+  private readonly marks: (FuseMark | null)[] = [];
+
+  /** Note a state as it arrives (in order). */
+  observe(s: BomMirror): void {
+    for (let i = 0; i < MAX_BOMBS; i++) {
+      const row = s.bo[i];
+      if (!row || row[2] === 1 || s.ph !== 'play' || row[1] <= 0) {
+        this.marks[i] = null;
+        continue;
+      }
+      const mark = this.marks[i];
+      if (!mark || mark.round !== s.no || row[1] < mark.burnt || s.st < mark.st) {
+        this.marks[i] = { round: s.no, st: s.st, burnt: row[1] };
+      }
+    }
+  }
+
+  /**
+   * Burnt share of bomb `index` at server time `now`, read ahead from the newest state `s`; null
+   * when it cannot be told yet (just lit, exploded, or not in the chase).
+   */
+  burntAt(s: BomMirror, index: number, now: number): number | null {
+    const row = s.bo[index];
+    const mark = this.marks[index];
+    if (!row || !mark || row[2] === 1 || s.ph !== 'play' || mark.round !== s.no) return null;
+    const span = s.st - mark.st;
+    const grown = row[1] - mark.burnt;
+    if (span < FUSE_BASE_S || grown <= 0) return null;
+    const ahead = s.pz ? 0 : sinceStamp(s.at, now) / 1000;
+    return Math.min(1, row[1] + (grown / span) * ahead);
   }
 }

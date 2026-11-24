@@ -16,15 +16,18 @@ import {
   MirrorTimeline,
   PUBLISH_MS,
   pose,
-  RENDER_DELAY_MS,
   type RunnerRow,
   type RuntuhMirror,
+  ruleNow,
+  simNow,
   TELEPORT_M,
   type TileNow,
   tileGroups,
+  tilesNow,
   tilesOf,
   toMirror,
 } from './mirror';
+import { CLOCK_AHEAD_MAX_MS } from './playout';
 
 const T0 = 1_700_000_000_000;
 
@@ -308,7 +311,9 @@ describe('tile schedules', () => {
   function drawnAt(received: RuntuhMirror[], s: RuntuhMirror): TileNow[] {
     const tl = new MirrorTimeline();
     for (const r of received) if (r.at <= s.at + 300) tl.push(r, r.at);
-    return tl.sample(s.at + RENDER_DELAY_MS)!.tiles;
+    // The first draw settles how far behind the screen plays; then look at the moment of `s`.
+    tl.drawAt(s.at);
+    return tl.sample(s.at + tl.behindMs!)!.tiles;
   }
 
   const truth = (s: RuntuhMirror): TileNow[] => tilesOf(s.tg).map((x) => advanceTile(x, s.st));
@@ -347,6 +352,26 @@ describe('tile schedules', () => {
     expect(pose(null, held, null, held.at + 5000).tiles[tile]!.state).toBe('warn');
     expect(advanceTile(after, until + 0.01)).toMatchObject({ state: 'gone', since: until });
   });
+
+  it('cracks and drops tiles at server time from the newest state, ahead of the delayed stage', () => {
+    const states = publishRun();
+    const k = states.findIndex((s, i) => i > 0 && s.tg.some((g) => g[0] === 1 && g[1] > states[i - 1]!.st));
+    const latest = states[k]!;
+    const group = latest.tg.find((g) => g[0] === 1 && g[1] > states[k - 1]!.st)!;
+    const [, , until] = group;
+    const tile = group[4][0]!;
+    // Server time runs with sim time: the tile drops at the server moment its warning ends.
+    const dropAt = latest.at + (until - latest.st) * 1000;
+    expect(simNow(latest, dropAt)).toBeCloseTo(until, 6);
+    expect(tilesNow(latest, simNow(latest, dropAt - 30))[tile]!.state).toBe('warn');
+    expect(tilesNow(latest, simNow(latest, dropAt + 30))[tile]).toMatchObject({
+      state: 'gone',
+      since: until,
+    });
+    // A paused Host holds everything; a dead link stops reading ahead.
+    expect(simNow({ ...latest, pz: true }, dropAt + 30)).toBe(latest.st);
+    expect(simNow(latest, latest.at + 60_000)).toBeCloseTo(latest.st + CLOCK_AHEAD_MAX_MS / 1000, 6);
+  });
 });
 
 /* ------------------------------------------------------------------ interpolation */
@@ -369,6 +394,7 @@ function state(at: number, st: number, ru: RunnerRow[], patch: Partial<RuntuhMir
     hr: '',
     ha: '',
     rc: null,
+    sl: 0,
     sc: [],
     ic: null,
     en: null,
@@ -417,14 +443,15 @@ describe('pose', () => {
 });
 
 describe('MirrorTimeline', () => {
-  it('draws behind the newest state by the delivery delay plus the render delay', () => {
+  it('draws behind server time by the shortest trip plus an adaptive buffer', () => {
     const tl = new MirrorTimeline();
     expect(tl.sample(0)).toBeNull();
     expect(tl.push(state(1000, 1, []), 1300)).toBe(true);
     expect(tl.push(state(1000, 1, []), 1310)).toBe(false);
     expect(tl.push(state(900, 0.9, []), 1320)).toBe(false);
     expect(tl.lagMs).toBe(300);
-    expect(tl.drawAt(2000)).toBe(2000 - 300 - RENDER_DELAY_MS);
+    // No gap measured yet: 1.5 times the assumed 70 ms.
+    expect(tl.drawAt(2000)).toBe(2000 - 300 - 105);
   });
 
   it('interpolates between the two states around the draw time', () => {
@@ -432,9 +459,76 @@ describe('MirrorTimeline', () => {
     tl.push(state(1000, 1, [[1, 0, 0, 0, 0, 0]]), 1000);
     tl.push(state(1075, 1.075, [[1, 0.75, 0, 0, 0, 0]]), 1075);
     tl.push(state(1150, 1.15, [[1, 1.5, 0, 0, 0, 0]]), 1150);
-    const p = tl.sample(1100 + RENDER_DELAY_MS)!;
-    expect(p.s.at).toBe(1075);
-    expect(p.simT).toBeCloseTo(1.1);
-    expect(p.runners[0]!.x).toBeCloseTo(1);
+    const now = 1150;
+    const at = tl.drawAt(now);
+    const p = tl.sample(now)!;
+    expect(p.s.at).toBe(at < 1075 ? 1000 : 1075);
+    expect(p.simT).toBeCloseTo(at / 1000, 6);
+    expect(p.runners[0]!.x).toBeCloseTo((at - 1000) / 100, 6);
+  });
+
+  it('keeps a direct link close behind and follows a route change without the stage jumping', () => {
+    const tl = new MirrorTimeline();
+    const trip = (t: number) => (t < 5000 ? 240 + ((t * 7) % 80) : 25 + ((t * 7) % 6));
+    const sent = Array.from({ length: 200 }, (_, i) => 1000 + i * 60);
+    let k = 0;
+    let lastX = Number.NEGATIVE_INFINITY;
+    let maxStep = 0;
+    for (let now = 1000; now < 13_000; now += 16) {
+      while (k < sent.length && sent[k]! + trip(sent[k]!) <= now) {
+        const t = sent[k++]!;
+        tl.push(state(t, t / 1000, [[1, t / 1000, 0, 0, 0, 0]]), t + trip(t));
+      }
+      const p = tl.sample(now);
+      if (!p) continue;
+      const x = p.runners[0]!.x;
+      if (lastX > Number.NEGATIVE_INFINITY) {
+        expect(x).toBeGreaterThanOrEqual(lastX - 1e-9);
+        maxStep = Math.max(maxStep, x - lastX);
+      }
+      lastX = x;
+    }
+    expect(maxStep).toBeLessThan(0.016 * 1.15);
+    expect(tl.lagMs).toBeLessThan(31);
+    expect(tl.behindMs! - tl.lagMs!).toBeLessThan(120);
+  });
+});
+
+describe('rule card at server time', () => {
+  const rc = {
+    title: 'Babak 1: Warna',
+    head: 'Berdiri di',
+    target: 'MERAH',
+    tint: '#F2453D',
+    seconds: 12,
+    double: false,
+  };
+
+  it('counts the rule card down on server time from the newest state, and stops while paused', () => {
+    const s = state(10_000, 5, [], { rc, sl: 11.4 });
+    expect(ruleNow(s, 10_000)?.seconds).toBe(12);
+    expect(ruleNow(s, 10_500)?.seconds).toBe(11);
+    expect(ruleNow(s, 11_500)?.seconds).toBe(10);
+    expect(ruleNow({ ...s, pz: true }, 11_500)?.seconds).toBe(12);
+    expect(ruleNow(s, 10_500)).toMatchObject({ target: 'MERAH', tint: '#F2453D' });
+    // Run out: the count goes, the card stays.
+    expect(ruleNow(state(10_000, 5, [], { rc, sl: 0.3 }), 10_400)).toMatchObject({
+      seconds: null,
+      target: 'MERAH',
+    });
+    // No count on the card: nothing to run.
+    expect(
+      ruleNow(state(10_000, 5, [], { rc: { ...rc, seconds: null }, sl: 4 }), 10_400)?.seconds,
+    ).toBeNull();
+    expect(ruleNow(state(10_000, 5, []), 10_400)).toBeNull();
+  });
+
+  it('carries the unrounded seconds left from the Host and validates them', () => {
+    const m = playing(4, 2);
+    const s = snapshot(m, T0);
+    expect(s.sl).toBeCloseTo(m.secondsLeft, 2);
+    expect(applyMirror(wire(s))).toEqual(s);
+    expect(applyMirror({ ...s, sl: -1 })).toBeNull();
+    expect(applyMirror({ ...s, sl: 'x' })).toBeNull();
   });
 });

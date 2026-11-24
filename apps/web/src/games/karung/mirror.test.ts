@@ -10,11 +10,12 @@ import {
   MirrorMarks,
   type MirrorSource,
   MirrorTimeline,
+  mirrorClocks,
   mirrorHud,
   mirrorRoster,
-  RENDER_DELAY_MS,
   toMirror,
 } from './mirror';
+import { CLOCK_AHEAD_MAX_MS } from './playout';
 import { formatClock, STR } from './strings';
 
 const FRUITS: Fruit[] = ['semangka', 'alpukat', 'durian', 'nanas', 'jeruk', 'stroberi', 'mangga', 'rambutan'];
@@ -108,6 +109,11 @@ function hud(o: Opts, t: number): HudState {
   };
 }
 
+const ANCHOR = 990_000;
+/** The go beat: three countdown steps of `countBeats` beats after beat 0. */
+const COUNT_STEP = DEFAULT_TUNING.countBeats * DEFAULT_TUNING.beatMs;
+const GO_AT = ANCHOR + 3 * COUNT_STEP;
+
 function source(o: Opts = {}): MirrorSource {
   return {
     server: o.server ?? 1_000_000,
@@ -116,8 +122,9 @@ function source(o: Opts = {}): MirrorSource {
     totalRaces: 3,
     elapsed: o.elapsed ?? 12_345,
     grace: o.grace ?? null,
-    anchor: 990_000,
+    anchor: ANCHOR,
     beatMs: DEFAULT_TUNING.beatMs,
+    startAt: GO_AT,
     trackLength: DEFAULT_TUNING.trackLength,
     hopMs: DEFAULT_TUNING.hopMs,
     stumbleMs: DEFAULT_TUNING.stumbleMs,
@@ -144,7 +151,7 @@ describe('toMirror / applyMirror', () => {
     for (const overlay of OVERLAYS) {
       const src = source({ overlay, grace: 4_200, n: 8 });
       const s = applyMirror(wire(src))!;
-      expect(mirrorHud(s, { elapsed: 12_345, grace: 4_200 }, LANES, ORIGIN)).toEqual(src.hud);
+      expect(mirrorHud(s, { elapsed: 12_345, grace: 4_200, overlay: null }, LANES, ORIGIN)).toEqual(src.hud);
     }
   });
 
@@ -271,44 +278,97 @@ describe('MirrorMarks / MarkReader', () => {
   });
 });
 
+describe('mirrorClocks (server time)', () => {
+  const at = (o: Opts): KarungMirror => applyMirror(wire(source(o)))!;
+  const label = STR.raceOf(2, 3);
+
+  it('runs the race clock and the finish grace on server time from the newest packet', () => {
+    const s = at({ server: 1000, elapsed: 5000, grace: 8000 });
+    expect(mirrorClocks(s, 1300)).toEqual({ elapsed: 5300, grace: 7700, overlay: null });
+    expect(mirrorClocks(s, 1000 + 9000).grace).toBe(8000 - CLOCK_AHEAD_MAX_MS);
+    // Paused Host: the clocks stand still.
+    expect(mirrorClocks(at({ server: 1000, elapsed: 5000, grace: 8000, held: true }), 1300)).toEqual({
+      elapsed: 5000,
+      grace: 8000,
+      overlay: null,
+    });
+  });
+
+  it('counts 3, 2, 1 on the Host beats and shows GO on the go beat, not when the packet lands', () => {
+    const count = (server: number) =>
+      at({ server, phase: 'countdown', elapsed: 0, overlay: { kind: 'count', value: 3, label } });
+    const s = count(ANCHOR);
+    expect(mirrorClocks(s, ANCHOR - 50).overlay).toEqual({ kind: 'count', value: 3, label });
+    expect(mirrorClocks(s, ANCHOR + COUNT_STEP - 1).overlay).toEqual({ kind: 'count', value: 3, label });
+    expect(mirrorClocks(s, ANCHOR + COUNT_STEP).overlay).toEqual({ kind: 'count', value: 2, label });
+    const late = count(ANCHOR + 2 * COUNT_STEP - 100);
+    expect(mirrorClocks(late, ANCHOR + 2 * COUNT_STEP).overlay).toEqual({ kind: 'count', value: 1, label });
+    const go = mirrorClocks(late, GO_AT + 40);
+    expect(go).toMatchObject({ grace: null, overlay: { kind: 'go' } });
+    expect(go.elapsed).toBeCloseTo(40, 0);
+    expect(mirrorHud(late, go, LANES, ORIGIN).overlay).toEqual({ kind: 'go' });
+  });
+
+  it('keeps the packet overlay while the Host is paused or outside the countdown', () => {
+    const held = at({
+      server: ANCHOR,
+      phase: 'countdown',
+      held: true,
+      overlay: { kind: 'count', value: 3, label },
+    });
+    expect(mirrorClocks(held, GO_AT + 10).overlay).toBeNull();
+    expect(mirrorClocks(at({ phase: 'standings' }), 2_000_000).overlay).toBeNull();
+  });
+
+  it('rejects a go beat before beat 0', () => {
+    const raw = wire(source()) as Record<string, unknown>;
+    expect(applyMirror({ ...raw, gs: ANCHOR - 1 })).toBeNull();
+    expect(applyMirror({ ...raw, gs: 'x' })).toBeNull();
+  });
+});
+
 describe('MirrorTimeline', () => {
   const at = (t: number, elapsed: number, o: Opts = {}): KarungMirror =>
     applyMirror(wire(source({ ...o, server: t, elapsed })))!;
-  const LAG = 250;
-
-  it('interpolates the race clock a little in the past', () => {
-    const tl = new MirrorTimeline();
-    expect(tl.push(at(1000, 0), 1000 + LAG)).toBe(true);
-    expect(tl.push(at(1070, 70), 1070 + LAG)).toBe(false);
-    expect(tl.push(at(1140, 140), 1140 + LAG)).toBe(false);
-    expect(tl.lag).toBe(LAG);
-    // Playback point = now - lag - delay.
-    expect(tl.sample(1105 + LAG + RENDER_DELAY_MS).elapsed).toBeCloseTo(105, 5);
-    // Before the first packet: the first; after the last: the last.
-    expect(tl.sample(0).elapsed).toBe(0);
-    expect(tl.sample(5000 + LAG).elapsed).toBe(140);
-  });
-
-  it('interpolates the finish grace and shows it from the packet it starts in', () => {
-    const tl = new MirrorTimeline();
-    tl.push(at(1000, 0, { grace: null }), 1000);
-    tl.push(at(1100, 100, { grace: 8000 }), 1100);
-    tl.push(at(1200, 200, { grace: 7900 }), 1200);
-    expect(tl.sample(1050 + RENDER_DELAY_MS).grace).toBeNull();
-    expect(tl.sample(1150 + RENDER_DELAY_MS).grace).toBeCloseTo(7950, 5);
-  });
-
   it('releases packets in order once the playback point passes them', () => {
     const tl = new MirrorTimeline();
     tl.push(at(1000, 0), 1000);
     expect(tl.flush().map((s) => s.t)).toEqual([1000]);
-    tl.push(at(1070, 70), 1080);
+    tl.push(at(1070, 70), 1070);
     tl.push(at(1140, 140), 1140);
-    // Lag is 0 now; packets come out RENDER_DELAY_MS after they were made.
-    expect(tl.due(1140 + RENDER_DELAY_MS - 71).map((s) => s.t)).toEqual([]);
-    expect(tl.due(1070 + RENDER_DELAY_MS).map((s) => s.t)).toEqual([1070]);
-    expect(tl.due(1140 + RENDER_DELAY_MS).map((s) => s.t)).toEqual([1140]);
+    expect(tl.due(1140)).toEqual([]);
+    // No trip and no jitter: packets come out 1.5 packet gaps after they were made.
+    const behind = tl.behind!;
+    expect(behind).toBeCloseTo(105, 6);
+    expect(tl.due(1070 + behind - 1)).toEqual([]);
+    expect(tl.due(1070 + behind).map((s) => s.t)).toEqual([1070]);
+    expect(tl.due(1140 + behind).map((s) => s.t)).toEqual([1140]);
     expect(tl.due(9999)).toEqual([]);
+  });
+
+  it('plays a fast direct link close behind, and follows a route change in order without bursts', () => {
+    const tl = new MirrorTimeline();
+    const trip = (t: number) => (t < 4000 ? 260 + ((t * 7) % 60) : 30 + ((t * 7) % 5));
+    const sent = Array.from({ length: 200 }, (_, i) => i * 60);
+    let k = 0;
+    let lastT = Number.NEGATIVE_INFINITY;
+    let most = 0;
+    for (let now = 0; now < 12_000; now += 16) {
+      while (k < sent.length && sent[k]! + trip(sent[k]!) <= now) {
+        const t = sent[k++]!;
+        if (tl.push(at(t, t), t + trip(t))) tl.flush();
+      }
+      const out = tl.due(now);
+      most = Math.max(most, out.length);
+      for (const p of out) {
+        expect(p.t).toBeGreaterThan(lastT);
+        lastT = p.t;
+      }
+    }
+    // Hops come out one frame at a time, never in a burst that would skip the Host's rhythm.
+    expect(most).toBeLessThanOrEqual(1);
+    expect(tl.lag).toBeLessThan(36);
+    expect(tl.behind! - tl.lag!).toBeLessThan(120);
   });
 
   it('snaps on a new phase, a pause or a Host restart, handing out what was waiting first', () => {

@@ -6,16 +6,17 @@ import {
   applyMirror,
   type MirrorSource,
   MirrorTimeline,
+  mirrorClocks,
   mirrorFacts,
   mirrorRoster,
   newSupers,
-  RENDER_DELAY_MS,
   type SuperMark,
   TAP_STEP_MS,
   TapPacer,
   type TarikMirror,
   toMirror,
 } from './mirror';
+import { CLOCK_AHEAD_MAX_MS } from './playout';
 
 const OFFSET = 1_000_000;
 const FRUITS: Fruit[] = ['semangka', 'alpukat', 'durian', 'nanas', 'jeruk', 'stroberi', 'mangga', 'rambutan'];
@@ -80,6 +81,8 @@ function source(run: Run, extra: Partial<MirrorSource> = {}): MirrorSource {
     ticker: null,
     ringStart: m.ringStart,
     ringPeriod: m.tuning.ringPeriodMs,
+    countLeft: m.phase === 'countdown' ? 3 * m.tuning.countStepMs - (run.t - m.phaseStart) : 0,
+    countStep: m.tuning.countStepMs,
     held: false,
     ...extra,
   };
@@ -91,11 +94,11 @@ function wire(state: TarikMirror): TarikMirror {
   return parsed;
 }
 
-/** What the far-away screen rebuilds from one packet, read without interpolation. */
+/** What the far-away screen rebuilds from one packet, read without interpolation, at its moment. */
 function rebuilt(state: TarikMirror): BoardFacts {
   const line = new MirrorTimeline();
   line.push(state, state.t + 250);
-  return mirrorFacts(state, line.sample(state.t + 250));
+  return mirrorFacts(state, line.sample(state.t + 250), mirrorClocks(state, state.t));
 }
 
 describe('tarik mirror', () => {
@@ -240,24 +243,22 @@ function snap(t: number, p: number, extra: Partial<TarikMirror> = {}): TarikMirr
 describe('tarik mirror timeline', () => {
   const LAG = 300;
 
-  it('plays packets back a little behind the newest one, interpolated', () => {
+  it('plays packets back a little behind server time, interpolated', () => {
     const line = new MirrorTimeline();
     expect(line.push(snap(1000, 0), 1000 + LAG)).toBe(true);
     expect(line.push(snap(1070, 0.07), 1070 + LAG)).toBe(false);
     expect(line.push(snap(1140, 0.14), 1140 + LAG)).toBe(false);
     expect(line.lag).toBe(LAG);
-    // Drawn time = now - lag - delay = 1040: between the first two packets.
     const s = line.sample(1140 + LAG);
-    expect(1140 - RENDER_DELAY_MS).toBe(1040);
-    expect(s.p).toBeCloseTo(0.04, 6);
-    expect(s.force.red).toBeCloseTo(0.4, 6);
-    expect(s.left).toBeCloseTo(30_000 - 1040, 6);
-    expect(s.sincePull).toBeCloseTo(1040, 6);
+    // Trip 300 plus a buffer of 1.5 packet gaps (no jitter yet): drawn time 1035.
+    expect(line.behind).toBeCloseTo(LAG + 105, 6);
+    expect(s.p).toBeCloseTo(0.035, 6);
+    expect(s.force.red).toBeCloseTo(0.35, 6);
     // Later than the newest packet: hold it, never extrapolate.
     expect(line.sample(5000 + LAG).p).toBeCloseTo(0.14, 6);
   });
 
-  it('absorbs a late packet without jumping back', () => {
+  it('absorbs a late packet without jumping back or skipping ahead', () => {
     const line = new MirrorTimeline();
     line.push(snap(1000, 0), 1000 + LAG);
     line.push(snap(1070, 0.07), 1070 + LAG);
@@ -265,10 +266,10 @@ describe('tarik mirror timeline', () => {
     const before = line.sample(1140 + LAG + 59).p;
     expect(before).toBeCloseTo(0.07, 6);
     line.push(snap(1140, 0.14), 1140 + LAG + 60);
-    expect(line.lag).toBe(LAG + 2);
+    expect(line.lag).toBe(LAG);
     const after = line.sample(1140 + LAG + 60).p;
     expect(after).toBeGreaterThanOrEqual(before);
-    expect(after).toBeLessThan(0.14);
+    expect(after).toBeLessThan(0.08);
   });
 
   it('snaps on a new phase, a pause, sudden death or a restarted Host', () => {
@@ -283,11 +284,70 @@ describe('tarik mirror timeline', () => {
     expect(line.sample(500 + LAG).p).toBe(0.5);
   });
 
-  it('measures the delay afresh after a long stall', () => {
+  it('shrinks the delay on a fast direct link, and follows a route change without the rope jumping', () => {
     const line = new MirrorTimeline();
-    line.push(snap(1000, 0), 1000 + LAG);
-    line.push(snap(1070, 0.1), 1070 + LAG + 2000);
-    expect(line.lag).toBe(LAG + 2000);
+    const base = snap(0, 0);
+    // The rope walks steadily: position = Host time / 20 s. Relay first, then a direct link.
+    const trip = (t: number) => (t < 4000 ? 260 + ((t * 7) % 50) : 30 + ((t * 7) % 5));
+    const sent = Array.from({ length: 200 }, (_, i) => i * 60);
+    let k = 0;
+    let lastP = Number.NEGATIVE_INFINITY;
+    let maxStep = 0;
+    for (let now = 0; now < 12_000; now += 16) {
+      while (k < sent.length && sent[k]! + trip(sent[k]!) <= now) {
+        const t = sent[k++]!;
+        line.push({ ...base, t, p: t / 20_000 }, t + trip(t));
+      }
+      if (k === 0) continue;
+      const p = line.sample(now).p;
+      if (lastP > Number.NEGATIVE_INFINITY) {
+        expect(p).toBeGreaterThanOrEqual(lastP - 1e-9);
+        maxStep = Math.max(maxStep, p - lastP);
+      }
+      lastP = p;
+    }
+    // Never more than a little over real-time speed (16 ms of rope per frame = 0.0008).
+    expect(maxStep).toBeLessThan(0.0008 * 1.15);
+    expect(line.lag).toBeLessThan(36);
+    expect(line.behind! - line.lag!).toBeLessThan(120);
+  });
+});
+
+describe('tarik mirror clocks (server time)', () => {
+  const T = 50_000;
+
+  it('runs the round clock on server time from the newest packet, and stops it while paused', () => {
+    const s = snap(T, 0, { left: 20_000, sp: 5000 });
+    expect(mirrorClocks(s, T + 400)).toMatchObject({ phase: 'pull', left: 19_600, sincePull: 5400 });
+    expect(mirrorClocks({ ...s, hold: true }, T + 400)).toMatchObject({ left: 20_000, sincePull: 5000 });
+    // A link that dies does not run the clock away.
+    expect(mirrorClocks(s, T + 60_000).left).toBe(20_000 - CLOCK_AHEAD_MAX_MS);
+  });
+
+  it('counts down and shows GO at the server moment the Host starts the pull', () => {
+    const s = snap(T, 0, { ph: 'countdown', cv: 2, cd: [1500, 900], left: 30_000, sp: 0 });
+    expect(mirrorClocks(s, T).countValue).toBe(2);
+    expect(mirrorClocks(s, T + 500).countValue).toBe(2);
+    expect(mirrorClocks(s, T + 700).countValue).toBe(1);
+    expect(mirrorClocks({ ...s, hold: true }, T + 700).countValue).toBe(2);
+    const go = mirrorClocks(s, T + 1600);
+    expect(go).toMatchObject({ phase: 'pull', sincePull: 100, left: 29_900, countValue: 0 });
+    expect(
+      hudFrom(mirrorFacts(s, { p: 0, force: { red: 0, blue: 0 }, rate: { red: 0, blue: 0 } }, go)).overlay,
+    ).toEqual({ kind: 'go' });
+  });
+
+  it('carries the countdown from the Host and validates it', () => {
+    const run = newRun(2);
+    advance(run, (m) => m.phase === 'countdown');
+    run.t += 400;
+    run.m.advance(run.t, run.t + OFFSET);
+    const s = wire(toMirror(source(run)));
+    expect(s.cd).toEqual([3 * run.m.tuning.countStepMs - 400, run.m.tuning.countStepMs]);
+    expect(mirrorClocks(s, s.t).countValue).toBe(run.m.countValue);
+    expect(applyMirror({ ...s, cd: [1, 0] })).toBeNull();
+    expect(applyMirror({ ...s, cd: [-5, 900] })).toBeNull();
+    expect(applyMirror({ ...s, cd: 'x' })).toBeNull();
   });
 });
 

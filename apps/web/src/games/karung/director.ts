@@ -35,8 +35,12 @@ const STUMBLE_SFX_MS = 200;
 const RING_SYNC_MS = 5000;
 const GO_OVERLAY_MS = 900;
 const HINT_MS = 12_000;
-/** Long-distance play: publish interval during a race, and otherwise. */
-const MIRROR_LIVE_MS = 70;
+/**
+ * Long-distance play: publish interval during a race (every 4th frame at 60 fps, about 15 a
+ * second; not 50 ms, because the shell holds each publish 50 ms and closer states would merge and
+ * halve the rate), and otherwise.
+ */
+const MIRROR_LIVE_MS = 60;
 const MIRROR_IDLE_MS = 250;
 /** Opponents for someone playing alone: four sacks in the race. */
 const SOLO_OPPONENTS = 3;
@@ -611,6 +615,7 @@ export class Director {
         grace: m.graceLeft(),
         anchor: m.anchor,
         beatMs: m.tuning.beatMs,
+        startAt: m.raceStartServer,
         trackLength: m.tuning.trackLength,
         hopMs: m.tuning.hopMs,
         stumbleMs: m.tuning.stumbleMs,

@@ -2,26 +2,31 @@
  * Long-distance play: the display state the Host's main screen publishes for Lantai Runtuh and how
  * a far-away main screen turns it back into a moving stage. Pure (no DOM, no SDK, no Three.js):
  * `toMirror` reads the running match, `applyMirror` validates untrusted JSON, `MirrorTimeline`
- * buffers the states and interpolates players between them a little in the past, so the far-away
- * screen moves smoothly although the states arrive about 13 times a second.
+ * buffers the states and interpolates players between them a little in the past (an adaptive
+ * delay, see `playout.ts`), so the far-away screen moves smoothly although the states arrive about
+ * 15 times a second.
  *
  * Tiles: every state carries the full schedule of each tile that is not plain solid (state, when it
  * began, when it ends, how long it stays gone after the warning), grouped by equal timing. The
  * schedule is a pure function of sim time, so the far-away screen cracks, drops and raises every
  * tile at the exact sim time the Host did, and a lost state loses nothing: the next one carries the
- * same schedule.
+ * same schedule. The tiles and the rule card's countdown are read at server time from the newest
+ * state (`tilesNow`, `ruleNow`), not from the delayed stage, so a far-away player sees a tile crack
+ * and drop, and the count run out, when the Host judges it.
  */
 import { type Fruit, isFruit, type Look, parseLook } from '@hoorah/protocol';
 import type { SolidState } from '../../shared/kotak/solids';
 import { COLOR_IDS, SYMBOL_IDS, TILES, type TileFace } from './arena';
 import type { EndRow, FinalRow, IntroCard, RuleCard, ScoreRow } from './hud';
 import { type Phase, RULES, type Rule, type RuntuhMatch } from './logic';
+import { PlayoutClock, sinceStamp } from './playout';
 import type { ShowEvent } from './show';
 
-/** Host: periodic state while a round runs (ms); events publish at once. */
-export const PUBLISH_MS = 75;
-/** Mirror: how far behind the newest state it draws (ms), to always have two to blend. */
-export const RENDER_DELAY_MS = 100;
+/**
+ * Host: periodic state while a round runs (ms), every 4th frame at 60 fps; events publish at once.
+ * Not 50: the shell holds each publish 50 ms, so closer states would merge and halve the rate.
+ */
+export const PUBLISH_MS = 60;
 /** A player who moved further than this between two states jumped (m): no blending. */
 export const TELEPORT_M = 4;
 /** Events kept in each state: at most this many, and none older than `EVENT_KEEP_S`. */
@@ -34,6 +39,8 @@ const BUFFER = 8;
 
 const PHASES: readonly Phase[] = ['intro', 'play', 'end', 'final', 'done'];
 const MAX_PLAYERS = 8;
+/** Longest rule countdown accepted from the network (s). */
+const SECONDS_MAX = 600;
 
 /** Player flags (bit mask). */
 export const FLAG = { hidden: 1, stunned: 2, frozen: 4 } as const;
@@ -69,7 +76,7 @@ export interface EventEntry {
   e: ShowEvent;
 }
 
-/** Compact wire shape (short keys: it crosses the network about 13 times a second). */
+/** Compact wire shape (short keys: it crosses the network about 15 times a second). */
 export interface RuntuhMirror {
   v: 1;
   /** Server ms the Host made this state (`game.now()`). */
@@ -95,6 +102,8 @@ export interface RuntuhMirror {
   hr: string;
   ha: string;
   rc: RuleCard | null;
+  /** Seconds left on the rule card's countdown when the state was made (unrounded, 0 = none). */
+  sl: number;
   sc: ScoreWire[];
   ic: IntroCard | null;
   en: { t: string; s: string; r: EndWire[] } | null;
@@ -281,6 +290,7 @@ export function toMirror(src: MirrorSource): RuntuhMirror {
     hr: h.round,
     ha: h.alive,
     rc: h.rule ? { ...h.rule } : null,
+    sl: m.phase === 'play' ? Math.max(0, r2(m.secondsLeft)) : 0,
     sc: h.scores.slice(0, MAX_PLAYERS).map((r) => [r.id, r.score, bit(r.out), bit(r.offline)]),
     ic: h.intro ? { ...h.intro } : null,
     en: h.end
@@ -449,6 +459,7 @@ export function applyMirror(json: unknown): RuntuhMirror | null {
   if (!rl || rl.length === 0 || !isNat(j.ro) || j.ro >= rl.length || !oneOf(PHASES, j.ph)) return null;
   if (!isText(j.fc, TILES * 3) || !isText(j.hr, 60) || !isText(j.ha, 60)) return null;
   if (!decodeFaces(j.fc)) return null;
+  if (!isNum(j.sl) || j.sl < 0 || j.sl > SECONDS_MAX) return null;
   const gl = parseList(j.gl, (x) => (isTile(x) ? x : null), TILES);
   const tg = parseList(j.tg, parseTileGroup, TILES);
   const pl = parseList(j.pl, parsePlayer, MAX_PLAYERS);
@@ -478,6 +489,7 @@ export function applyMirror(json: unknown): RuntuhMirror | null {
     hr: j.hr,
     ha: j.ha,
     rc,
+    sl: j.sl,
     sc,
     ic,
     en,
@@ -582,13 +594,13 @@ export function pose(prev: RuntuhMirror | null, a: RuntuhMirror, b: RuntuhMirror
 }
 
 /**
- * Mirror: the states received so far and the clock to draw them by. The draw time trails the
- * newest state by the measured delivery delay plus `RENDER_DELAY_MS`; the delay estimate rises
- * quickly when packets come late and falls slowly, so jitter rarely leaves nothing to blend to.
+ * Mirror: the states received so far and the clock to draw them by: a `PlayoutClock` keeps the
+ * draw time the shortest recent trip plus a buffer (following the state gap and jitter) behind
+ * server time, eased so a route change never makes the stage jump.
  */
 export class MirrorTimeline {
   private buf: RuntuhMirror[] = [];
-  private lag: number | null = null;
+  private readonly clock = new PlayoutClock();
 
   /** Adds a state received at server time `now`; false if it is old or a repeat. */
   push(s: RuntuhMirror, now: number): boolean {
@@ -596,9 +608,7 @@ export class MirrorTimeline {
     if (last && s.at <= last.at) return false;
     this.buf.push(s);
     if (this.buf.length > BUFFER) this.buf.shift();
-    const sample = Math.max(0, now - s.at);
-    if (this.lag === null) this.lag = sample;
-    else this.lag += (sample - this.lag) * (sample > this.lag ? 0.3 : 0.03);
+    this.clock.observe(s.at, now);
     return true;
   }
 
@@ -606,14 +616,19 @@ export class MirrorTimeline {
     return this.buf[this.buf.length - 1] ?? null;
   }
 
-  /** Estimated delivery delay (ms), null before the first state. */
+  /** Shortest recent delivery delay (ms), null before the first state. */
   get lagMs(): number | null {
-    return this.lag;
+    return this.clock.lagMs;
+  }
+
+  /** How far behind server time the stage was last drawn (ms), null before the first state. */
+  get behindMs(): number | null {
+    return this.clock.behindMs;
   }
 
   /** Server time the screen should show at local server time `now`. */
   drawAt(now: number): number {
-    return now - (this.lag ?? 0) - RENDER_DELAY_MS;
+    return this.clock.drawAt(now);
   }
 
   sample(now: number): Posed | null {
@@ -629,4 +644,24 @@ export class MirrorTimeline {
     }
     return pose(buf[i - 1] ?? null, buf[i]!, buf[i + 1] ?? null, at);
   }
+}
+
+/* ------------------------------------------------------------------ server time */
+
+/** The Host's sim time at server time `now`, read ahead from the newest state (still while paused). */
+export function simNow(s: RuntuhMirror, now: number): number {
+  return s.st + (s.pz ? 0 : sinceStamp(s.at, now) / 1000);
+}
+
+/** Every tile as the Host has it at sim time `t`: the newest state's schedules carried forward. */
+export function tilesNow(s: RuntuhMirror, t: number): TileNow[] {
+  return poseTiles(s, null, t);
+}
+
+/** The rule card with its countdown at server time `now`, read from the newest state. */
+export function ruleNow(s: RuntuhMirror, now: number): RuleCard | null {
+  const rc = s.rc;
+  if (!rc || rc.seconds === null) return rc;
+  const rest = s.sl - (s.pz ? 0 : sinceStamp(s.at, now) / 1000);
+  return { ...rc, seconds: rest > 0 ? Math.ceil(rest - 1e-6) : null };
 }

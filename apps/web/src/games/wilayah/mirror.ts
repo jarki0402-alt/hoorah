@@ -15,7 +15,9 @@
  *
  * `MirrorFeed` (Host) keeps the numbering, `toMirror` packs, `applyMirror` validates untrusted
  * JSON, `MirrorGrid` (far-away screen) rebuilds the raster, `MirrorTimeline` interpolates heads a
- * little in the past and `mirrorHud` rebuilds the HUD.
+ * little in the past (an adaptive delay, see `playout.ts`), `mirrorClocks` reads the countdown and
+ * the round clock at server time (what the Host judges, not the delayed stage) and `mirrorHud`
+ * rebuilds the HUD.
  */
 import { type Look, parseLook } from '@hoorah/protocol';
 import type { HudState, Overlay } from './hud';
@@ -27,6 +29,7 @@ import {
   type Runner,
   type WilayahMatch,
 } from './logic';
+import { PlayoutClock, sinceStamp } from './playout';
 import { formatClock, formatPct } from './strings';
 import { wrapAngle } from './trail';
 
@@ -58,6 +61,8 @@ const NAME_MAX = 40;
 const TEXT_MAX = 200;
 const COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 const MAX_DIM = 512;
+/** Longest countdown accepted from the network (ms). */
+const GO_MAX_MS = 60_000;
 /** One coded string longer than this is refused outright. */
 const CODE_MAX = 16_000;
 
@@ -299,8 +304,9 @@ export interface WilayahMirror {
   rw: number;
   u: number;
   ph: Phase;
-  /** Round clock ms left. */
+  /** Round clock ms left; ms until the round starts (countdown only, else 0). */
   left: number;
+  go: number;
   urg: boolean;
   hint: boolean;
   hold: boolean;
@@ -397,6 +403,7 @@ export function toMirror(src: MirrorSource, part: FeedPart, epoch: number): Wila
     u: m.geo.unit,
     ph: m.phase,
     left: Math.round(m.timeLeft(t)),
+    go: m.phase === 'countdown' ? Math.max(0, Math.round(m.goAt - t)) : 0,
     urg: m.phase === 'play' && m.timeLeft(t) <= m.tuning.warnMs,
     hint: src.hint,
     hold: src.held,
@@ -576,6 +583,8 @@ export interface MirrorState {
   unit: number;
   phase: Phase;
   left: number;
+  /** Ms until the round starts (countdown only, else 0). */
+  goIn: number;
   urgent: boolean;
   hint: boolean;
   hold: boolean;
@@ -720,6 +729,7 @@ export function applyMirror(json: unknown): MirrorState | null {
   if (!isInt(cols) || !isInt(rows) || cols < 8 || rows < 8 || cols > MAX_DIM || rows > MAX_DIM) return null;
   if (!isInt(j.u) || j.u < 1 || j.u > 8 || !isNat(j.left) || !isNat(j.n) || !isNat(j.en)) return null;
   if (!isBool(j.urg) || !isBool(j.hint) || !isBool(j.hold)) return null;
+  if (!isNat(j.go) || j.go > GO_MAX_MS) return null;
   const overlay = parseOverlay(j.ov);
   if (!overlay || !Array.isArray(j.pl) || !Array.isArray(j.tr) || j.pl.length !== j.tr.length) return null;
   const size = cols * rows;
@@ -759,6 +769,7 @@ export function applyMirror(json: unknown): MirrorState | null {
     unit: j.u,
     phase: j.ph,
     left: j.left,
+    goIn: j.go,
     urgent: j.urg,
     hint: j.hint,
     hold: j.hold,
@@ -844,13 +855,7 @@ export class MirrorGrid {
 
 /* ------------------------------------------------------------------ interpolation */
 
-/** How far behind the newest packet the mirror draws, so there is usually a packet on each side. */
-export const RENDER_DELAY_MS = 100;
 const BUFFER = 8;
-/** A packet this much later than usual means the route changed: start measuring afresh. */
-const RESYNC_MS = 600;
-/** The measured delay creeps up this much per packet, so one lucky fast packet is not kept forever. */
-const CREEP_MS = 2;
 /** A head that moved further than this between two packets was respawned: no gliding (cells). */
 const JUMP_CELLS = 15;
 
@@ -865,26 +870,29 @@ export interface Span {
   a: MirrorState;
   b: MirrorState;
   k: number;
-  /** Round clock, interpolated. */
-  left: number;
 }
 
 /**
- * The last few packets, played back `RENDER_DELAY_MS` behind the newest one. The delay between
- * the Host making a packet and it arriving is measured (lowest seen, creeping up slowly), so
- * packets that arrive a little late still land before the playback point reaches them.
+ * The last few packets, played back a little behind server time by a `PlayoutClock`: the shortest
+ * recent trip plus a buffer that follows the packet gap and jitter, eased so a route change never
+ * makes the heads jump.
  */
 export class MirrorTimeline {
   private readonly buf: MirrorState[] = [];
-  private offset: number | null = null;
+  private readonly clock = new PlayoutClock();
 
   get latest(): MirrorState | null {
     return this.buf[this.buf.length - 1] ?? null;
   }
 
-  /** Measured Host-to-here delay in ms (null before the first packet). */
+  /** Shortest recent Host-to-here trip in ms (null before the first packet). */
   get lag(): number | null {
-    return this.offset;
+    return this.clock.lagMs;
+  }
+
+  /** How far behind server time the stage was last drawn (ms), null before the first packet. */
+  get behind(): number | null {
+    return this.clock.behindMs;
   }
 
   /**
@@ -892,9 +900,7 @@ export class MirrorTimeline {
    * packet, new phase, pause, Host restarted): draw it right away.
    */
   push(s: MirrorState, now: number): boolean {
-    const lag = now - s.t;
-    if (this.offset === null || lag < this.offset || lag - this.offset > RESYNC_MS) this.offset = lag;
-    else this.offset += Math.min(CREEP_MS, lag - this.offset);
+    this.clock.observe(s.t, now);
     const last = this.latest;
     const snap = !last || s.t <= last.t || stretchKey(s) !== stretchKey(last);
     if (snap) this.buf.length = 0;
@@ -905,7 +911,7 @@ export class MirrorTimeline {
 
   /** Server time of the Host state shown now. */
   playhead(now: number): number {
-    return now - (this.offset ?? 0) - RENDER_DELAY_MS;
+    return this.clock.drawAt(now);
   }
 
   sample(now: number): Span | null {
@@ -914,16 +920,15 @@ export class MirrorTimeline {
     const last = buf[buf.length - 1];
     if (!first || !last) return null;
     const at = this.playhead(now);
-    if (at <= first.t) return { a: first, b: first, k: 0, left: first.left };
-    if (at >= last.t) return { a: last, b: last, k: 0, left: last.left };
+    if (at <= first.t) return { a: first, b: first, k: 0 };
+    if (at >= last.t) return { a: last, b: last, k: 0 };
     for (let i = 0; i < buf.length - 1; i++) {
       const b = buf[i + 1]!;
       if (at > b.t) continue;
       const a = buf[i]!;
-      const k = (at - a.t) / (b.t - a.t);
-      return { a, b, k, left: lerp(a.left, b.left, k) };
+      return { a, b, k: (at - a.t) / (b.t - a.t) };
     }
-    return { a: last, b: last, k: 0, left: last.left };
+    return { a: last, b: last, k: 0 };
   }
 }
 
@@ -950,8 +955,31 @@ export function poseAt(a: MirrorRunner, b: MirrorRunner | undefined, k: number, 
 
 /* ------------------------------------------------------------------ HUD */
 
-/** The HUD the Host shows, rebuilt from a packet (`left`: the interpolated round clock). */
-export function mirrorHud(s: MirrorState, left: number): HudState {
+/** The Host's clocks at a moment in server time (what the Host judges right then). */
+export interface Clocks {
+  left: number;
+  /** The countdown overlay as the Host shows it then; null: the packet's own overlay. */
+  overlay: Overlay | null;
+}
+
+/**
+ * The countdown and round clock at server time `now`, read from the newest packet `s` (not from
+ * the delayed stage), so the far-away screen shows GO and the clock when the Host does. They
+ * stand still while the Host is paused.
+ */
+export function mirrorClocks(s: MirrorState, now: number): Clocks {
+  const run = s.hold ? 0 : sinceStamp(s.t, now);
+  if (s.phase === 'play') return { left: Math.max(0, s.left - run), overlay: null };
+  if (s.phase === 'countdown' && s.goIn > 0 && !s.hold) {
+    const rest = s.goIn - run;
+    if (rest > 0) return { left: s.left, overlay: { kind: 'count', value: Math.ceil(rest / 1000) } };
+    return { left: Math.max(0, s.left + rest), overlay: { kind: 'go' } };
+  }
+  return { left: s.left, overlay: null };
+}
+
+/** The HUD the Host shows, rebuilt from a packet, with the countdown and clock from `clocks`. */
+export function mirrorHud(s: MirrorState, clocks: Clocks): HudState {
   const size = s.cols * s.rows;
   const list = s.runners;
   const lead = Math.max(1, list[0]?.cells ?? 1);
@@ -967,7 +995,7 @@ export function mirrorHud(s: MirrorState, left: number): HudState {
   } else overlay = s.overlay;
   return {
     live: true,
-    timer: formatClock(left),
+    timer: formatClock(clocks.left),
     urgent: s.urgent,
     rows: list.map((r, order) => ({
       id: r.id,
@@ -983,7 +1011,7 @@ export function mirrorHud(s: MirrorState, left: number): HudState {
       respawn: r.respawn,
       away: r.away,
     })),
-    overlay,
+    overlay: clocks.overlay ?? overlay,
     hint: s.hint,
   };
 }

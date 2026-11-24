@@ -3,7 +3,8 @@
  * director drives, from the published display state. No rules, brains, phones or sounds run here
  * (the shell forwards the Host's sounds and music). Heads glide between packets a little in the
  * past; land changes and effects (capture rings, knock-outs, respawns, feed lines) play when the
- * playback point reaches the packet that brought them, so they line up with the heads.
+ * playback point reaches the packet that brought them, so they line up with the heads. The
+ * countdown and the round clock run on server time, like on the Host.
  */
 import type { HoorahGame } from '@hoorah/sdk';
 import type * as Phaser from 'phaser';
@@ -18,6 +19,7 @@ import {
   type MirrorRunner,
   type MirrorState,
   MirrorTimeline,
+  mirrorClocks,
   mirrorHud,
   newEvents,
   type Pose,
@@ -146,7 +148,7 @@ export class WilayahReplica {
       const stage = new MirrorStage(this.grid, s.unit);
       this.stage = stage;
       this.eventSeen = null;
-      this.syncRunners(stage, { a: s, b: s, k: 0, left: s.left });
+      this.syncRunners(stage, { a: s, b: s, k: 0 });
       this.scene.setup(stage);
       this.scene.paint([...changes.fresh, ...changes.cleared, ...changes.fixed], now, 'instant');
     } else {
@@ -293,7 +295,11 @@ export class WilayahReplica {
     this.scene.alpha = 1;
     if (now - this.lastHud >= HUD_MS) {
       this.lastHud = now;
-      this.hud.setState(mirrorHud(span.a, span.left));
+      // The stage plays a little in the past; the countdown and clock run on server time.
+      const latest = this.timeline.latest;
+      const a = span.a;
+      const clockSrc = latest && latest.epoch === a.epoch && latest.phase === a.phase ? latest : a;
+      this.hud.setState(mirrorHud(a, mirrorClocks(clockSrc, now)));
     }
   }
 

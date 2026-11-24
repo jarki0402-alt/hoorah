@@ -1,15 +1,18 @@
 /**
- * Long-distance play: the display state the Host's main screen publishes about 14 times a second
+ * Long-distance play: the display state the Host's main screen publishes about 15 times a second
  * during a race, and what a far-away main screen does with it. Pure (no DOM, no SDK):
  * `MirrorMarks` counts hops, supers, stumbles and finishes on the Host, `toMirror` packs the
  * board, `applyMirror` validates untrusted JSON, `MarkReader` turns counters back into stage
- * actions, `mirrorHud` rebuilds the HUD, and `MirrorTimeline` plays packets back a little in the
- * past so hops keep the Host's rhythm even when packets arrive unevenly.
+ * actions, `mirrorHud` rebuilds the HUD, `MirrorTimeline` plays packets back a little in the past
+ * (an adaptive delay, see `playout.ts`) so hops keep the Host's rhythm even when packets arrive
+ * unevenly, and `mirrorClocks` reads the countdown, race clock and finish grace at server time
+ * (what the Host judges, not the delayed stage).
  */
 import { type Look, parseLook } from '@hoorah/protocol';
 import type { TickerLine } from './commentary';
 import { type BoardRow, type HudState, type Overlay, type Plate, plateBox } from './hud';
 import type { HopKind, Phase } from './logic';
+import { PlayoutClock, sinceStamp } from './playout';
 import { formatClock, STR } from './strings';
 
 const PHASES: readonly Phase[] = ['waiting', 'countdown', 'race', 'raceEnd', 'standings', 'matchEnd', 'done'];
@@ -104,6 +107,8 @@ export interface MirrorSource {
   /** Beat 0 of the current race (server ms) and the beat length. */
   anchor: number;
   beatMs: number;
+  /** The go beat of the current race (server ms): the countdown ends and taps count from here. */
+  startAt: number;
   trackLength: number;
   hopMs: number;
   stumbleMs: number;
@@ -170,6 +175,8 @@ export interface KarungMirror {
   /** Beat 0 (server ms) and beat length. */
   an: number;
   bm: number;
+  /** Go beat (server ms). */
+  gs: number;
   /** Track length (m), hop ms, stumble ms. */
   tl: number;
   hm: number;
@@ -255,6 +262,7 @@ export function toMirror(src: MirrorSource): KarungMirror {
     gr: src.grace === null ? null : Math.round(src.grace),
     an: Math.round(src.anchor),
     bm: roundTo(src.beatMs, 3),
+    gs: Math.round(src.startAt),
     tl: src.trackLength,
     hm: src.hopMs,
     sm: src.stumbleMs,
@@ -381,7 +389,7 @@ export function applyMirror(json: unknown): KarungMirror | null {
   const ph = j.ph as Phase;
   if (!isInt(j.n) || j.n < 1 || j.n > MAX_RACES || !isInt(j.r) || j.r < 1 || j.r > MAX_RACES) return null;
   if (!isNat(j.el) || (j.gr !== null && !isNat(j.gr))) return null;
-  if (!isNum(j.an) || !isNum(j.bm) || j.bm <= 0) return null;
+  if (!isNum(j.an) || !isNum(j.bm) || j.bm <= 0 || !isNum(j.gs) || j.gs < j.an) return null;
   if (!isNum(j.tl) || j.tl <= 0 || j.tl > MAX_DIST || !isNat(j.hm) || !isNat(j.sm) || !isNat(j.fl))
     return null;
   if (!isBool(j.lv) || !isBool(j.pr) || !isBool(j.hn) || !isBool(j.hold)) return null;
@@ -400,6 +408,7 @@ export function applyMirror(json: unknown): KarungMirror | null {
     gr: j.gr,
     an: j.an,
     bm: j.bm,
+    gs: j.gs,
     tl: j.tl,
     hm: j.hm,
     sm: j.sm,
@@ -417,10 +426,36 @@ export function applyMirror(json: unknown): KarungMirror | null {
 
 /* ------------------------------------------------------------------ rebuilding */
 
-/** The values that move continuously, interpolated between packets. */
-export interface Sampled {
+/** The Host's clocks at a moment in server time (what the Host judges right then). */
+export interface Clocks {
   elapsed: number;
   grace: number | null;
+  /** The countdown overlay as the Host shows it then; null: the packet's own overlay. */
+  overlay: Overlay | null;
+}
+
+/** Countdown steps before the go beat. */
+const COUNT_STEPS = 3;
+
+/**
+ * The countdown, race clock and finish grace at server time `now`, read from the newest packet
+ * `s` (not from the delayed stage), so the far-away screen shows 3, 2, 1, GO on the beats the
+ * Host judges taps by. They stand still while the Host is paused.
+ */
+export function mirrorClocks(s: KarungMirror, now: number): Clocks {
+  const run = s.hold ? 0 : sinceStamp(s.t, now);
+  if (s.ph === 'race') {
+    return { elapsed: s.el + run, grace: s.gr === null ? null : Math.max(0, s.gr - run), overlay: null };
+  }
+  const ov = s.ov;
+  if (s.ph === 'countdown' && ov[0] === 'c' && !s.hold && s.gs > s.an) {
+    const at = s.t + run;
+    if (at >= s.gs) return { elapsed: at - s.gs, grace: null, overlay: { kind: 'go' } };
+    const step = (s.gs - s.an) / COUNT_STEPS;
+    const value = Math.min(COUNT_STEPS, Math.max(1, COUNT_STEPS - Math.floor((at - s.an) / step)));
+    return { elapsed: 0, grace: null, overlay: { kind: 'count', value, label: ov[2] } };
+  }
+  return { elapsed: s.el, grace: s.gr, overlay: null };
 }
 
 /** Roster entries for the scene, in lane order. */
@@ -467,18 +502,21 @@ function overlayOf(w: OverlayWire): Overlay {
   }
 }
 
-/** The HUD the Host showed, with plates placed on this screen's lanes and the moving clock. */
+/**
+ * The HUD the Host showed, with plates placed on this screen's lanes, and the countdown, race
+ * clock and grace from `clocks` (server time).
+ */
 export function mirrorHud(
   s: KarungMirror,
-  live: Sampled,
+  clocks: Clocks,
   lanes: { centers: readonly number[]; spacing: number },
   origin: { x: number; y: number },
 ): HudState {
   return {
     live: s.lv,
     raceLabel: STR.raceOf(s.r, s.n),
-    timer: formatClock(live.elapsed),
-    grace: live.grace === null ? null : STR.graceLeft(Math.ceil(live.grace / 1000)),
+    timer: formatClock(clocks.elapsed),
+    grace: clocks.grace === null ? null : STR.graceLeft(Math.ceil(clocks.grace / 1000)),
     prompt: s.pr,
     hint: s.hn,
     plates: s.rc.map(
@@ -495,7 +533,7 @@ export function mirrorHud(
         ...plateBox(i, lanes.centers, lanes.spacing, origin),
       }),
     ),
-    overlay: overlayOf(s.ov),
+    overlay: clocks.overlay ?? overlayOf(s.ov),
   };
 }
 
@@ -545,41 +583,36 @@ export class MarkReader {
 
 /* ------------------------------------------------------------------ playback */
 
-/** How far behind the newest packet the mirror draws, so there is usually a packet on each side. */
-export const RENDER_DELAY_MS = 100;
 const BUFFER = 8;
 /** Packets waiting to be shown beyond this are shown at once (this screen stopped drawing). */
 const MAX_PENDING = 40;
-/** A packet this much later than usual means the route changed: start measuring afresh. */
-const RESYNC_MS = 600;
-/** The measured delay creeps up this much per packet, so one lucky fast packet is not kept forever. */
-const CREEP_MS = 2;
 
 /** Packets that differ in these are separate stretches: the stage snaps instead of waiting. */
 const stretchKey = (s: KarungMirror): string => `${s.ph}|${s.r}|${s.hold ? 1 : 0}`;
 
-const lerp = (a: number, b: number, k: number): number => a + (b - a) * k;
-
 /**
- * The last few packets, played back `RENDER_DELAY_MS` behind the newest one. The delay between
- * the Host making a packet and it arriving is measured (lowest seen, creeping up slowly), so
- * packets that arrive a little late still land before the playback point reaches them.
- * Packets are handed out in order once the playback point passes them (`due`), or all at once
- * when a new stretch starts (`flush`).
+ * The last few packets, played back a little behind server time by a `PlayoutClock`: the shortest
+ * recent trip plus a buffer that follows the packet gap and jitter, eased so a route change never
+ * makes the hops jump. Packets are handed out in order once the playback point passes them
+ * (`due`), or all at once when a new stretch starts (`flush`).
  */
 export class MirrorTimeline {
   private readonly buf: KarungMirror[] = [];
   private readonly pending: KarungMirror[] = [];
-  private offset: number | null = null;
-  private readonly out: Sampled = { elapsed: 0, grace: null };
+  private readonly clock = new PlayoutClock();
 
   get latest(): KarungMirror | null {
     return this.buf[this.buf.length - 1] ?? null;
   }
 
-  /** Measured Host-to-here delay in ms (null before the first packet). */
+  /** Shortest recent Host-to-here trip in ms (null before the first packet). */
   get lag(): number | null {
-    return this.offset;
+    return this.clock.lagMs;
+  }
+
+  /** How far behind server time the stage was last played (ms), null before the first packet. */
+  get behind(): number | null {
+    return this.clock.behindMs;
   }
 
   /**
@@ -587,9 +620,7 @@ export class MirrorTimeline {
    * packet, new phase or race, pause, Host restarted): `flush` and draw it right away.
    */
   push(s: KarungMirror, now: number): boolean {
-    const lag = now - s.t;
-    if (this.offset === null || lag < this.offset || lag - this.offset > RESYNC_MS) this.offset = lag;
-    else this.offset += Math.min(CREEP_MS, lag - this.offset);
+    this.clock.observe(s.t, now);
     const last = this.latest;
     const snap = !last || s.t <= last.t || stretchKey(s) !== stretchKey(last);
     if (snap) this.buf.length = 0;
@@ -599,13 +630,9 @@ export class MirrorTimeline {
     return snap;
   }
 
-  private playback(now: number): number {
-    return now - (this.offset ?? 0) - RENDER_DELAY_MS;
-  }
-
   /** Packets whose moment has come by `now`, oldest first. */
   due(now: number): KarungMirror[] {
-    const at = this.playback(now);
+    const at = this.clock.drawAt(now);
     let n = 0;
     while (n < this.pending.length && (this.pending[n]!.t <= at || this.pending.length - n > MAX_PENDING))
       n++;
@@ -615,34 +642,5 @@ export class MirrorTimeline {
   /** Every packet not shown yet, oldest first. */
   flush(): KarungMirror[] {
     return this.pending.splice(0, this.pending.length);
-  }
-
-  /** The moving values as the Host showed them `RENDER_DELAY_MS` before the newest packet. Reused object. */
-  sample(now: number): Sampled {
-    const out = this.out;
-    const buf = this.buf;
-    const first = buf[0];
-    const last = buf[buf.length - 1];
-    if (!first || !last) return out;
-    const at = this.playback(now);
-    let a = last;
-    let b = last;
-    let k = 0;
-    if (at <= first.t) {
-      a = first;
-      b = first;
-    } else if (at < last.t) {
-      for (let i = 0; i < buf.length - 1; i++) {
-        const next = buf[i + 1]!;
-        if (at > next.t) continue;
-        a = buf[i]!;
-        b = next;
-        k = (at - a.t) / (b.t - a.t);
-        break;
-      }
-    }
-    out.elapsed = lerp(a.el, b.el, k);
-    out.grace = a.gr !== null && b.gr !== null ? lerp(a.gr, b.gr, k) : k < 1 ? a.gr : b.gr;
-    return out;
   }
 }

@@ -38,8 +38,12 @@ const COMMENT_MS = 250;
 const PULL_SFX_MS = 1000 / 6;
 const SUPER_SFX_MS = 150;
 const RING_SYNC_MS = 5000;
-/** Long-distance play: display state for a far-away screen, ~14 Hz while pulling, 4 Hz otherwise. */
-const MIRROR_LIVE_MS = 70;
+/**
+ * Long-distance play: display state for a far-away screen, ~15 Hz while pulling (every 4th frame
+ * at 60 fps; not 50 ms, because the shell holds each publish 50 ms and closer states would merge
+ * and halve the rate), 4 Hz otherwise.
+ */
+const MIRROR_LIVE_MS = 60;
 const MIRROR_IDLE_MS = 250;
 
 export class Director {
@@ -436,6 +440,8 @@ export class Director {
         ticker: this.commentator.current,
         ringStart: match.ringStart,
         ringPeriod: match.tuning.ringPeriodMs,
+        countLeft: match.phase === 'countdown' ? 3 * match.tuning.countStepMs - (t - match.phaseStart) : 0,
+        countStep: match.tuning.countStepMs,
         held: this.clock.paused,
       }),
     );

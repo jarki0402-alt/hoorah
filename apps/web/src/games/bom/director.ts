@@ -7,7 +7,7 @@
  * players; their skill adapts silently. A dropped phone's runner is run by a gentle brain until it
  * reconnects, so a bomb never gets stuck in an empty hand.
  *
- * Long-distance play: with a `mirror` link the display state goes out about 13 times a second
+ * Long-distance play: with a `mirror` link the display state goes out about 15 times a second
  * while the chase runs and at once on every event; flourishes are logged for the far-away screen.
  */
 import {

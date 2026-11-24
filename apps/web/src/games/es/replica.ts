@@ -4,11 +4,13 @@
  * so no rules, computer skaters, phones or sounds run: every frame the skaters, phase, shot and
  * floe size are written from the interpolated states, and the HUD is built from them. The rim
  * breaks when the drawn floe gets smaller; flourishes (MELUNCUR!, DUK!, BYUR!, toasts) replay
- * from the Host's numbered event log when the drawn game time reaches them.
+ * from the Host's numbered event log when the drawn game time reaches them. The aim countdown runs
+ * on server time (from the newest state), so it ends when the Host stops taking locks.
  */
 import { type Board, boardOf, type Chip, type EndRow, type FinalRow, type HudStore } from './hud';
 import type { EsMatch, PlayerInfo, Skater } from './logic';
 import {
+  aimSecondsNow,
   applyMirror,
   type EsMirror,
   type EventEntry,
@@ -113,7 +115,7 @@ export class EsReplica {
     this.scene.frame(s.pz ? 0 : dt);
     if (now - this.lastBoard >= BOARD_MS || now < this.lastBoard) {
       this.lastBoard = now;
-      this.hud.setBoard(this.board(s));
+      this.hud.setBoard(this.board(s, now));
     }
   }
 
@@ -191,14 +193,20 @@ export class EsReplica {
 
   /* ------------------------------------------------------------------ HUD */
 
-  private board(s: EsMirror): Board {
+  private board(s: EsMirror, now: number): Board {
     const rows = new Map((this.posed?.skaters ?? []).map((k) => [k.id, k]));
-    return boardOf(
+    const board = boardOf(
       this.m,
       s.rn,
       (p: Skater) => rows.get(p.id)?.score ?? p.total,
       (id) => ((rows.get(id)?.flags ?? 0) & FLAG.offline) !== 0,
     );
+    // The floe is drawn a little in the past; the aim countdown runs on server time.
+    const latest = this.timeline.latest;
+    if (board.center?.mode === 'aim' && latest && latest.rd === s.rd && latest.sh === s.sh) {
+      board.center = { mode: 'aim', seconds: aimSecondsNow(latest, now) };
+    }
+    return board;
   }
 
   private syncChips(s: EsMirror): void {

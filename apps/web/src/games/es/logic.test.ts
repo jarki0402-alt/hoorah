@@ -171,6 +171,29 @@ describe('match flow', () => {
     expect(m.lock(2, { x: 0.4, y: 0.4 })).toBe(true);
   });
 
+  it('waits for far-away locks sent in time, and refuses ones sent after the grace', () => {
+    const m = new EsMatch({ players: players(3), rounds: 1, seed: 2 });
+    toAim(m);
+    m.lateWait = 0.35;
+    run(m, TIMING.aim + TIMING.grace + 0.1);
+    // Past the usual launch: still aiming, waiting for locks on their way.
+    expect(m.phase).toBe('aim');
+    // Sent just before time was up, arriving now: taken.
+    expect(m.lock(2, { x: 0.4, y: 0.4 }, TIMING.aim - 0.05)).toBe(true);
+    // Sent after the grace, or with no stamp at all (arrival time): refused.
+    expect(m.lock(3, { x: 0.4, y: 0.4 }, TIMING.aim + TIMING.grace + 0.05)).toBe(false);
+    expect(m.lock(1, { x: 0.4, y: 0.4 })).toBe(false);
+    run(m, 0.3);
+    expect(m.phase).toBe('slide');
+  });
+
+  it('launches at the usual time when no far-away screen watches', () => {
+    const m = new EsMatch({ players: players(2), rounds: 1, seed: 2 });
+    toAim(m);
+    run(m, TIMING.aim + TIMING.grace + 0.05);
+    expect(m.phase).not.toBe('aim');
+  });
+
   it('knocks a skater off with a full shot and scores the survivor', () => {
     const m = new EsMatch({ players: players(2), rounds: 2, seed: 4 });
     toAim(m);

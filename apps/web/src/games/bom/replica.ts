@@ -4,7 +4,8 @@
  * so no rules, computer runners, phones or sounds run: every frame the runners, bombs, phase and
  * sim time are written from the interpolated states, and the HUD signals are copied from them.
  * Flourishes (OPER call-outs, the BUM burst, toasts) replay from the Host's numbered event log
- * when the drawn sim time reaches them, so they line up with the runners on screen.
+ * when the drawn sim time reaches them, so they line up with the runners on screen. The fuse
+ * sputters at the share burnt at server time (`FuseClock`), as the Host's bomb does right now.
  */
 import { ARENAS } from './arena';
 import type { CardRow, HudStore, RunnerChip, ScoreCard } from './hud';
@@ -14,6 +15,7 @@ import {
   type BomMirror,
   type EventEntry,
   FLAG,
+  FuseClock,
   MirrorTimeline,
   type PlayerRow,
   type Posed,
@@ -31,6 +33,7 @@ const info = (p: PlayerRow): RunnerInfo => ({ id: p.id, name: p.n, fruit: p.f, l
 
 export class BomReplica {
   private readonly timeline = new MirrorTimeline();
+  private readonly fuse = new FuseClock();
   private match: BomMatch | null = null;
   private queue: EventEntry[] = [];
   private seq: number | null = null;
@@ -66,6 +69,7 @@ export class BomReplica {
   push(raw: unknown, now: number): void {
     const s = applyMirror(raw);
     if (!s || !this.timeline.push(s, now)) return;
+    this.fuse.observe(s);
     if (this.seq === null) {
       // Joined mid-game: what already happened is not replayed.
       this.seq = s.ev.reduce((n, e) => Math.max(n, e.n), 0);
@@ -91,7 +95,7 @@ export class BomReplica {
     if (s.pl.length === 0) return;
     const m = this.ensureMatch(s);
     this.syncRoster(m, s);
-    this.applyPose(m, p);
+    this.applyPose(m, p, now);
     this.fire(p.simT);
     this.scene.frame(m, s.pz ? 0 : dt);
     this.syncMarks(m, s);
@@ -130,8 +134,11 @@ export class BomReplica {
     );
   }
 
-  private applyPose(m: BomMatch, p: Posed): void {
+  private applyPose(m: BomMatch, p: Posed, now: number): void {
     const s = p.s;
+    // The fuse share at server time, from the newest state of the same round (the yard lags a little).
+    const latest = this.timeline.latest;
+    const ahead = latest && latest.no === s.no && latest.ph === s.ph ? latest : null;
     m.sim.t = p.simT;
     m.alpha = 1;
     m.phase = s.ph;
@@ -163,7 +170,9 @@ export class BomReplica {
         holder,
         // Only the burnt share crosses the network: a unit fuse lit that long ago burns the same.
         fuse: 1,
-        litAt: p.simT - (p.burnt[index] ?? 0),
+        litAt:
+          p.simT -
+          ((exploded === 0 && ahead ? this.fuse.burntAt(ahead, index, now) : null) ?? p.burnt[index] ?? 0),
         heldSince: 0,
         flight: flight ? { from: flight[0], to: holder, at: flight[1] } : null,
         exploded: exploded === 1,

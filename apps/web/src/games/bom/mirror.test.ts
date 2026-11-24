@@ -8,15 +8,16 @@ import {
   EVENT_KEEP_S,
   EventLog,
   FLAG,
+  FuseClock,
   MAX_EVENTS,
   type MirrorSource,
   MirrorTimeline,
   pose,
-  RENDER_DELAY_MS,
   type RunnerRow,
   TELEPORT_M,
   toMirror,
 } from './mirror';
+import { BUFFER_MAX_MS, BUFFER_MIN_MS, CLOCK_AHEAD_MAX_MS } from './playout';
 
 const runners = (n: number) =>
   Array.from({ length: n }, (_, i) => {
@@ -281,20 +282,26 @@ describe('pose', () => {
 });
 
 describe('MirrorTimeline', () => {
-  it('draws a fixed delay behind the delivery delay and blends between states', () => {
+  it('draws the shortest trip plus an adaptive buffer behind server time and blends between states', () => {
     const tl = new MirrorTimeline();
     const lag = 300;
     for (let i = 0; i < 6; i++) {
       const at = 10_000 + i * 80;
       expect(tl.push(state(at, i * 0.08, [[1, i * 0.4, 0, 0, 0, 3, 0]]), at + lag)).toBe(true);
     }
-    expect(tl.lagMs).toBeCloseTo(lag);
+    expect(tl.lagMs).toBe(lag);
     const now = 10_000 + 5 * 80 + lag;
-    expect(tl.drawAt(now)).toBeCloseTo(10_400 - RENDER_DELAY_MS);
+    const drawn = tl.drawAt(now);
+    const buffer = tl.behindMs! - lag;
+    expect(drawn).toBeCloseTo(now - tl.behindMs!, 6);
+    // About 1.5 state gaps (80 ms) with no jitter.
+    expect(buffer).toBeGreaterThanOrEqual(BUFFER_MIN_MS);
+    expect(buffer).toBeGreaterThan(105);
+    expect(buffer).toBeLessThan(121);
     const p = tl.sample(now)!;
-    // Drawn at 10 300: three quarters of the way from the state at 10 240 to the one at 10 320.
-    expect(p.s.at).toBe(10_240);
-    expect(p.runners[0]!.x).toBeCloseTo(1.2 + 0.4 * 0.75);
+    const a = Math.floor((drawn - 10_000) / 80);
+    expect(p.s.at).toBe(10_000 + a * 80);
+    expect(p.runners[0]!.x).toBeCloseTo(((drawn - 10_000) / 80) * 0.4, 5);
   });
 
   it('ignores repeats and older states', () => {
@@ -312,13 +319,71 @@ describe('MirrorTimeline', () => {
     expect(tl.sample(1000)!.runners[0]!.x).toBe(3);
   });
 
-  it('raises the delay quickly for a late packet and lowers it slowly', () => {
+  it('keeps a direct link close behind and follows route changes without the yard jumping', () => {
     const tl = new MirrorTimeline();
-    tl.push(state(0, 0, []), 200);
-    tl.push(state(80, 0.08, []), 80 + 600);
-    const raised = tl.lagMs!;
-    expect(raised).toBeGreaterThan(300);
-    tl.push(state(160, 0.16, []), 160 + 200);
-    expect(tl.lagMs!).toBeGreaterThan(raised - 20);
+    // Relay, then a direct link, then the relay again; the runner walks 1 m per second.
+    const trip = (t: number) => (t < 4000 || t >= 9000 ? 250 + ((t * 7) % 70) : 30 + ((t * 7) % 6));
+    const sent = Array.from({ length: 250 }, (_, i) => i * 60);
+    let k = 0;
+    let lastX = Number.NEGATIVE_INFINITY;
+    let maxStep = 0;
+    let direct = Number.POSITIVE_INFINITY;
+    for (let now = 0; now < 15_000; now += 16) {
+      while (k < sent.length && sent[k]! + trip(sent[k]!) <= now) {
+        const t = sent[k++]!;
+        tl.push(state(t, t / 1000, [[1, t / 1000, 0, 0, 0, 3, 0]]), t + trip(t));
+      }
+      const p = tl.sample(now);
+      if (!p) continue;
+      const x = p.runners[0]!.x;
+      if (lastX > Number.NEGATIVE_INFINITY) {
+        expect(x).toBeGreaterThanOrEqual(lastX - 1e-9);
+        maxStep = Math.max(maxStep, x - lastX);
+      }
+      lastX = x;
+      if (now >= 8000 && now < 9000) direct = Math.min(direct, tl.behindMs! - tl.lagMs!);
+    }
+    expect(maxStep).toBeLessThan(0.016 * 1.15);
+    expect(direct).toBeLessThan(120);
+    expect(tl.behindMs! - tl.lagMs!).toBeLessThanOrEqual(BUFFER_MAX_MS);
+  });
+});
+
+describe('FuseClock', () => {
+  const bomb = (at: number, st: number, burnt: number, patch: Partial<BomMirror> = {}): BomMirror =>
+    state(at, st, [], { bo: [[1, burnt, 0, null]], ...patch });
+
+  it('reads the fuse at server time from how fast it burnt, ahead of the delayed yard', () => {
+    const f = new FuseClock();
+    // A 20 s fuse: 0.05 per second.
+    for (let i = 0; i <= 25; i++) f.observe(bomb(10_000 + i * 60, 2 + i * 0.06, 0.1 + i * 0.003));
+    const newest = bomb(10_000 + 25 * 60, 2 + 25 * 0.06, 0.1 + 25 * 0.003);
+    expect(f.burntAt(newest, 0, newest.at)).toBeCloseTo(0.175, 6);
+    expect(f.burntAt(newest, 0, newest.at + 400)).toBeCloseTo(0.175 + 0.02, 4);
+    // Never past a full fuse, never further ahead than the clock cap.
+    expect(f.burntAt(newest, 0, newest.at + 60_000)).toBeCloseTo(
+      0.175 + (0.05 * CLOCK_AHEAD_MAX_MS) / 1000,
+      4,
+    );
+    const nearEnd = bomb(newest.at, newest.st, 0.99);
+    expect(f.burntAt(nearEnd, 0, nearEnd.at + 1000)).toBe(1);
+    // Paused Host: the fuse stands still.
+    expect(f.burntAt({ ...newest, pz: true }, 0, newest.at + 400)).toBeCloseTo(0.175, 6);
+  });
+
+  it('waits for a second of burning before reading ahead, and starts over each round', () => {
+    const f = new FuseClock();
+    f.observe(bomb(0, 0, 0.01));
+    const early = bomb(500, 0.5, 0.035);
+    f.observe(early);
+    expect(f.burntAt(early, 0, 900)).toBeNull();
+    const later = bomb(1500, 1.5, 0.085);
+    f.observe(later);
+    expect(f.burntAt(later, 0, 1500)).toBeCloseTo(0.085, 6);
+    const next = bomb(1600, 1.6, 0.01, { no: 1 });
+    f.observe(next);
+    expect(f.burntAt(next, 0, 1700)).toBeNull();
+    expect(f.burntAt(bomb(1700, 1.7, 0.5, { bo: [[1, 0.5, 1, null]] }), 0, 1800)).toBeNull();
+    expect(f.burntAt(bomb(1700, 1.7, 0.5, { ph: 'boom' }), 0, 1800)).toBeNull();
   });
 });

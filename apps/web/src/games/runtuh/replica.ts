@@ -5,7 +5,9 @@
  * faces, glow, round and sim time are written from the interpolated states, and the HUD signals are
  * copied from them. Crumble debris starts when a tile drops here; the other flourishes (MULAI,
  * RUNTUH, shoves, falls, near misses) replay from the Host's numbered event log when the drawn sim
- * time reaches them, so they line up with the stage on screen.
+ * time reaches them, so they line up with the stage on screen. Tiles and the rule card's countdown
+ * run on server time (from the newest state), so they crack, drop and count out when the Host
+ * judges them, a little ahead of the players drawn in the past.
  */
 import type { SolidState } from '../../shared/kotak/solids';
 import { COLOR_HEX, TILES, type TileFace } from './arena';
@@ -20,6 +22,10 @@ import {
   type PlayerRow,
   type Posed,
   type RuntuhMirror,
+  ruleNow,
+  simNow,
+  type TileNow,
+  tilesNow,
 } from './mirror';
 import type { RuntuhScene } from './scene';
 import { type ShowTarget, showEvent } from './show';
@@ -114,8 +120,9 @@ export class RuntuhReplica {
       this.syncStage(s);
       this.syncHud(s);
     }
-    this.applyPose(p);
+    this.applyPose(p, now);
     this.fire(p.simT);
+    this.put('rule', this.hud.rule, ruleNow(this.timeline.latest ?? s, now));
     this.scene.frame(1, s.pz ? 0 : dt);
   }
 
@@ -168,9 +175,12 @@ export class RuntuhReplica {
     }
   }
 
-  private applyPose(p: Posed): void {
+  private applyPose(p: Posed, now: number): void {
     const m = this.m;
-    m.sim.t = p.simT;
+    // Tiles (and the sim clock the tile layer animates by) run on server time.
+    const latest = this.timeline.latest ?? p.s;
+    const tileT = Math.max(p.simT, simNow(latest, now));
+    m.sim.t = tileT;
     m.alpha = 1;
     for (const pr of p.runners) {
       const b = m.sim.body(pr.id);
@@ -187,23 +197,23 @@ export class RuntuhReplica {
       b.stunLeft = pr.flags & FLAG.stunned ? 1 : 0;
       b.frozenLeft = pr.flags & FLAG.frozen ? 1 : 0;
     }
-    this.applyTiles(p);
+    this.applyTiles(tilesNow(latest, tileT), tileT);
   }
 
   /** Tile schedules from the Host; a tile that drops here bursts into debris like on the Host. */
-  private applyTiles(p: Posed): void {
+  private applyTiles(tiles: readonly TileNow[], simT: number): void {
     const m = this.m;
     const first = this.drawn === null;
     const drawn = this.drawn ?? [];
     for (let i = 0; i < TILES; i++) {
       const s = m.sim.solids[i];
-      const t = p.tiles[i];
+      const t = tiles[i];
       if (!s || !t) continue;
       s.state = t.state;
       s.since = t.since;
       s.until = t.until;
       s.goneFor = t.goneFor;
-      if (!first && t.state === 'gone' && drawn[i] !== 'gone' && p.simT - t.since < DEBRIS_S)
+      if (!first && t.state === 'gone' && drawn[i] !== 'gone' && simT - t.since < DEBRIS_S)
         this.debris(i, m.faces[i]);
       drawn[i] = t.state;
     }
@@ -246,7 +256,6 @@ export class RuntuhReplica {
     h.paused.value = s.pz || this.localPaused;
     this.put('round', h.round, s.hr);
     this.put('alive', h.alive, s.ha);
-    this.put('rule', h.rule, s.rc);
     this.put('intro', h.intro, s.ic);
     this.put('help', h.help, s.hp);
     const scores: ScoreRow[] = [];

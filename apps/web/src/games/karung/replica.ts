@@ -2,7 +2,8 @@
  * Long-distance play, far-away main screen: drives the same Phaser scene and HUD the Host's
  * director drives, from the published display state. No rules, brains, phones or sounds run here
  * (the shell forwards the Host's sounds). Packets are played back a little in the past so hops
- * keep the Host's rhythm; phase changes snap and replay the same stage flourishes the Host plays.
+ * keep the Host's rhythm; the countdown, race clock, grace and beat ring run on server time, like
+ * on the Host; phase changes snap and replay the same stage flourishes the Host plays.
  */
 import type { HoorahGame } from '@hoorah/sdk';
 import type * as Phaser from 'phaser';
@@ -16,6 +17,7 @@ import {
   MarkReader,
   type MirrorAction,
   MirrorTimeline,
+  mirrorClocks,
   mirrorHud,
   mirrorRoster,
 } from './mirror';
@@ -159,7 +161,10 @@ export class KarungReplica {
     const s = this.shown;
     if (!s) return;
     this.lastHud = now;
-    this.hud.setState(mirrorHud(s, this.timeline.sample(now), this.scene.lanes, this.hud.origin));
+    // The stage plays a little in the past; the clocks run on server time from the newest packet.
+    const latest = this.timeline.latest;
+    const clockSrc = latest && latest.ph === s.ph && latest.r === s.r ? latest : s;
+    this.hud.setState(mirrorHud(s, mirrorClocks(clockSrc, now), this.scene.lanes, this.hud.origin));
   }
 
   private frame(): void {

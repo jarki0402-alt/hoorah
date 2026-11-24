@@ -1259,14 +1259,25 @@ export function clearTimer(id: TimerId): void {
   shellTimer.value = null;
 }
 
+/** When the last packet went out (performance clock), for the 50 ms spacing. */
+let lastFlushAt = -Infinity;
+
+/**
+ * At most one packet per MIRROR_FLUSH_MS, sent as early as that allows: when the spacing has
+ * already passed, changes made in the same task still ride one packet (a 0 ms timer), otherwise
+ * the packet waits only for the rest of the spacing. A game publishing every 50-60 ms then
+ * really reaches 16-20 packets per second instead of being merged down to about 10.
+ */
 function scheduleFlush(): void {
   if (isMirror || flushTimer) return;
-  flushTimer = window.setTimeout(flushMirrors, MIRROR_FLUSH_MS);
+  const wait = Math.max(0, lastFlushAt + MIRROR_FLUSH_MS - performance.now());
+  flushTimer = window.setTimeout(flushMirrors, wait);
 }
 
 /** Sends what changed since the last packet: the shell state when it differs, game state, sounds. */
 function flushMirrors(): void {
   flushTimer = 0;
+  lastFlushAt = performance.now();
   if (mirrorCount.peek() === 0) {
     fxQueue = [];
     gameOut = null;

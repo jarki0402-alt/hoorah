@@ -216,6 +216,11 @@ export class EsMatch {
   nextEdge: number;
   /** Seconds since the slide started (credit window). */
   slideT = 0;
+  /**
+   * Long-distance play: extra seconds the launch waits after the grace for locks still on their way
+   * from far-away phones (0 when no far-away screen watches). Only locks sent in time count then.
+   */
+  lateWait = 0;
   private fallen = 0;
   private cracked = false;
   private lastLeft = -1;
@@ -361,10 +366,15 @@ export class EsMatch {
     p.live = Math.hypot(aim.x, aim.y) >= SLING_MIN_POWER ? { x: aim.x, y: aim.y } : null;
   }
 
-  /** Locked aim from the phone. Re-aiming replaces it until time is up (plus grace). */
-  lock(id: number, aim: SlingAim): boolean {
+  /**
+   * Locked aim from the phone. Re-aiming replaces it until time is up (plus grace). `sentT` is the
+   * phase time the phone sent it (from its stamp; arrival when unknown): a lock that arrives during
+   * `lateWait` counts only if it left the phone within the grace.
+   */
+  lock(id: number, aim: SlingAim, sentT = this.phaseT): boolean {
     const p = this.player(id);
     if (!p || this.phase !== 'aim' || !this.isStanding(p) || this.plans.has(id)) return false;
+    if (Math.min(sentT, this.phaseT) > TIMING.aim + TIMING.grace) return false;
     if (Math.hypot(aim.x, aim.y) < SLING_MIN_POWER) return false;
     const again = p.aim !== null;
     p.aim = { x: aim.x, y: aim.y };
@@ -496,7 +506,7 @@ export class EsMatch {
           }
           this.lastLeft = left;
         }
-        if (this.phaseT >= TIMING.aim + TIMING.grace) this.launch();
+        if (this.phaseT >= TIMING.aim + TIMING.grace + Math.max(0, this.lateWait)) this.launch();
         break;
       }
       case 'slide':

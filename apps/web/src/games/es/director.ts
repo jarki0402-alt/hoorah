@@ -4,9 +4,11 @@
  * and adaptive music, vibration, phone views and the final result.
  *
  * Fairness: an aim is locked on the phone and sent once; the main screen keeps taking locks for a
- * short grace after the countdown, so a slow connection never costs a shot.
+ * short grace after the countdown, so a slow connection never costs a shot. While a far-away
+ * screen watches, the launch waits a little longer for locks from far-away phones, and those count
+ * by the phone's send stamp (server time), so only locks sent in time are taken.
  *
- * Long-distance play: with a `mirror` link the display state goes out about 13 times a second
+ * Long-distance play: with a `mirror` link the display state goes out about 15 times a second
  * while skaters aim, slide or fall, and at once on every event, so a far-away main screen draws
  * the same floe (mirror.ts, replica.ts). Flourishes go through show.ts and a numbered log.
  */
@@ -34,6 +36,11 @@ import { viewFor } from './views';
 
 const HUD_MS = 100;
 const VIEW_MS = 250;
+/** Extra wait for locks from far-away phones (s), on top of the grace, while a far screen watches. */
+const LATE_LOCK_WAIT_S = 0.35;
+/** A phone's send stamp is trusted this far behind arrival and this far ahead of it (ms). */
+const STAMP_LAG_MAX_MS = 1000;
+const STAMP_LEAD_MAX_MS = 300;
 
 export type GameLike = Pick<
   HoorahGame,
@@ -216,10 +223,21 @@ export class Director {
   private onAction(from: number, a: ControllerToGame): void {
     if (a.k !== 'action' || this.ended || this.clock.paused || a.id !== 'aim') return;
     const aim = parseAim(a.value);
-    if (aim && this.m.lock(from, aim)) {
+    if (aim && this.m.lock(from, aim, this.sentPhaseT(a.at))) {
       this.drain();
       this.sendViews(false);
     }
+  }
+
+  /**
+   * Phase time a phone sent an action, from its server-clock stamp. A stamp from the future or
+   * more than a second old (a wrong clock or a lying phone) counts as sent on arrival.
+   */
+  private sentPhaseT(at: number): number {
+    const lag = this.game.now() - at;
+    const phaseT = this.m.phaseT;
+    if (!Number.isFinite(lag) || lag > STAMP_LAG_MAX_MS || lag < -STAMP_LEAD_MAX_MS) return phaseT;
+    return phaseT - Math.max(0, lag) / 1000;
   }
 
   /* ------------------------------------------------------------------ frame */
@@ -231,6 +249,7 @@ export class Director {
     const dt = this.lastFrame < 0 ? 0 : Math.min(0.1, Math.max(0, (t - this.lastFrame) / 1000));
     this.lastFrame = t;
     if (!this.ended && dt > 0) {
+      this.m.lateWait = this.mirror?.active() ? LATE_LOCK_WAIT_S : 0;
       this.m.tick(dt);
       this.drain();
     }

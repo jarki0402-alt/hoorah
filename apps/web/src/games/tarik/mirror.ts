@@ -1,15 +1,18 @@
 /**
- * Long-distance play: the display state the Host's main screen publishes about 14 times a second
+ * Long-distance play: the display state the Host's main screen publishes about 15 times a second
  * while the rope moves, and what a far-away main screen does with it. Pure (no DOM, no SDK):
  * `toMirror` packs the board, `applyMirror` validates untrusted JSON, `mirrorFacts` rebuilds the
- * HUD facts, `MirrorTimeline` interpolates the moving values a little in the past so the rope
- * glides between packets, and `TapPacer` spreads tap bursts back out over time.
+ * HUD facts, `MirrorTimeline` interpolates the moving values a little in the past (an adaptive
+ * delay, see `playout.ts`) so the rope glides between packets, `mirrorClocks` reads the countdown
+ * and the round clock at server time (what the Host judges, not the delayed stage), and
+ * `TapPacer` spreads tap bursts back out over time.
  */
 import { type Look, parseLook } from '@hoorah/protocol';
 import type { BoardFacts } from './board';
 import type { TickerLine } from './commentary';
 import type { HudMember } from './hud';
 import type { Phase, RoundReason, Team } from './logic';
+import { PlayoutClock, sinceStamp } from './playout';
 
 const PHASES: readonly Phase[] = [
   'waiting',
@@ -28,6 +31,9 @@ const MAX_HISTORY = 64;
 const MAX_SUPERS = 8;
 const NAME_MAX = 40;
 const TICKER_MAX = 200;
+/** Longest countdown step and countdown accepted from the network (ms). */
+const COUNT_STEP_MAX = 5000;
+const COUNT_LEFT_MAX = 3 * COUNT_STEP_MAX;
 
 /** A super pull the mirror should replay: match-wide sequence number, team, combo. */
 export interface SuperMark {
@@ -54,6 +60,9 @@ export interface MirrorSource {
   /** Server time the current ring cycle grid starts at, and the cycle length. */
   ringStart: number;
   ringPeriod: number;
+  /** Countdown: ms of game time until the pull starts (0 outside the countdown), and one step. */
+  countLeft: number;
+  countStep: number;
   /** The Host's screen is paused. */
   held: boolean;
 }
@@ -105,6 +114,8 @@ export interface TarikMirror {
   tk: [number, string, string] | null;
   /** Ring grid start (server ms) and period. */
   ring: [number, number];
+  /** Countdown: ms until the pull starts and one step (ms), null outside the countdown. */
+  cd: [number, number] | null;
   hold: boolean;
 }
 
@@ -161,6 +172,7 @@ export function toMirror(src: MirrorSource): TarikMirror {
     pl: [...players.values()],
     tk: tk ? [tk.key, tk.bold, tk.text] : null,
     ring: [Math.round(src.ringStart), src.ringPeriod],
+    cd: f.phase === 'countdown' ? [Math.max(0, Math.round(src.countLeft)), Math.round(src.countStep)] : null,
     hold: src.held,
   };
 }
@@ -211,6 +223,13 @@ function parseSuper(v: unknown): SuperRow | null {
   return isNat(n) && oneOf(SIDES, team) && isNat(combo) ? [n, team, combo] : null;
 }
 
+function parseCount(v: unknown): TarikMirror['cd'] | undefined {
+  if (v === null) return null;
+  const cd = parsePair(v, isNat);
+  if (!cd || cd[0] > COUNT_LEFT_MAX || cd[1] < 1 || cd[1] > COUNT_STEP_MAX) return undefined;
+  return cd;
+}
+
 function parseTicker(v: unknown): TarikMirror['tk'] | undefined {
   if (v === null) return null;
   if (!Array.isArray(v) || v.length !== 3) return undefined;
@@ -242,7 +261,8 @@ export function applyMirror(json: unknown): TarikMirror | null {
   const off = parseList(j.off, idOrNull);
   const wt = j.wt === null ? null : parseList(j.wt, idOrNull);
   const tk = parseTicker(j.tk);
-  if (!su || !pl || !off || (j.wt !== null && !wt) || tk === undefined) return null;
+  const cd = parseCount(j.cd);
+  if (!su || !pl || !off || (j.wt !== null && !wt) || tk === undefined || cd === undefined) return null;
   if (!Array.isArray(j.tm) || j.tm.length !== 2) return null;
   const red = parseList(j.tm[0], idOrNull);
   const blue = parseList(j.tm[1], idOrNull);
@@ -278,6 +298,7 @@ export function applyMirror(json: unknown): TarikMirror | null {
     pl,
     tk,
     ring,
+    cd,
     hold: j.hold,
   };
 }
@@ -289,14 +310,44 @@ export interface Sampled {
   p: number;
   force: Record<Team, number>;
   rate: Record<Team, number>;
+}
+
+/** The Host's clocks at a moment in server time (what the Host judges right then). */
+export interface Clocks {
+  /** Phase for the HUD: the countdown turns into the pull at the server moment it ends. */
+  phase: Phase;
   left: number;
   sincePull: number;
+  countValue: number;
+}
+
+/**
+ * The countdown and the round clock at server time `now`, read from the newest packet `s` (not
+ * from the delayed stage), so the far-away screen shows GO and the clock when the Host does.
+ * They stand still while the Host is paused.
+ */
+export function mirrorClocks(s: TarikMirror, now: number): Clocks {
+  const run = s.hold ? 0 : sinceStamp(s.t, now);
+  if (s.ph === 'pull')
+    return { phase: s.ph, left: Math.max(0, s.left - run), sincePull: s.sp + run, countValue: 0 };
+  if (s.ph === 'countdown' && s.cd) {
+    const rest = s.cd[0] - run;
+    if (rest > 0) {
+      const value = Math.min(3, Math.max(1, Math.ceil(rest / s.cd[1])));
+      return { phase: s.ph, left: s.left, sincePull: 0, countValue: value };
+    }
+    return { phase: 'pull', left: Math.max(0, s.left + rest), sincePull: -rest, countValue: 0 };
+  }
+  return { phase: s.ph, left: s.left, sincePull: s.sp, countValue: s.cv };
 }
 
 const HISTORY_TEAM: Record<string, Team | null> = { r: 'red', b: 'blue', '-': null };
 
-/** HUD facts from a validated state; the moving values come from `live` (interpolated). */
-export function mirrorFacts(s: TarikMirror, live: Sampled): BoardFacts {
+/**
+ * HUD facts from a validated state; the moving values come from `live` (interpolated), the
+ * countdown and clock from `clocks` (server time).
+ */
+export function mirrorFacts(s: TarikMirror, live: Sampled, clocks: Clocks): BoardFacts {
   const info = new Map(s.pl.map((row) => [row[0], row]));
   const off = new Set(s.off);
   const members = (ids: readonly number[], connected: (id: number) => boolean): HudMember[] => {
@@ -309,15 +360,15 @@ export function mirrorFacts(s: TarikMirror, live: Sampled): BoardFacts {
   };
   const shown = (id: number) => !off.has(id);
   return {
-    phase: s.ph,
+    phase: clocks.phase,
     round: s.r,
     totalRounds: s.n,
     winsNeeded: s.wn,
     wins: { red: s.w[0], blue: s.w[1] },
     suddenDeath: s.sd,
-    timeLeft: live.left,
-    sincePull: live.sincePull,
-    countValue: s.cv,
+    timeLeft: clocks.left,
+    sincePull: clocks.sincePull,
+    countValue: clocks.countValue,
     p: live.p,
     rate: { red: live.rate.red, blue: live.rate.blue },
     teams: { red: members(s.tm[0], shown), blue: members(s.tm[1], shown) },
@@ -344,13 +395,7 @@ export function mirrorRoster(s: TarikMirror, team: Team): { id: number; look: Lo
 
 /* ------------------------------------------------------------------ interpolation */
 
-/** How far behind the newest packet the mirror draws, so there is usually a packet on each side. */
-export const RENDER_DELAY_MS = 100;
 const BUFFER = 8;
-/** A packet this much later than usual means the route changed: start measuring afresh. */
-const RESYNC_MS = 600;
-/** The measured delay creeps up this much per packet, so one lucky fast packet is not kept forever. */
-const CREEP_MS = 2;
 
 /** Packets that differ in these are separate stretches: the stage snaps instead of blending. */
 const stretchKey = (s: TarikMirror): string => `${s.ph}|${s.r}|${s.hold ? 1 : 0}|${s.sd ? 1 : 0}`;
@@ -358,28 +403,31 @@ const stretchKey = (s: TarikMirror): string => `${s.ph}|${s.r}|${s.hold ? 1 : 0}
 const lerp = (a: number, b: number, k: number): number => a + (b - a) * k;
 
 /**
- * The last few packets, played back `RENDER_DELAY_MS` behind the newest one. The delay between
- * the Host making a packet and it arriving is measured (lowest seen, creeping up slowly), so
- * packets that arrive a little late still land before the playback point reaches them.
+ * The last few packets, played back a little behind server time by a `PlayoutClock`: the shortest
+ * recent trip plus a buffer that follows the packet gap and jitter, eased so a route change never
+ * makes the rope jump.
  */
 export class MirrorTimeline {
   private readonly buf: TarikMirror[] = [];
-  private offset: number | null = null;
+  private readonly clock = new PlayoutClock();
   private readonly out: Sampled = {
     p: 0,
     force: { red: 0, blue: 0 },
     rate: { red: 0, blue: 0 },
-    left: 0,
-    sincePull: 0,
   };
 
   get latest(): TarikMirror | null {
     return this.buf[this.buf.length - 1] ?? null;
   }
 
-  /** Measured Host-to-here delay in ms (null before the first packet). */
+  /** Shortest recent Host-to-here trip in ms (null before the first packet). */
   get lag(): number | null {
-    return this.offset;
+    return this.clock.lagMs;
+  }
+
+  /** How far behind server time the rope was last drawn (ms), null before the first packet. */
+  get behind(): number | null {
+    return this.clock.behindMs;
   }
 
   /**
@@ -387,9 +435,7 @@ export class MirrorTimeline {
    * packet, new phase or round, pause, sudden death, Host restarted): draw it right away.
    */
   push(s: TarikMirror, now: number): boolean {
-    const lag = now - s.t;
-    if (this.offset === null || lag < this.offset || lag - this.offset > RESYNC_MS) this.offset = lag;
-    else this.offset += Math.min(CREEP_MS, lag - this.offset);
+    this.clock.observe(s.t, now);
     const last = this.latest;
     const snap = !last || s.t <= last.t || stretchKey(s) !== stretchKey(last);
     if (snap) this.buf.length = 0;
@@ -398,14 +444,14 @@ export class MirrorTimeline {
     return snap;
   }
 
-  /** The moving values as the Host showed them `RENDER_DELAY_MS` before the newest packet. Reused object. */
+  /** The moving values as the Host showed them at the playback point. Reused object. */
   sample(now: number): Sampled {
     const out = this.out;
     const buf = this.buf;
     const first = buf[0];
     const last = buf[buf.length - 1];
     if (!first || !last) return out;
-    const at = now - (this.offset ?? 0) - RENDER_DELAY_MS;
+    const at = this.clock.drawAt(now);
     let a = last;
     let b = last;
     let k = 0;
@@ -427,8 +473,6 @@ export class MirrorTimeline {
     out.force.blue = lerp(a.f[1], b.f[1], k);
     out.rate.red = lerp(a.rt[0], b.rt[0], k);
     out.rate.blue = lerp(a.rt[1], b.rt[1], k);
-    out.left = lerp(a.left, b.left, k);
-    out.sincePull = lerp(a.sp, b.sp, k);
     return out;
   }
 }

@@ -2,21 +2,26 @@
  * Long-distance play: the display state the Host's main screen publishes for Seluncur Es and how
  * a far-away main screen turns it back into a moving floe. Pure (no DOM, no SDK, no Three.js):
  * `toMirror` reads the running match, `applyMirror` validates untrusted JSON, `MirrorTimeline`
- * buffers the states and interpolates skaters between them a little in the past, so the far-away
- * screen moves smoothly although the states arrive about 13 times a second.
+ * buffers the states and interpolates skaters between them a little in the past (an adaptive
+ * delay, see `playout.ts`), so the far-away screen moves smoothly although the states arrive about
+ * 15 times a second. `aimSecondsNow` reads the aim countdown at server time (what the Host judges
+ * locks by, not the delayed floe).
  *
  * The floe size (edge and the rim about to break) travels as state, so a far-away screen that
  * missed a state still breaks the rim and starts each round on the right floe.
  */
 import { type Fruit, isFruit, type Look, parseLook } from '@hoorah/protocol';
 import type { EndRow, FinalRow, IntroCard } from './hud';
-import { type EsMatch, PHYS, type Phase, type Vec } from './logic';
+import { type EsMatch, PHYS, type Phase, TIMING, type Vec } from './logic';
+import { PlayoutClock, sinceStamp } from './playout';
 import type { ShowEvent } from './show';
 
-/** Host: periodic state while skaters aim, slide or fall (ms); events publish at once. */
-export const PUBLISH_MS = 75;
-/** Mirror: how far behind the newest state it draws (ms), to always have two to blend. */
-export const RENDER_DELAY_MS = 100;
+/**
+ * Host: periodic state while skaters aim, slide or fall (ms), every 4th frame at 60 fps; events
+ * publish at once. Not 50: the shell holds each publish 50 ms, so closer states would merge and
+ * halve the rate.
+ */
+export const PUBLISH_MS = 60;
 /** A skater that moved further than this between two states jumped (m): no blending. */
 export const TELEPORT_M = 3;
 /** Events kept in each state: at most this many, and none older than `EVENT_KEEP_S`. */
@@ -60,7 +65,7 @@ export interface EventEntry {
   e: ShowEvent;
 }
 
-/** Compact wire shape (short keys: it crosses the network about 13 times a second). */
+/** Compact wire shape (short keys: it crosses the network about 15 times a second). */
 export interface EsMirror {
   v: 1;
   /** Server ms the Host made this state (`game.now()`). */
@@ -439,13 +444,13 @@ export function pose(a: EsMirror, b: EsMirror | null, at: number): Posed {
 }
 
 /**
- * Mirror: the states received so far and the clock to draw them by. The draw time trails the
- * newest state by the measured delivery delay plus `RENDER_DELAY_MS`; the delay estimate rises
- * quickly when packets come late and falls slowly, so jitter rarely leaves nothing to blend to.
+ * Mirror: the states received so far and the clock to draw them by: a `PlayoutClock` keeps the
+ * draw time the shortest recent trip plus a buffer (following the state gap and jitter) behind
+ * server time, eased so a route change never makes the floe jump.
  */
 export class MirrorTimeline {
   private buf: EsMirror[] = [];
-  private lag: number | null = null;
+  private readonly clock = new PlayoutClock();
 
   /** Adds a state received at server time `now`; false if it is old or a repeat. */
   push(s: EsMirror, now: number): boolean {
@@ -453,9 +458,7 @@ export class MirrorTimeline {
     if (last && s.at <= last.at) return false;
     this.buf.push(s);
     if (this.buf.length > BUFFER) this.buf.shift();
-    const sample = Math.max(0, now - s.at);
-    if (this.lag === null) this.lag = sample;
-    else this.lag += (sample - this.lag) * (sample > this.lag ? 0.3 : 0.03);
+    this.clock.observe(s.at, now);
     return true;
   }
 
@@ -463,14 +466,19 @@ export class MirrorTimeline {
     return this.buf[this.buf.length - 1] ?? null;
   }
 
-  /** Estimated delivery delay (ms), null before the first state. */
+  /** Shortest recent delivery delay (ms), null before the first state. */
   get lagMs(): number | null {
-    return this.lag;
+    return this.clock.lagMs;
+  }
+
+  /** How far behind server time the floe was last drawn (ms), null before the first state. */
+  get behindMs(): number | null {
+    return this.clock.behindMs;
   }
 
   /** Server time the screen should show at local server time `now`. */
   drawAt(now: number): number {
-    return now - (this.lag ?? 0) - RENDER_DELAY_MS;
+    return this.clock.drawAt(now);
   }
 
   sample(now: number): Posed | null {
@@ -486,4 +494,15 @@ export class MirrorTimeline {
     }
     return pose(buf[i]!, buf[i + 1] ?? null, at);
   }
+}
+
+/**
+ * Whole seconds of aiming left at server time `now`, read from the newest state `s` of the shot
+ * on screen (at least 1, as the Host shows it; 1 once the Host has moved on to the slide). Stands
+ * still while the Host is paused.
+ */
+export function aimSecondsNow(s: EsMirror, now: number): number {
+  if (s.ph !== 'aim') return 1;
+  const phaseT = s.pt + (s.pz ? 0 : sinceStamp(s.at, now) / 1000);
+  return Math.max(1, Math.ceil(TIMING.aim - phaseT - 1e-6));
 }

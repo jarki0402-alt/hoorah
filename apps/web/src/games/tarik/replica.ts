@@ -2,7 +2,8 @@
  * Long-distance play, far-away main screen: drives the same Phaser scene and HUD the Host's
  * director drives, from the published display state. No rules, brains, phones or sounds run here
  * (the shell forwards the Host's sounds). Moving values are interpolated a little in the past;
- * phase changes snap and replay the same stage flourishes the Host plays.
+ * the countdown, round clock and super ring run on server time, like on the Host; phase changes
+ * snap and replay the same stage flourishes the Host plays.
  */
 import type { HoorahGame } from '@hoorah/sdk';
 import type * as Phaser from 'phaser';
@@ -14,6 +15,7 @@ import { type Phase, TEAMS } from './logic';
 import {
   applyMirror,
   MirrorTimeline,
+  mirrorClocks,
   mirrorFacts,
   mirrorRoster,
   newSupers,
@@ -146,7 +148,8 @@ export class TarikReplica {
 
   private renderHud(s: TarikMirror, now: number): void {
     this.lastHud = now;
-    this.hud.setState(hudFrom(mirrorFacts(s, this.timeline.sample(now))));
+    // The stage plays a little in the past; the countdown and clock run on server time.
+    this.hud.setState(hudFrom(mirrorFacts(s, this.timeline.sample(now), mirrorClocks(s, now))));
   }
 
   private frame(): void {

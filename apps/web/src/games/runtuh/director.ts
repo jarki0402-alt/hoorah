@@ -6,7 +6,7 @@
  * Computer contestants (PRD 6.4): exactly one person gets three opponents that look like normal
  * players; their skill adapts silently. A dropped phone keeps playing with the same brain.
  *
- * Long-distance play: with a `mirror` link the display state goes out about 13 times a second
+ * Long-distance play: with a `mirror` link the display state goes out about 15 times a second
  * while a round runs and at once on every event; flourishes are logged for the far-away screen.
  */
 import {

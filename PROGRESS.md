@@ -68,6 +68,24 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-24 · Penyempurnaan 6 game real-time jarak jauh + kiriman ke layar teman sampai 20 kali per detik
+
+**Apa yang diubah:**
+- **`playout.ts` (sama di Tarik, Karung, Wilayah, Bom, Runtuh, Es) + tes:** jeda gambar di B menyesuaikan diri: perjalanan tercepat dari 8 paket terakhir + `clamp(1,5 × jarak paket + 2 × jitter, 60, 250)` ms, bergerak halus (maks 10% lebih cepat / 25% lebih lambat), menahan paket terbaru saat jalur langsung jatuh ke relay. Jalur langsung ±75–90 ms di belakang perjalanan tercepat.
+- **Jam server di B:** hitung mundur dan GO (Tarik `cd`, Karung `gs`, Wilayah `go`), jam ronde, sumbu Bom (`FuseClock`, panjang sumbu tetap rahasia), jadwal petak dan kartu aturan Runtuh (`sl`), hitung mundur bidik Es.
+- **Seluncur Es:** selama ada layar teman, kunci bidikan yang terlambat sampai dinilai dari stempel HP (tunggu tambahan 0,35 dtk). Tanpa layar teman sama seperti sebelumnya.
+- Kirim tiap 60 ms (±16 kali per detik) di Tarik, Karung, Bom, Runtuh, Es; Wilayah tetap 70 ms (paket bisa sampai 7 KB).
+- **Shell (`screen/store.ts`):** paket ke layar teman dulu selalu menunggu 50 ms setelah perubahan pertama, sehingga kiriman 50–60 ms tergabung menjadi ±10 kali per detik. Sekarang paket berangkat segera bila 50 ms sejak paket terakhir sudah lewat (maks 20 kali per detik). Baris tes rollout yang terlalu panjang dirapikan (biome).
+
+**File:** `apps/web/src/games/{tarik,karung,wilayah,bom,runtuh,es}/**` (playout.ts, playout.test.ts, mirror.ts, replica.ts, director.ts, tes), `apps/web/src/screen/store.ts`, `apps/web/src/screen/mirror.test.ts`.
+
+**Verifikasi:**
+- `npm run check`: lulus (11 peringatan lint lama, 138 file / 2349 tes unit, build).
+- `npx playwright test e2e/remote.spec.ts e2e/remote-games.spec.ts`: 13/13 lulus, jalur langsung A↔B "1 ms" di localhost, cuplikan A/B cocok.
+- `npm run docker:up`: lulus, `curl http://192.168.0.104:1010/health` → `{"ok":true,...}`, katalog di aset berisi 20 game `remote`, teks "Jalur langsung" ada di build.
+
+**Berikutnya / sisa:** oper bom (Bom) dan dorong (Runtuh) dinilai menurut posisi saat tekanan tiba di A, belum diputar mundur. Layar A dan B harus versi sama (field baru wajib). Belum diuji antar-kota sungguhan.
+
 ### 2026-11-24 · Jalur langsung layar A↔B (WebRTC), hitung mundur sinkron, Langkah Maut + Rusun + Makan Kerupuk (20 game jarak jauh)
 
 **Apa yang diubah** (eksekusi pemilik 2026-11-24: "paling optimal dan smooth"):
