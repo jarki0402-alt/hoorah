@@ -1,6 +1,7 @@
 /**
  * Ular Arena entry: connect to the shell, start Phaser (canvas 1.5x the stage) under a Preact HUD,
- * then hand control to the driver. Player heads are rasterized by the scene as looks show up.
+ * then hand control to the driver (or, on a far-away screen in long-distance play, to the replica
+ * that draws the Host's match). Player heads are rasterized by the scene as looks show up.
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -10,6 +11,7 @@ import { Driver } from './driver';
 import { Hud } from './hud';
 import { boxAspect } from './layout';
 import { parseRounds } from './logic';
+import { ArenaReplica } from './replica';
 import { ArenaScene } from './scene';
 import { STR } from './strings';
 import { RENDER_SCALE } from './textures';
@@ -68,19 +70,29 @@ async function boot(): Promise<void> {
   });
   await scene.ready;
   const hud = new Hud(hudHost);
-  const roundMs = parseRounds(game.settings.rounds) * 60_000;
-  const driver = new Driver(game, scene, hud, phaser, roundMs, boxAspect(stageWidth(), stageHeight()));
+  // Long-distance play: a far-away screen draws the Host's match from its published state and
+  // runs nothing of its own.
+  const control = game.isMirror
+    ? new ArenaReplica(game, scene, hud, phaser)
+    : new Driver(
+        game,
+        scene,
+        hud,
+        phaser,
+        parseRounds(game.settings.rounds) * 60_000,
+        boxAspect(stageWidth(), stageHeight()),
+      );
   const fit = (w: number, h: number) => {
     scene.setViewSize(w, h);
-    driver.setStage(w, h);
+    control.setStage(w, h);
   };
   fit(stageWidth(), stageHeight());
   onResize((h, w) => {
     phaser.scale.resize(w * RENDER_SCALE, h * RENDER_SCALE);
     fit(w, h);
   });
-  await scene.attach(driver.match);
-  driver.start();
+  if (control instanceof Driver) await scene.attach(control.match);
+  control.start();
   // Let the first frame paint before the shell removes its loading screen.
   await nextFrame();
   await nextFrame();

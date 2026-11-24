@@ -1,6 +1,7 @@
 /**
  * Nyebrang entry: connect to the shell, start Phaser (pixel art, canvas 1.5x the stage) under the
- * DOM HUD, then hand control to the driver. The scene rasterizes pixel avatars as looks show up.
+ * DOM HUD, then hand control to the driver (or, on a far-away mirror screen, to the replica). The
+ * scene rasterizes pixel avatars as looks show up.
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -8,6 +9,7 @@ import { fontsReady, mountStage } from '../common/stage';
 import { Driver } from './driver';
 import { Hud } from './hud';
 import { parseRounds } from './logic';
+import { NyebrangReplica } from './replica';
 import { NyebrangScene, RENDER_SCALE } from './scene';
 import { STR } from './strings';
 import './nyebrang.css';
@@ -71,13 +73,18 @@ async function boot(): Promise<void> {
   await scene.ready;
   scene.setViewSize(stageWidth(), stageHeight());
   const hud = new Hud(hudHost);
-  const driver = new Driver(game, scene, hud, phaser, parseRounds(game.settings.rounds), randomSeed());
   onResize((h, w) => {
     phaser.scale.resize(w * RENDER_SCALE, h * RENDER_SCALE);
     scene.setViewSize(w, h);
   });
-  if (import.meta.env.DEV) (window as unknown as { __nyebrang?: Driver }).__nyebrang = driver;
-  driver.start();
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's crossing from its published state, run nothing of our own.
+    new NyebrangReplica(game, scene, hud, phaser).start();
+  } else {
+    const driver = new Driver(game, scene, hud, phaser, parseRounds(game.settings.rounds), randomSeed());
+    if (import.meta.env.DEV) (window as unknown as { __nyebrang?: Driver }).__nyebrang = driver;
+    driver.start();
+  }
   // Let the first frame paint before the shell removes its loading screen.
   await nextFrame();
   await nextFrame();

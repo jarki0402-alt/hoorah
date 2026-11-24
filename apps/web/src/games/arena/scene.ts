@@ -3,6 +3,9 @@
  * and the twinkling fairy lights in stage px; the arena camera draws everything that moves in
  * world units, zoomed so the whole arena fits its lawn. It only renders: rules live in logic.ts.
  *
+ * It draws from a `StageModel`: the match itself on the Host, or the Host's published state on a
+ * far-away screen in long-distance play (replica.ts).
+ *
  * Performance: one texture atlas, pooled sprites per snake (outline pass, body pass, head), one
  * pooled sprite pair per seed slot. Hot paths reuse buffers and never allocate.
  */
@@ -13,7 +16,7 @@ import type { Face } from '../../shared/art/fruits';
 import { loadImage } from '../common/stage';
 import { backdropSvg, roundedRectPoints } from './backdrop';
 import { type ArenaView, BORDER, fitArena } from './layout';
-import { type ArenaMatch, colorNumber, PELLET_FREE, SEED_COLORS, type Snake } from './logic';
+import { colorNumber, PELLET_FREE, SEED_COLORS } from './logic';
 import {
   ATLAS_KEY,
   Atlas,
@@ -90,6 +93,52 @@ interface Bulb {
   speed: number;
 }
 
+/** A snake as the scene draws it (the match's `Snake`, or a far-away screen's copy). */
+export interface StageSnake {
+  readonly id: number;
+  readonly look: Look;
+  readonly colorNum: number;
+  readonly alive: boolean;
+  readonly inMatch: boolean;
+  readonly gone: boolean;
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+  /** How hard the head turns, -1..1. */
+  readonly steer: number;
+  readonly boosting: boolean;
+  readonly radius: number;
+  readonly bodyLen: number;
+}
+
+/** Seed slots as the scene reads them (struct of arrays; `gen` changes whenever a slot is refilled). */
+export interface StagePellets {
+  readonly span: number;
+  readonly x: ArrayLike<number>;
+  readonly y: ArrayLike<number>;
+  readonly r: ArrayLike<number>;
+  readonly kind: ArrayLike<number>;
+  readonly color: ArrayLike<number>;
+  readonly born: ArrayLike<number>;
+  readonly expires: ArrayLike<number>;
+  readonly gen: ArrayLike<number>;
+}
+
+/** What the scene draws: the arena, seeds and snakes at time `now` (ms). */
+export interface StageModel {
+  readonly now: number;
+  readonly width: number;
+  readonly height: number;
+  readonly corner: number;
+  readonly pellets: StagePellets;
+  /** Every snake ever seated, in a stable order (append only: the order picks each snake's layer). */
+  readonly all: readonly StageSnake[];
+  snake(id: number): StageSnake | undefined;
+  /** Body samples head first, x, y pairs every `step` units of length plus the tail end. */
+  sampleBody(s: StageSnake, step: number, out: Float32Array): number;
+  isProtected(s: StageSnake): boolean;
+}
+
 const easeOutBack = (t: number): number => {
   const c1 = 1.7;
   const c3 = c1 + 1;
@@ -106,7 +155,7 @@ export class ArenaScene extends Phaser.Scene {
   private resolveReady!: () => void;
   private atlas!: Atlas;
   private heads!: HeadAtlas;
-  private model: ArenaMatch | null = null;
+  private model: StageModel | null = null;
   private arenaCam!: Phaser.Cameras.Scene2D.Camera;
   private stageW = 1280;
   private stageH = 720;
@@ -203,7 +252,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /** Start drawing a match; resolves once the backdrop for its arena is on screen. */
-  attach(model: ArenaMatch): Promise<void> {
+  attach(model: StageModel): Promise<void> {
     this.model = model;
     this.syncWorld();
     return this.bgPending;
@@ -414,7 +463,7 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private renderPellets(m: ArenaMatch, now: number): void {
+  private renderPellets(m: StageModel, now: number): void {
     const P = m.pellets;
     for (let i = this.cores.length; i < P.span; i++) {
       const glow = this.make.image({ key: ATLAS_KEY, frame: 'glow' }, false);
@@ -463,7 +512,7 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private makeView(s: Snake, slot: number): SnakeView | null {
+  private makeView(s: StageSnake, slot: number): SnakeView | null {
     const layer = this.snakeLayers[slot];
     if (!layer) return null;
     const img = (frame: string, depth: number) => {
@@ -559,7 +608,7 @@ export class ArenaScene extends Phaser.Scene {
     v.shown = Math.min(v.shown, from);
   }
 
-  private renderSnakes(m: ArenaMatch, now: number): void {
+  private renderSnakes(m: StageModel, now: number): void {
     const all = m.all;
     for (let slot = 0; slot < all.length; slot++) {
       const s = all[slot]!;
@@ -594,7 +643,7 @@ export class ArenaScene extends Phaser.Scene {
     }
   }
 
-  private drawSnake(m: ArenaMatch, s: Snake, v: SnakeView, now: number): void {
+  private drawSnake(m: StageModel, s: StageSnake, v: SnakeView, now: number): void {
     const step = s.bodyLen > 640 ? 3 : s.bodyLen > 300 ? 2 : 1;
     const n = m.sampleBody(s, step, this.buf);
     const buf = this.buf;

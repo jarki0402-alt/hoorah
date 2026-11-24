@@ -245,6 +245,8 @@ export class World {
   readonly map: MapId;
   /** Balapan finish row, or null for Bertahan (endless). */
   readonly finish: number | null;
+  /** The seed the lanes grow from (a far-away screen rebuilds the same world from it). */
+  readonly seed: number;
   private readonly rnd: () => number;
   private readonly lanes: Lane[] = [];
   /** Plan of upcoming lane kinds (segments are planned a few rows at a time). */
@@ -254,7 +256,8 @@ export class World {
   constructor(map: MapId, seed: number, finish: number | null) {
     this.map = map;
     this.finish = finish;
-    this.rnd = mulberry(seed);
+    this.seed = seed >>> 0;
+    this.rnd = mulberry(this.seed);
   }
 
   lane(row: number): Lane {

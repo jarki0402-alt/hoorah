@@ -26,6 +26,8 @@ const CASES: { id: string; title: string; players: number; settle?: number; star
   { id: 'hantu', title: 'Hantu Tak Terlihat', players: 2, settle: 9000, start: ['Lanjut', 'Mulai'] },
   { id: 'warna', title: 'Petualangan Warna', players: 2, settle: 7000, start: ['Pilih level', 'Mulai'] },
   { id: 'dapur', title: 'Dapur Heboh', players: 2, settle: 7000, start: ['Lanjut', 'Lanjut', 'Mulai masak'] },
+  { id: 'arena', title: 'Ular Arena', players: 2, settle: 7000 },
+  { id: 'nyebrang', title: 'Nyebrang', players: 2, settle: 8000, start: ['Lanjut', 'Mulai!'] },
 ];
 const NAMES = ['Rina', 'Bayu', 'Sari', 'Dodi', 'Wulan', 'Tono'];
 

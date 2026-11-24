@@ -5,6 +5,10 @@
  *
  * Computer runners (PRD 6.4): a lone player gets three that look like normal players. With two or
  * more people there are none, but the same brain steers a runner whose phone dropped.
+ *
+ * Long-distance play: while a far-away main screen watches, the match judges swipes at the
+ * phone's stamp (`NyebrangMatch.far`) and the display state is published about 15 times a second
+ * during a run (4 otherwise, at once on events, actions and pauses), see `mirror.ts`.
  */
 import {
   lookOfFruit,
@@ -23,8 +27,10 @@ import { celebrate } from '../../shared/confetti';
 import { cpuSkill, isCpu, reportSoloResult, soloOpponents } from '../common/cpu';
 import { submitRecord } from '../common/records';
 import { fieldSkills, HopBrain, TAKEOVER_SKILL } from './brain';
+import { StageEffects } from './effects';
 import type { BoardRow, Hud, Overlay, ScoreRow } from './hud';
 import { type Dir, type NyebrangEvent, NyebrangMatch, type Runner, TUNING } from './logic';
+import { MIRROR_IDLE_MS, MIRROR_LIVE_MS, toMirror } from './mirror';
 import { buildResult, soloOutcome } from './results';
 import type { NyebrangScene, RunnerLook } from './scene';
 import { formatClock, STR } from './strings';
@@ -56,7 +62,12 @@ export class Driver {
   private banner: { overlay: Overlay; until: number } | null = null;
   private record: string | null = null;
   private readonly hornAt = new Map<number, number>();
-  private readonly pt = { x: 0, y: 0 };
+  private readonly fx: StageEffects;
+  private lastMirror = Number.NEGATIVE_INFINITY;
+  /** Server ms matching the match time `match.t` (taken each frame, and on pause and resume). */
+  private anchor: number | null = null;
+  private horns = 0;
+  private hornRow = -1;
 
   constructor(
     private readonly game: HoorahGame,
@@ -72,6 +83,7 @@ export class Driver {
       this.brains.set(cpu.id, new HopBrain(skills[i] ?? 0.5));
     });
     this.match = new NyebrangMatch({ rounds, seed, runners: this.runnerList() });
+    this.fx = new StageEffects(scene, hud);
     this.syncLooks();
   }
 
@@ -82,6 +94,11 @@ export class Driver {
       if (a.k === 'action') this.onAction(from, a.id, a.value);
     });
     this.game.on('pause', (p) => this.setPaused(p));
+    this.match.far = this.game.mirrored;
+    this.game.on('mirrors', (on) => {
+      this.match.far = on;
+      if (on) this.publishMirror(true);
+    });
     this.phaser.events.on('hidden', () => this.setPaused(true));
     this.phaser.events.on('visible', () => this.setPaused(this.game.paused));
     if (this.game.paused) this.setPaused(true);
@@ -133,11 +150,15 @@ export class Driver {
       }
     }
     this.sendViews(true);
+    this.publishMirror(true);
   }
 
   /* ------------------------------------------------------------------ input */
 
   private onInput(i: RelayedInput & { atMs: number }): void {
+    // Long-distance play: how long ago the phone sent this (server clock), for judging at its stamp.
+    const age = (this.game.now() - i.atMs) / 1000;
+    if (this.match.far) this.match.setLag(i.from, age);
     const prev = this.lastTaps.get(i.from);
     const counter = i.taps & 0xffff;
     this.lastTaps.set(i.from, counter);
@@ -151,7 +172,7 @@ export class Driver {
     else if (i.buttons & PAD_RIGHT) dir = 'right';
     else if (i.buttons & PAD_DOWN) dir = 'down';
     else if (i.buttons & (PAD_UP | PAD_ACTION)) dir = 'up';
-    if (dir) this.match.input(i.from, dir);
+    if (dir) this.match.input(i.from, dir, this.match.pressedAt(age));
   }
 
   private onAction(from: number, id: string, value: string | undefined): void {
@@ -181,7 +202,11 @@ export class Driver {
         for (let row = Math.floor(m.cam); row < m.cam + 10; row++)
           if (m.world.lane(row).kind === 'road') roads.push(row);
         const row = roads[Math.floor(Math.random() * roads.length)];
-        if (row !== undefined) this.scene.fxHorn(row);
+        if (row !== undefined) {
+          this.scene.fxHorn(row);
+          this.horns++;
+          this.hornRow = row;
+        }
         break;
       }
       default:
@@ -190,6 +215,7 @@ export class Driver {
     if (events.length) this.handle(events);
     this.updateHud(true);
     this.sendViews(true);
+    this.publishMirror(true);
   }
 
   private setPaused(p: boolean): void {
@@ -201,6 +227,9 @@ export class Driver {
       this.hurry = false;
       this.game.musicHurry(false);
     }
+    // No frames run while paused, so tell a far-away screen right here; match time goes on from now.
+    this.anchor = this.game.now();
+    this.publishMirror(true);
   }
 
   /* ------------------------------------------------------------------ frame */
@@ -215,14 +244,19 @@ export class Driver {
       if (dir) m.input(r.id, dir);
     }
     const events = m.step(deltaMs / 1000);
+    this.anchor = this.game.now();
     if (events.length) this.handle(events);
     this.clockSounds();
     this.setMusic();
-    this.drawTags();
+    this.fx.tags(m, (id) => {
+      const r = m.runner(id);
+      return r ? { name: r.name, color: this.looks.get(id)?.color ?? '#FFC928', dim: r.takeover } : null;
+    });
     this.hud.tidy();
     const now = performance.now();
     if (now - this.lastHud >= HUD_MS) this.updateHud(false);
     if (now - this.lastViews >= VIEW_MS) this.sendViews(false);
+    this.publishMirror(false);
   }
 
   private clockSounds(): void {
@@ -285,8 +319,8 @@ export class Driver {
             this.game.sfx('jump');
           }
           const r = m.runner(e.id);
-          if (r) this.scene.fxDust(r.x, r.row - (e.dir === 'up' ? 1 : e.dir === 'down' ? -1 : 0));
-          this.scene.landed(e.id);
+          if (r) this.fx.hop(e.id, r.x, StageEffects.dustRow(r.row, e.dir));
+          else this.scene.landed(e.id);
           break;
         }
         case 'bump':
@@ -295,43 +329,26 @@ export class Driver {
         case 'death': {
           const r = m.runner(e.id);
           if (!r) break;
-          if (e.kind === 'water' || e.kind === 'drift') {
-            this.scene.fxSplash(r.deathX, r.deathRow);
-            this.game.sfx('splash');
-          } else if (e.kind === 'edge') {
-            this.game.sfx('stinger-fall');
-          } else {
-            this.scene.fxHit(r.deathX, r.deathRow);
-            this.game.sfx(e.kind === 'train' ? 'explode' : 'hit');
-          }
+          if (e.kind === 'water' || e.kind === 'drift') this.game.sfx('splash');
+          else if (e.kind === 'edge') this.game.sfx('stinger-fall');
+          else this.game.sfx(e.kind === 'train' ? 'explode' : 'hit');
           if (!isCpu(e.id)) this.game.vibrate(e.id, [80, 40, 80]);
-          this.scene.toStage(r.deathX, r.deathRow + 0.6, this.pt);
-          this.hud.pop(
-            m.mode === 'balapan' ? STR.outBack(TUNING.respawnS) : STR.out,
-            this.pt.x,
-            this.pt.y,
-            'red',
-          );
+          this.fx.death(e.kind, r.deathX, r.deathRow, m.mode);
           break;
         }
         case 'respawn':
-          this.scene.respawned(e.id);
+          this.fx.respawn(e.id);
           break;
         case 'near': {
           this.game.sfx('perfect');
           if (!isCpu(e.id)) this.game.vibrate(e.id, 25);
-          this.scene.toStage(e.x, e.row + 0.7, this.pt);
-          this.hud.pop(`${STR.near} ${STR.nearPts(TUNING.nearPoints)}`, this.pt.x, this.pt.y, 'yellow');
+          this.fx.near(e.x, e.row);
           break;
         }
         case 'finish': {
           const r = m.runner(e.id);
           this.game.sfx(e.place === 1 ? 'stinger-win' : 'correct');
-          if (r) {
-            this.scene.fxFinish(r.x, r.row);
-            this.scene.toStage(r.x, r.row + 0.7, this.pt);
-            this.hud.pop(STR.finish(e.place), this.pt.x, this.pt.y, 'green');
-          }
+          if (r) this.fx.finish(e.place, r.x, r.row);
           if (!isCpu(e.id)) this.game.vibrate(e.id, [30, 30, 60]);
           break;
         }
@@ -349,6 +366,7 @@ export class Driver {
     }
     this.updateHud(true);
     this.sendViews(true);
+    this.publishMirror(true);
   }
 
   private onPhase(phase: NyebrangMatch['phase']): void {
@@ -407,28 +425,6 @@ export class Driver {
 
   /* ------------------------------------------------------------------ HUD + views */
 
-  private drawTags(): void {
-    const m = this.match;
-    if (m.phase === 'setup' || m.phase === 'roundEnd' || m.phase === 'final' || m.phase === 'ended') {
-      this.hud.tags([]);
-      return;
-    }
-    const list: { name: string; color: string; x: number; y: number; dim: boolean }[] = [];
-    for (const r of m.roster) {
-      if (r.state === 'out' || r.state === 'dead') continue;
-      const p = m.pose(r);
-      this.scene.toStage(p.x, p.row + 1.05 + p.lift * 0.55, this.pt);
-      list.push({
-        name: r.name,
-        color: this.looks.get(r.id)?.color ?? '#FFC928',
-        x: this.pt.x,
-        y: this.pt.y,
-        dim: r.takeover,
-      });
-    }
-    this.hud.tags(list);
-  }
-
   private scoreRows(): ScoreRow[] {
     return this.match.standings().map(({ r, rank }) => {
       const look = this.looks.get(r.id);
@@ -446,10 +442,8 @@ export class Driver {
     });
   }
 
-  private updateHud(force: boolean): void {
-    const now = performance.now();
-    if (!force && now - this.lastHud < HUD_MS) return;
-    this.lastHud = now;
+  /** The centre overlay the HUD shows at `now` (performance ms). */
+  private overlay(now: number): Overlay {
     const m = this.match;
     let overlay: Overlay = { kind: 'none' };
     switch (m.phase) {
@@ -496,6 +490,15 @@ export class Driver {
         if (this.banner && now < this.banner.until) overlay = this.banner.overlay;
         break;
     }
+    return overlay;
+  }
+
+  private updateHud(force: boolean): void {
+    const now = performance.now();
+    if (!force && now - this.lastHud < HUD_MS) return;
+    this.lastHud = now;
+    const m = this.match;
+    const overlay = this.overlay(now);
     const rows: BoardRow[] = m.ranking().map((r: Runner) => {
       const look = this.looks.get(r.id);
       return {
@@ -552,5 +555,27 @@ export class Driver {
       this.sent.set(p.id, key);
       this.game.setView(p.id, view);
     }
+  }
+
+  /* ------------------------------------------------------------------ long-distance play */
+
+  /** The display state for a far-away screen, throttled unless `force` is set. */
+  private publishMirror(force: boolean): void {
+    if (!this.game.mirrored || this.ended) return;
+    const now = performance.now();
+    const m = this.match;
+    if (!force && now - this.lastMirror < (m.phase === 'run' ? MIRROR_LIVE_MS : MIRROR_IDLE_MS)) return;
+    this.lastMirror = now;
+    this.game.publish(
+      toMirror({
+        server: this.anchor ?? this.game.now(),
+        match: m,
+        overlay: this.overlay(now),
+        held: this.paused,
+        look: (id) => this.looks.get(id) ?? { look: lookOfFruit('jeruk'), color: '#FFC928' },
+        horns: this.horns,
+        hornRow: this.hornRow,
+      }),
+    );
   }
 }

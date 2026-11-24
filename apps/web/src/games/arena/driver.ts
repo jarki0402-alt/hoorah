@@ -3,6 +3,9 @@
  * aware clock, phone input (joystick + held boost), computer snakes, sounds, phone views (throttled,
  * deduplicated) and the HUD state.
  *
+ * Long-distance play: while a far-away main screen watches, the stage is published to it about
+ * 16 times a second (mirror.ts), and at once on a phase change, a knock-out or a pause.
+ *
  * Computer snakes (PRD 6.4): a lone player gets four opponents that look like normal players. With
  * two or more people there are none, but the same brain steers a snake whose phone dropped until
  * it reconnects.
@@ -14,10 +17,12 @@ import { celebrate } from '../../shared/confetti';
 import { cpuSkill, isCpu, reportSoloResult, soloOpponents } from '../common/cpu';
 import { fieldSkills, Sensors, SnakeBrain, TAKEOVER_SKILL } from './brain';
 import { GameClock } from './clock';
+import { FEED_MS, GO_MS, koFlourish, leadFlourish, warningFlourish } from './effects';
 import type { BoardRow, Hud, HudState, Overlay, PodiumPlace } from './hud';
 import { type PadCommand, PadInputs } from './input';
 import { panelRect } from './layout';
 import { type ArenaEvent, ArenaMatch, type Snake } from './logic';
+import { MIRROR_MS, MirrorFeed } from './mirror';
 import { buildResult, soloOutcome } from './results';
 import { type ArenaScene, HEAD_SCALE } from './scene';
 import { formatClock, STR } from './strings';
@@ -27,8 +32,6 @@ import { viewFor } from './views';
 const SOLO_OPPONENTS = 4;
 const HUD_MS = 100;
 const VIEW_MS = 250;
-const FEED_MS = 7000;
-const GO_MS = 900;
 const WARN_SHOW_MS = 2200;
 const SFX_EAT_MS = 80;
 const SFX_BIG_MS = 120;
@@ -57,6 +60,10 @@ export class Driver {
   private warnAt = Number.NEGATIVE_INFINITY;
   private readonly lastSfx = new Map<string, number>();
   private readonly pt = { x: 0, y: 0 };
+  private readonly mirror = new MirrorFeed();
+  private lastMirror = Number.NEGATIVE_INFINITY;
+  /** Something a far-away screen should see at once happened this frame. */
+  private mirrorNow = false;
   private stageW = 1280;
   private stageH = 720;
 
@@ -81,6 +88,11 @@ export class Driver {
     this.game.on('players', () => this.onPlayers());
     this.game.on('input', (input) => this.onInput(input));
     this.game.on('pause', (paused) => this.setHold('shell', paused));
+    this.game.on('mirrors', (on) => {
+      if (!on) return;
+      this.mirror.resync();
+      this.publishMirror(this.clock.now(), true);
+    });
     this.phaser.events.on('hidden', () => this.setHold('hidden', true));
     this.phaser.events.on('visible', () => this.setHold('hidden', false));
     if (this.game.paused) this.setHold('shell', true);
@@ -99,6 +111,8 @@ export class Driver {
     this.hud.setPaused(paused);
     if (paused) this.phaser.pause();
     else this.phaser.resume();
+    // No frames run while paused, so tell a far-away screen right here.
+    this.publishMirror(this.clock.now(), true);
   }
 
   private onPlayers(): void {
@@ -169,7 +183,13 @@ export class Driver {
     }
     m.update(dt);
     const events = m.drainEvents();
-    for (let i = 0; i < events.length; i++) this.onEvent(events[i]!, t);
+    for (let i = 0; i < events.length; i++) {
+      const e = events[i]!;
+      this.mirror.note(e);
+      this.onEvent(e, t);
+    }
+    this.publishMirror(t, this.mirrorNow);
+    this.mirrorNow = false;
     if (this.ended) return;
     this.placeTags();
     if (t - this.lastViews >= VIEW_MS) {
@@ -195,16 +215,12 @@ export class Driver {
     if (this.online.has(id) && !this.takeover.has(id)) this.game.vibrate(id, pattern);
   }
 
-  private nameOf(id: number | null): string {
-    if (id === null) return '';
-    return this.match.snake(id)?.name ?? '';
-  }
-
   private onEvent(e: ArenaEvent, t: number): void {
     const m = this.match;
     switch (e.type) {
       case 'phase':
         this.lastHud = Number.NEGATIVE_INFINITY;
+        this.mirrorNow = true;
         if (e.phase === 'podium') {
           this.sfx('win');
           celebrate();
@@ -215,10 +231,12 @@ export class Driver {
         return;
       case 'count':
         this.sfx('count');
+        this.mirrorNow = true;
         this.sendViews();
         return;
       case 'go':
         this.sfx('go');
+        this.mirrorNow = true;
         this.sendViews();
         return;
       case 'spawn': {
@@ -254,22 +272,13 @@ export class Driver {
         const s = m.snake(e.id);
         if (!s) return;
         this.sfx('ding', 600);
-        this.hud.pushFeed(STR.feedLead(s.name), s.color, t);
-        const p = this.scene.toStage(s.x, s.y, this.pt);
-        this.hud.float(STR.leadFloat, p.x, p.y - 46, {
-          size: 24,
-          color: '#FFC928',
-          rise: 34,
-          duration: 1100,
-        });
-        this.scene.flashLights(s.colorNum, 700);
+        leadFlourish(this.scene, this.hud, s, t);
         return;
       }
       case 'warning':
         this.warnAt = t;
-        this.scene.urgent = true;
         this.sfx('tension');
-        this.scene.flashLights(0xff9a3d, 900);
+        warningFlourish(this.scene);
         return;
       case 'tick':
         this.sfx('count');
@@ -280,6 +289,7 @@ export class Driver {
         window.setTimeout(() => this.game.sfx('cheer'), 350);
         this.result = this.finalResult();
         this.reportSolo(this.result);
+        this.mirrorNow = true;
         this.sendViews();
         return;
     }
@@ -287,33 +297,15 @@ export class Driver {
 
   private onKo(e: Extract<ArenaEvent, { type: 'ko' }>, t: number): void {
     const m = this.match;
-    const victim = m.snake(e.id);
-    this.scene.onKo(e.id, e.x, e.y, e.len);
+    const killer = e.by === null ? undefined : m.snake(e.by);
+    koFlourish(this.scene, this.hud, e, m.snake(e.id), killer, t);
+    this.mirrorNow = true;
     this.sfx('hit', 90);
     if (e.len >= 60) this.sfx('explode', 300);
-    // A head-on knock-out has two victims at one spot: one float is enough.
-    if (e.cause !== 'head' || e.by === null || e.id < e.by) {
-      const p = this.scene.toStage(e.x, e.y, this.pt);
-      this.hud.float(STR.koFloat, p.x, p.y - 10, { size: 30, color: victim?.color ?? '#FFFFFF', rise: 46 });
-    }
     this.buzz(e.id, [80, 40, 160]);
-    if (e.cause === 'body' && e.by !== null) {
-      const killer = m.snake(e.by);
-      if (killer) {
-        if (killer.alive) {
-          const k = this.scene.toStage(killer.x, killer.y, this.pt);
-          this.hud.float(STR.koPlus, k.x, k.y - 40, { size: 24, color: '#FFC928', rise: 36, duration: 1000 });
-        }
-        this.hud.pushFeed(STR.feedKo(killer.name, victim?.name ?? ''), killer.color, t);
-        this.buzz(killer.id, 40);
-        this.sendView(killer.id);
-      }
-    } else if (e.cause === 'head') {
-      if (e.by === null || e.id < e.by) {
-        this.hud.pushFeed(STR.feedHead(victim?.name ?? '', this.nameOf(e.by)), victim?.color ?? '#FFFFFF', t);
-      }
-    } else if (victim) {
-      this.hud.pushFeed(STR.feedWall(victim.name), victim.color, t);
+    if (e.cause === 'body' && killer) {
+      this.buzz(killer.id, 40);
+      this.sendView(killer.id);
     }
     this.sendView(e.id);
   }
@@ -456,6 +448,23 @@ export class Driver {
       panel: panelRect(this.stageW, this.stageH),
       arena: { x: v.x, y: v.y, w: v.w, h: v.h },
     };
+  }
+
+  /* ------------------------------------------------------------------ long-distance play */
+
+  /** The stage for far-away screens, throttled unless `now` is set. */
+  private publishMirror(t: number, now: boolean): void {
+    if (!this.game.mirrored) return;
+    if (!now && t - this.lastMirror < MIRROR_MS) return;
+    this.lastMirror = t;
+    this.game.publish(
+      this.mirror.pack({
+        match: this.match,
+        server: this.game.now(),
+        overlay: this.overlay(t),
+        held: this.clock.paused,
+      }),
+    );
   }
 
   setStage(w: number, h: number): void {

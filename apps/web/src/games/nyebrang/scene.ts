@@ -2,7 +2,8 @@
  * The Phaser world of Nyebrang. World units are art pixels (16 per cell); the camera zooms them
  * up with nearest-neighbour filtering so the pixel art stays crisp. It only renders: rules live
  * in logic.ts and lanes.ts. Everything is pooled: lane strips, vehicles, props and effects are
- * reused every frame, and hot paths never allocate.
+ * reused every frame, and hot paths never allocate. It draws a `StageModel`: the Host's match,
+ * or on a far-away main screen the replica rebuilt from the Host's published state.
  */
 import { type Look, lookOfFruit, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
@@ -19,7 +20,7 @@ import {
   X_MAX,
   X_MIN,
 } from './lanes';
-import type { NyebrangMatch, Runner } from './logic';
+import type { DeathKind, Phase, Posed, Runner } from './logic';
 import { AvatarBank, buildTextures, CELL, laneKey, propKey, textureFor } from './textures';
 
 const colorNumber = (hex: string): number => Number.parseInt(hex.replace('#', ''), 16) || 0xffc928;
@@ -53,6 +54,30 @@ export interface RunnerLook {
   color: string;
 }
 
+/** What the scene reads of a runner. */
+export interface StageRunner extends Posed {
+  readonly id: number;
+  readonly state: Runner['state'];
+  readonly deaths: number;
+  readonly deadAt: number;
+  readonly deathX: number;
+  readonly deathRow: number;
+  readonly death: DeathKind | null;
+}
+
+/** What the scene draws: the match on the Host's screen, the replica on a far-away one. */
+export interface StageModel {
+  readonly map: MapId;
+  /** Bottom edge row of the camera. */
+  readonly cam: number;
+  /** Match time (s) the lanes are drawn at. */
+  readonly t: number;
+  readonly phase: Phase;
+  readonly world: { lane(row: number): Lane };
+  readonly roster: readonly StageRunner[];
+  pose(r: Posed): { x: number; row: number; lift: number };
+}
+
 /** Shown for a runner whose player info is not known yet. */
 const FALLBACK_LOOK: Look = lookOfFruit('jeruk');
 
@@ -71,7 +96,7 @@ export class NyebrangScene extends Phaser.Scene {
   readonly ready: Promise<void>;
   private resolveReady!: () => void;
   private avatars!: AvatarBank;
-  private model: NyebrangMatch | null = null;
+  private model: StageModel | null = null;
   private looks = new Map<number, RunnerLook>();
   private stageW = 1280;
   private stageH = 720;
@@ -139,7 +164,7 @@ export class NyebrangScene extends Phaser.Scene {
     this.draw();
   }
 
-  attach(model: NyebrangMatch, looks: Map<number, RunnerLook>): void {
+  attach(model: StageModel, looks: Map<number, RunnerLook>): void {
     this.model = model;
     this.looks = looks;
   }
@@ -285,7 +310,7 @@ export class NyebrangScene extends Phaser.Scene {
     }
   }
 
-  private drawLanes(m: NyebrangMatch, lo: number, hi: number): void {
+  private drawLanes(m: StageModel, lo: number, hi: number): void {
     const t = m.t;
     for (let i = 0; i < this.slots.length; i++) {
       const slot = this.slots[i]!;
@@ -323,7 +348,7 @@ export class NyebrangScene extends Phaser.Scene {
     return o;
   }
 
-  private drawItems(m: NyebrangMatch, lo: number, hi: number): void {
+  private drawItems(m: StageModel, lo: number, hi: number): void {
     const t = m.t;
     let ni = 0;
     let ns = 0;
@@ -439,7 +464,7 @@ export class NyebrangScene extends Phaser.Scene {
     }
   }
 
-  private viewFor(r: Runner): RunnerView {
+  private viewFor(r: StageRunner): RunnerView {
     let v = this.runners.get(r.id);
     if (!v) {
       const look = this.looks.get(r.id);
@@ -468,7 +493,7 @@ export class NyebrangScene extends Phaser.Scene {
     }
   }
 
-  private drawRunners(m: NyebrangMatch): void {
+  private drawRunners(m: StageModel): void {
     const now = this.time.now;
     const seen = new Set<number>();
     for (const r of m.roster) {
@@ -549,7 +574,7 @@ export class NyebrangScene extends Phaser.Scene {
     }
   }
 
-  private drawDarkness(m: NyebrangMatch, lo: number, hi: number): void {
+  private drawDarkness(m: StageModel, lo: number, hi: number): void {
     if (this.map !== 'malam' || m.phase === 'setup') {
       this.dark?.veil.setVisible(false);
       return;

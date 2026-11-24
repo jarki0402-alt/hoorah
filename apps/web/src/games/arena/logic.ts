@@ -141,7 +141,7 @@ export type ArenaEvent =
   | { type: 'count'; value: number }
   | { type: 'go' }
   | { type: 'spawn'; id: number; x: number; y: number; first: boolean }
-  | { type: 'eat'; id: number; x: number; y: number; value: number; color: number }
+  | { type: 'eat'; id: number; slot: number; x: number; y: number; value: number; color: number }
   | { type: 'boost'; id: number; on: boolean }
   | { type: 'ko'; id: number; by: number | null; cause: KoCause; x: number; y: number; len: number }
   | { type: 'removed'; id: number }
@@ -209,6 +209,8 @@ export class Snake {
   readonly trailY = new Float32Array(TRAIL_CAP);
   trailHead = 0;
   trailCount = 0;
+  /** Trail points laid over the whole match (never reset): the newest point's number. */
+  serial = 0;
   /** Distance from the head to the newest trail point (0 ≤ gap < spacing). */
   gap = 0;
   x = 0;
@@ -446,6 +448,15 @@ export class ArenaMatch {
   timeLeft(): number {
     if (this.phase === 'intro' || this.phase === 'countdown') return this.roundMs;
     if (this.phase === 'play') return Math.max(0, this.roundMs - (this.now - this.playStart));
+    return 0;
+  }
+
+  /** Ms until play starts (intro and countdown), 0 once it has. */
+  startsIn(): number {
+    const t = this.tuning;
+    const since = this.now - this.phaseAt;
+    if (this.phase === 'intro') return Math.max(0, t.introMs - since) + 3 * t.countMs;
+    if (this.phase === 'countdown') return Math.max(0, 3 * t.countMs - since);
     return 0;
   }
 
@@ -948,6 +959,7 @@ export class ArenaMatch {
     s.trailHead = (s.trailHead + 1) & TRAIL_MASK;
     s.trailX[s.trailHead] = x;
     s.trailY[s.trailHead] = y;
+    s.serial++;
     if (s.trailCount < TRAIL_CAP) s.trailCount++;
   }
 
@@ -1211,7 +1223,7 @@ export class ArenaMatch {
         best.len = Math.min(t.maxLen, best.len + value * t.foodLen);
         best.eaten++;
         if (best.len > best.best) best.best = best.len;
-        this.emit({ type: 'eat', id: best.id, x: px, y: py, value, color: P.color[i]! });
+        this.emit({ type: 'eat', id: best.id, slot: i, x: px, y: py, value, color: P.color[i]! });
         P.remove(i);
         continue;
       }

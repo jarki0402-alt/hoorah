@@ -4,6 +4,13 @@
  * water or drifts off with a log is out: back in 3 seconds in Balapan, out for the ronde in
  * Bertahan. Time is seconds of game time, advanced only by `step` (the driver stops it while
  * paused). The world itself is closed-form (lanes.ts), so nothing here depends on frame rate.
+ *
+ * Long-distance play (`far`, on only while a far-away main screen watches): a phone there sees the
+ * same traffic at the same server time, but its swipes reach this screen 0.1-0.4 s late. A hop is
+ * then judged from the moment it was swiped (the phone's stamp, bounded by `FAR`): the runner is
+ * replayed from that moment to now against the closed-form traffic. A runner whose phone lags
+ * gets a hit by a vehicle held open for about that lag, so a hop swiped just before the hit
+ * still saves it. With `far` off nothing of this runs and judging is exactly the local one.
  */
 import {
   COLS,
@@ -57,6 +64,23 @@ export const TUNING = {
   nearPoints: 2,
 } as const;
 
+/** Long-distance judging bounds (seconds), see the file comment. */
+export const FAR = {
+  /** Stamps older than this are judged on arrival. */
+  maxAge: 1,
+  /** Stamps up to this far ahead of now count as now; further ahead, on arrival. */
+  maxAhead: 0.3,
+  /** A runner whose phone lags less than this is judged like a local one. */
+  rescueFrom: 0.06,
+  /** Longest a hit stays open, and the margin on top of the measured lag. */
+  rescueMax: 0.45,
+  rescueExtra: 0.03,
+  /** Replay step from a stamp to now. */
+  replayStep: 1 / 120,
+  /** Easing of the measured lag per input when it goes down. */
+  lagGain: 0.1,
+} as const;
+
 /** Bonus by place: Balapan finish order, Bertahan survival order. */
 export const PLACE_BONUS = [25, 18, 12, 8, 6, 4, 2, 1] as const;
 
@@ -75,6 +99,17 @@ export interface Hop {
   dir: Dir;
 }
 
+/** A hit held open for a lagging phone (long-distance play): confirmed at `until`. */
+export interface PendingHit {
+  kind: DeathKind;
+  /** Match time of the hit. */
+  at: number;
+  until: number;
+}
+
+/** What `pose` needs of a runner. */
+export type Posed = Pick<Runner, 'x' | 'row' | 'hop'>;
+
 export interface Runner {
   id: number;
   name: string;
@@ -89,6 +124,11 @@ export interface Runner {
   facing: Dir;
   /** River lanes: riding a log or pad (x follows it). */
   riding: boolean;
+  /** Match time the runner last became free to hop (landed, respawned). */
+  freeAt: number;
+  /** Long-distance play: a hit not confirmed yet, and the phone's measured lag (s). */
+  pending: PendingHit | null;
+  lag: number;
   state: 'run' | 'dead' | 'out' | 'done';
   deadAt: number;
   death: DeathKind | null;
@@ -172,6 +212,17 @@ export function mapsFor(pick: MapPick, rounds: number, rnd: () => number): MapId
   return Array.from({ length: rounds }, (_, i) => order[i % order.length]!);
 }
 
+/** Float position of a runner at match time `t` (mid-hop interpolated) and the hop height 0..1. */
+export function poseAt(r: Posed, t: number): { x: number; row: number; lift: number } {
+  if (!r.hop) return { x: r.x, row: r.row, lift: 0 };
+  const p = Math.max(0, Math.min(1, (t - r.hop.t0) / TUNING.hop));
+  return {
+    x: r.hop.fx + (r.hop.tx - r.hop.fx) * p,
+    row: r.hop.fr + (r.hop.tr - r.hop.fr) * p,
+    lift: Math.sin(p * Math.PI),
+  };
+}
+
 export class NyebrangMatch {
   readonly rounds: number;
   phase: Phase = 'setup';
@@ -190,6 +241,8 @@ export class NyebrangMatch {
   camSpeed = 0;
   level = 1;
   places = 0;
+  /** Long-distance judging (see the file comment); the driver sets it while far screens watch. */
+  far = false;
   private phaseT = 0;
   private readonly seed: number;
   private readonly rnd: () => number;
@@ -258,15 +311,14 @@ export class NyebrangMatch {
     return Math.max(0, len - (this.t - this.phaseT));
   }
 
+  /** Seed of the current ronde's world. */
+  get worldSeed(): number {
+    return this.world.seed;
+  }
+
   /** Float position of a runner (mid-hop interpolated) and the hop height 0..1. */
-  pose(r: Runner): { x: number; row: number; lift: number } {
-    if (!r.hop) return { x: r.x, row: r.row, lift: 0 };
-    const p = Math.min(1, (this.t - r.hop.t0) / TUNING.hop);
-    return {
-      x: r.hop.fx + (r.hop.tx - r.hop.fx) * p,
-      row: r.hop.fr + (r.hop.tr - r.hop.fr) * p,
-      lift: Math.sin(p * Math.PI),
-    };
+  pose(r: Posed, at = this.t): { x: number; row: number; lift: number } {
+    return poseAt(r, at);
   }
 
   /** Runners still in the ronde (Bertahan) or not finished (Balapan). */
@@ -321,6 +373,9 @@ export class NyebrangMatch {
         queue: [],
         facing: 'up',
         riding: false,
+        freeAt: 0,
+        pending: null,
+        lag: 0,
         state: this.phase === 'run' || this.phase === 'count' ? 'out' : 'run',
         deadAt: 0,
         death: null,
@@ -389,15 +444,48 @@ export class NyebrangMatch {
 
   /* ------------------------------------------------------------------ input */
 
-  /** Queue a hop (phones and computer runners). */
-  input(id: number, dir: Dir): void {
+  /**
+   * Queue a hop (phones and computer runners). `at` is the match time it was swiped (from
+   * `pressedAt`); it only counts while `far` is on, otherwise the hop is judged on arrival.
+   */
+  input(id: number, dir: Dir, at?: number): void {
     const r = this.runners.get(id);
     if (!r || this.phase !== 'run' || r.state !== 'run') return;
+    const start = this.far && at !== undefined ? Math.max(at, r.freeAt, this.t - this.runT) : this.t;
+    if (r.pending) {
+      // A hit is waiting for this phone: a hop swiped before it happened still gets away.
+      const hit = r.pending;
+      if (start >= hit.at) return;
+      r.pending = null;
+      if (!this.retroHop(r, dir, start)) r.pending = hit;
+      return;
+    }
     if (!r.hop) {
-      this.tryHop(r, dir);
+      if (start < this.t) this.retroHop(r, dir, start);
+      else this.tryHop(r, dir, this.t);
       return;
     }
     if (r.queue.length < TUNING.queue) r.queue.push(dir);
+  }
+
+  /**
+   * Match time of a swipe made `ageS` seconds ago (phone stamp against server time), or undefined
+   * to judge it on arrival: always when `far` is off, or when the stamp is out of `FAR` bounds.
+   */
+  pressedAt(ageS: number): number | undefined {
+    if (!this.far || !Number.isFinite(ageS) || ageS > FAR.maxAge || ageS < -FAR.maxAhead) return undefined;
+    return this.t - Math.max(0, ageS);
+  }
+
+  /**
+   * Long-distance play: how late this runner's swipes arrive (s). Rises at once (a hit must stay
+   * open long enough for the very next swipe), eases down slowly; stale frames do not count.
+   */
+  setLag(id: number, ageS: number): void {
+    const r = this.runners.get(id);
+    if (!r || !Number.isFinite(ageS) || ageS > FAR.maxAge) return;
+    const v = Math.max(0, ageS);
+    r.lag = v > r.lag ? v : r.lag + (v - r.lag) * FAR.lagGain;
   }
 
   /* ------------------------------------------------------------------ clock */
@@ -464,6 +552,8 @@ export class NyebrangMatch {
       r.hop = null;
       r.queue = [];
       r.riding = false;
+      r.pending = null;
+      r.freeAt = 0;
       r.death = null;
       r.place = 0;
       r.outAt = 0;
@@ -497,7 +587,7 @@ export class NyebrangMatch {
   private runStep(dt: number): void {
     this.runT += dt;
     this.moveCamera(dt);
-    for (const r of this.runners.values()) this.updateRunner(r, dt);
+    for (const r of this.runners.values()) this.updateRunner(r, dt, this.t, true);
     this.announceTrains();
     if (!this.last10 && this.timeCap - this.runT <= 10) {
       this.last10 = true;
@@ -524,54 +614,96 @@ export class NyebrangMatch {
     this.cam = Math.min(stop, this.cam + this.camSpeed * dt);
   }
 
-  private updateRunner(r: Runner, dt: number): void {
+  /**
+   * One runner from `now - dt` to `now`. `live` is the frame step; a replay from a phone stamp
+   * (`retroHop`) leaves out the camera edge (it only knows the camera of now).
+   */
+  private updateRunner(r: Runner, dt: number, now: number, live: boolean): void {
     if (r.state === 'dead') {
-      if (this.mode === 'balapan' && this.t - r.deadAt >= TUNING.respawnS) this.respawn(r);
+      if (this.mode === 'balapan' && now - r.deadAt >= TUNING.respawnS) this.respawn(r);
       return;
     }
     if (r.state !== 'run') return;
+    if (r.pending) {
+      if (now >= r.pending.until) this.kill(r, r.pending.kind, r.pending.at);
+      return;
+    }
     if (r.hop) {
-      if (this.t - r.hop.t0 >= TUNING.hop) this.land(r);
+      if (now - r.hop.t0 >= TUNING.hop) this.land(r, now);
     } else if (r.riding) {
       const lane = this.world.lane(r.row);
       r.x += lane.speed * dt;
       if (r.x < -0.45 || r.x > COLS - 0.55) {
-        this.kill(r, 'drift');
+        this.kill(r, 'drift', now);
         return;
       }
     }
     if (r.state !== 'run') return;
-    const pose = this.pose(r);
-    const p = r.hop ? Math.min(1, (this.t - r.hop.t0) / TUNING.hop) : 1;
+    const pose = this.pose(r, now);
+    const p = r.hop ? Math.min(1, (now - r.hop.t0) / TUNING.hop) : 1;
     const row = r.hop ? (p < 0.5 ? r.hop.fr : r.hop.tr) : r.row;
     const lane = this.world.lane(row);
-    const hit = hitAt(lane, this.t, pose.x, this.buf);
+    const hit = hitAt(lane, now, pose.x, this.buf);
     if (hit) {
-      this.kill(r, lane.kind === 'rail' ? 'train' : 'hit');
+      const kind: DeathKind = lane.kind === 'rail' ? 'train' : 'hit';
+      // Standing still (also in a replay, waiting for the phone's next swipe to arrive).
+      const hold = r.hop ? 0 : this.rescueFor(r);
+      if (hold > 0) {
+        r.pending = { kind, at: now, until: now + hold };
+        r.queue = [];
+      } else this.kill(r, kind, now);
       return;
     }
-    if (pose.row < this.cam - 0.5) {
-      this.kill(r, 'edge');
+    if (live && pose.row < this.cam - 0.5) {
+      this.kill(r, 'edge', now);
       return;
     }
-    this.checkNear(r, lane, pose.x, pose.row);
+    this.checkNear(r, lane, pose.x, pose.row, now);
   }
 
-  private checkNear(r: Runner, lane: Lane, x: number, row: number): void {
+  /** Seconds a hit on this standing runner stays open for a late swipe (0: decide now). */
+  private rescueFor(r: Runner): number {
+    if (!this.far || r.cpu || r.takeover || r.lag < FAR.rescueFrom) return 0;
+    return Math.min(FAR.rescueMax, r.lag + FAR.rescueExtra);
+  }
+
+  /**
+   * A hop swiped at match time `t0` (before now) by a standing runner: start it there and replay
+   * the runner up to now. False (and nothing changed) when the hop is blocked.
+   */
+  private retroHop(r: Runner, dir: Dir, t0: number): boolean {
+    const x = r.x;
+    // Riding a log: where it was when the swipe happened.
+    if (r.riding) r.x -= this.world.lane(r.row).speed * (this.t - t0);
+    this.tryHop(r, dir, t0);
+    if (!r.hop) {
+      r.x = x;
+      return false;
+    }
+    let at = t0;
+    while (at < this.t && r.state === 'run') {
+      const dt = Math.min(FAR.replayStep, this.t - at);
+      at += dt;
+      this.updateRunner(r, dt, at, false);
+    }
+    return true;
+  }
+
+  private checkNear(r: Runner, lane: Lane, x: number, row: number, now: number): void {
     if (lane.kind !== 'road' && lane.kind !== 'rail') return;
-    const { gap, key } = gapAt(lane, this.t, x, this.buf);
+    const { gap, key } = gapAt(lane, now, x, this.buf);
     if (gap > TUNING.nearGap || key < 0) return;
     const id = `${lane.row}:${key}`;
-    if (r.nearKeys.has(id) || this.t - r.lastNear < TUNING.nearCooldown) return;
+    if (r.nearKeys.has(id) || now - r.lastNear < TUNING.nearCooldown) return;
     r.nearKeys.add(id);
     if (r.nearKeys.size > 40) r.nearKeys.delete(r.nearKeys.values().next().value as string);
-    r.lastNear = this.t;
+    r.lastNear = now;
     r.near++;
     r.total.near++;
     this.events.push({ type: 'near', id: r.id, x, row });
   }
 
-  private tryHop(r: Runner, dir: Dir): void {
+  private tryHop(r: Runner, dir: Dir, now: number): void {
     r.facing = dir;
     const fromLane = this.world.lane(r.row);
     let tr = r.row;
@@ -596,7 +728,7 @@ export class NyebrangMatch {
         return;
       }
     }
-    r.hop = { fx: r.x, fr: r.row, tx, tr, t0: this.t, dir };
+    r.hop = { fx: r.x, fr: r.row, tx, tr, t0: now, dir };
     r.riding = false;
     r.hops++;
     r.total.hops++;
@@ -613,16 +745,17 @@ export class NyebrangMatch {
     this.events.push({ type: 'hop', id: r.id, dir, river: to.kind === 'river' });
   }
 
-  private land(r: Runner): void {
+  private land(r: Runner, now: number): void {
     const hop = r.hop!;
     r.hop = null;
     r.x = hop.tx;
     r.row = hop.tr;
+    r.freeAt = now;
     const lane = this.world.lane(r.row);
     if (lane.kind === 'river') {
-      const plat = platformAt(lane, this.t, r.x, this.buf);
+      const plat = platformAt(lane, now, r.x, this.buf);
       if (!plat) {
-        this.kill(r, 'water');
+        this.kill(r, 'water', now);
         return;
       }
       // Settle on the nearest slot of the log (pads: their centre).
@@ -630,7 +763,7 @@ export class NyebrangMatch {
       r.x = plat.left + slot + 0.5;
       r.riding = true;
       if (r.x < -0.45 || r.x > COLS - 0.55) {
-        this.kill(r, 'drift');
+        this.kill(r, 'drift', now);
         return;
       }
     }
@@ -643,25 +776,26 @@ export class NyebrangMatch {
       return;
     }
     const next = r.queue.shift();
-    if (next) this.tryHop(r, next);
+    if (next) this.tryHop(r, next, now);
   }
 
-  private kill(r: Runner, kind: DeathKind): void {
-    const pose = this.pose(r);
+  private kill(r: Runner, kind: DeathKind, now: number): void {
+    const pose = this.pose(r, now);
     r.deathX = pose.x;
     r.deathRow = pose.row;
     r.hop = null;
     r.queue = [];
     r.riding = false;
+    r.pending = null;
     r.death = kind;
-    r.deadAt = this.t;
+    r.deadAt = now;
     r.deaths++;
     r.total.deaths++;
     if (this.mode === 'balapan') {
       r.state = 'dead';
     } else {
       r.state = 'out';
-      r.outAt = this.t;
+      r.outAt = now;
     }
     this.events.push({ type: 'death', id: r.id, kind });
   }
@@ -680,6 +814,7 @@ export class NyebrangMatch {
           r.row = row;
           r.state = 'run';
           r.death = null;
+          r.freeAt = this.t;
           r.nearKeys.clear();
           this.events.push({ type: 'respawn', id: r.id });
           return;

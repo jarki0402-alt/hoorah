@@ -68,6 +68,26 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-24 · Main bareng teman jauh: Satu Tali, Hantu, Petualangan Warna, Dapur Heboh, Ular Arena, Nyebrang (26 game jarak jauh)
+
+**Apa yang diubah** (permintaan pemilik "game barunya sekalian"; layak setelah jalur langsung A↔B dan playout adaptif):
+- **Satu Tali** (`6e864dc`): lintasan dibangun ulang dari rute + seed + bagian, pendaki dan karung pasir diinterpolasi, tali dari posisi yang digambar + kendur per mata tali, jam tim dari jam server.
+- **Hantu Tak Terlihat** (`896d77e`): hanya yang tergambar di layar A yang dikirim; hantu keluar hanya saat kena senter, kunang-kunang, atau terungkap (`ghostShown`, tes kebocoran). **Bug lama diperbaiki:** kartu bagi peran selalu menaruh hantu manusia di urutan terakhir (membocorkan peran rahasia); sekarang diacak (`shuffled`, + tes).
+- **Petualangan Warna** (`896d77e`): level dibangun lokal di B dan diposisikan ke titik putar; `hudOf` satu sumber HUD untuk A dan B.
+- **Dapur Heboh** (`d30f1c5`): dapur dari id, juru masak/stasiun/lemparan/tiket dari snapshot ringkas, timer dan kesabaran tiket dari jam server, `panels.ts` untuk HUD kedua layar (latihan ikut).
+- **Ular Arena**: titik jejak bernomor (24 terbaru per paket + penyegaran bergilir ±2 dtk), biji sebagai perubahan bernomor + penyegaran kolam; ±2,1 KB median untuk 8 pemain.
+- **Nyebrang**: lalu lintas tidak dikirim, B membangun dunia yang sama dari seed dan menghitung kendaraan/kayu/kereta dari jam server. Selama ada layar teman, lompatan pemain jauh dinilai pada stempel HP (diputar ulang terhadap lalu lintas), tabrakan ditahan sebentar sesuai jeda HP (maks 0,45 dtk). Tanpa layar teman identik dengan sebelumnya (tes 600 frame).
+- `e2e/remote-games.spec.ts`: `start` bisa beberapa tombol berurutan; kasus untuk keenam game.
+
+**File:** `apps/web/src/games/{tali,hantu,warna,dapur,arena,nyebrang}/**`, `apps/web/src/shared/games.ts`, `apps/web/src/screen/mirror.test.ts`, `e2e/remote-games.spec.ts`.
+
+**Verifikasi:**
+- `npm run check`: lulus (11 peringatan lint lama, 151 file / 2502 tes unit, build).
+- `npx playwright test e2e/remote.spec.ts e2e/remote-games.spec.ts`: 19/19 lulus (semua game jarak jauh yang punya kasus + alur dasar), jalur langsung "2 ms". Cuplikan A/B cocok untuk keenam game baru.
+- `npm run docker:up`: lulus, `curl http://192.168.0.104:1010/health` → `{"ok":true,...}`, katalog di aset berisi 26 game `remote`.
+
+**Berikutnya / sisa:** belum bisa jarak jauh: Bajaj Rush, Lari Terus, Obby, Jago Masak (3D cepat, pemilik menerima). Gerakan joystick pemain jauh tetap tidak bisa dikompensasi (Ular Arena, Wilayah, Dapur, Warna, Hantu, Satu Tali): enaknya tergantung jalur HP↔layar A langsung atau lewat server. Belum diuji antar-kota sungguhan.
+
 ### 2026-11-24 · Penyempurnaan 6 game real-time jarak jauh + kiriman ke layar teman sampai 20 kali per detik
 
 **Apa yang diubah:**
