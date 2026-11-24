@@ -55,3 +55,33 @@ export function mouthY(unit: number): number {
 export function kerupukRestY(unit: number): number {
   return mouthY(unit) - KERUPUK_R * unit * 0.55;
 }
+
+/** Widest name plate (stage px). */
+export const PLATE_MAX_W = 230;
+const POP_STACK_MS = 700;
+
+/**
+ * Where floating words go: above a lane's kerupuk, a second word for the same lane while the
+ * first is still rising goes above it (three levels).
+ */
+export class PopStack {
+  private readonly last = new Map<number, { at: number; n: number }>();
+
+  /** Stage px for a word over lane `index` of `count` at time `now`; origin = stage px of world (0, 0). */
+  place(
+    id: number,
+    index: number,
+    count: number,
+    now: number,
+    origin: { x: number; y: number },
+  ): { x: number; y: number } {
+    const lay = laneLayout(count);
+    const prev = this.last.get(id);
+    const stack = prev && now - prev.at < POP_STACK_MS ? prev.n + 1 : 0;
+    this.last.set(id, { at: now, n: stack % 3 });
+    return {
+      x: origin.x + (lay.xs[index] ?? WORLD_W / 2),
+      y: origin.y + kerupukRestY(lay.unit) - (46 + (stack % 3) * 30) * lay.unit,
+    };
+  }
+}

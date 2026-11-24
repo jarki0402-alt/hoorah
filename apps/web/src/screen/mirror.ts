@@ -56,6 +56,28 @@ export interface ShellSnap {
    * starts with exactly these: its own player count may differ (Ular Tangga sizes its board by them).
    */
   settings: RunSettings | null;
+  /** The shell countdown running now (results, Mode Pesta, tutorial, ad break), in server time. */
+  timer: ShellTimer | null;
+}
+
+/** Shell pages that count down by themselves on the Host's main screen. */
+export const TIMER_IDS = ['results', 'party', 'tutorial', 'ad'] as const;
+export type TimerId = (typeof TIMER_IDS)[number];
+
+/**
+ * A countdown as the Host's main screen runs it: `end` is its deadline in server time (the synced
+ * clock), so a far-away screen shows exactly the same seconds left; `step` is the tutorial step
+ * (0 elsewhere).
+ */
+export interface ShellTimer {
+  id: TimerId;
+  step: number;
+  end: number;
+}
+
+/** Whole seconds left until `end` (server ms) at server time `now`, never below 0. */
+export function secondsLeft(end: number, now: number): number {
+  return Math.max(0, Math.ceil((end - now) / 1000));
 }
 
 export type GameSettings = Record<string, string | number | boolean>;
@@ -75,6 +97,13 @@ export interface MirrorPacket {
   s?: ShellSnap;
   g?: GameSnap;
   fx?: string[];
+  /**
+   * The Host's page session (`e`) and this packet's number in it (`n`, from 1). Packets travel two
+   * paths (relay, direct link) and the game part an unordered channel: a far-away screen drops
+   * parts older than the newest it applied (PacketOrder).
+   */
+  e?: string;
+  n?: number;
 }
 
 /** Sounds one packet may carry (more in 50 ms is noise anyway). */
@@ -216,6 +245,8 @@ export function parseShellSnap(v: unknown): ShellSnap | null {
   const recent = gameList(v.recent, 8);
   const music = parseMusic(v.music);
   const settings = nullable(v.settings, parseRunSettings);
+  // Missing in packets from before shell countdowns were shared: none running.
+  const timer = v.timer === undefined ? null : nullable(v.timer, parseTimer);
   if (
     home === undefined ||
     wheel === undefined ||
@@ -226,6 +257,7 @@ export function parseShellSnap(v: unknown): ShellSnap | null {
     offer === undefined ||
     adBreak === undefined ||
     settings === undefined ||
+    timer === undefined ||
     !recent ||
     !music
   ) {
@@ -249,6 +281,7 @@ export function parseShellSnap(v: unknown): ShellSnap | null {
     recent,
     music,
     settings,
+    timer,
   };
 }
 
@@ -283,5 +316,97 @@ export function parseMirrorPacket(v: unknown): MirrorPacket | null {
       .slice(0, MAX_FX);
     if (fx.length > 0) out.fx = fx;
   }
+  if (typeof v.e === 'string' && /^[a-z0-9]{1,16}$/.test(v.e) && isInt(v.n, 1, Number.MAX_SAFE_INTEGER)) {
+    out.e = v.e;
+    out.n = v.n;
+  }
   return out.s || out.g || out.fx ? out : null;
+}
+
+function parseTimer(v: unknown): ShellTimer | null {
+  if (!isObj(v) || !(TIMER_IDS as readonly unknown[]).includes(v.id) || !isInt(v.step, 0, 64)) return null;
+  if (typeof v.end !== 'number' || !Number.isFinite(v.end) || v.end < 0) return null;
+  return { id: v.id as TimerId, step: v.step, end: v.end };
+}
+
+/* ------------------------------------------------------------------ direct link */
+
+/**
+ * Far-away main screen: keeps the shell and game parts in order across both paths. The shell part
+ * is a whole snapshot and the game part the latest state, so an older one is simply dropped;
+ * sounds always play (each packet reaches a screen over one path only). A new page session on the
+ * Host's side starts over.
+ */
+export class PacketOrder {
+  private epoch = '';
+  private shell = 0;
+  private game = 0;
+
+  filter(p: MirrorPacket): MirrorPacket | null {
+    if (p.e === undefined || p.n === undefined) return p;
+    if (p.e !== this.epoch) {
+      this.epoch = p.e;
+      this.shell = 0;
+      this.game = 0;
+    }
+    const out: MirrorPacket = {};
+    if (p.s && p.n > this.shell) {
+      out.s = p.s;
+      this.shell = p.n;
+    }
+    if (p.g && p.n > this.game) {
+      out.g = p.g;
+      this.game = p.n;
+    }
+    if (p.fx) out.fx = p.fx;
+    return out.s || out.g || out.fx ? out : null;
+  }
+}
+
+/**
+ * A packet split for the direct link: shell state and sounds on the ordered, reliable channel,
+ * the game state on the unordered one without retransmits (a lost one is replaced by the next).
+ */
+export function splitForLink(p: MirrorPacket): { shell: MirrorPacket | null; game: MirrorPacket | null } {
+  const tag = p.e !== undefined && p.n !== undefined ? { e: p.e, n: p.n } : {};
+  const shell: MirrorPacket | null =
+    p.s || p.fx ? { ...(p.s ? { s: p.s } : {}), ...(p.fx ? { fx: p.fx } : {}), ...tag } : null;
+  return { shell, game: p.g ? { g: p.g, ...tag } : null };
+}
+
+/**
+ * Heartbeats on the ordered channel, both ways: `p<stamp>` asks, `q<stamp>` answers with the same
+ * stamp, so the asking side measures the round trip. Packets are JSON objects and never collide.
+ */
+export type Beat = { kind: 'ping' | 'pong'; stamp: number };
+
+export function beatText(kind: Beat['kind'], stamp: number): string {
+  return `${kind === 'ping' ? 'p' : 'q'}${Math.max(0, Math.round(stamp))}`;
+}
+
+export function parseBeat(text: string): Beat | null {
+  const m = /^([pq])(\d{1,12})$/.exec(text);
+  return m ? { kind: m[1] === 'p' ? 'ping' : 'pong', stamp: Number(m[2]) } : null;
+}
+
+/** Round trip shown on screen: smoothed so one late heartbeat does not jump the number. */
+export function smoothRtt(prev: number | null, sample: number): number {
+  const s = Math.min(10_000, Math.max(0, sample));
+  return prev === null ? s : prev * 0.7 + s * 0.3;
+}
+
+/** How the far-away screens are reached now: over how many direct links, and the slowest round trip. */
+export interface FarPath {
+  direct: number;
+  total: number;
+  /** Round trip in ms over the direct links (the slowest one), null without one. */
+  rtt: number | null;
+}
+
+/**
+ * Whether the relay must still carry a packet: some far-away screen was not reached over its
+ * direct link (or none is known yet, and the relay reaches whoever watches).
+ */
+export function relayNeeded(ids: readonly number[], reached: readonly number[]): boolean {
+  return ids.length === 0 || ids.some((id) => !reached.includes(id));
 }

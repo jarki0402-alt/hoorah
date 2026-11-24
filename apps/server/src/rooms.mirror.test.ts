@@ -80,7 +80,7 @@ describe('far-away main screens (long-distance play)', () => {
     expect(w).toMatchObject({ role: 'mirror', code, maxPlayers: 2, screenOnline: true });
     expect(w?.role === 'mirror' && w.players.map((p) => p.name)).toEqual(['Rina']);
     expect(JSON.stringify(b.sent)).not.toContain(key);
-    expect(screen.last('mirrors')).toEqual({ t: 'mirrors', count: 1, key });
+    expect(screen.last('mirrors')).toEqual({ t: 'mirrors', count: 1, key, ids: [1] });
   });
 
   it('never counts a mirror as a player or a seat', () => {
@@ -190,7 +190,7 @@ describe('far-away main screens (long-distance play)', () => {
     m.handleClose(b);
     expect(screen.last('mirrors')?.count).toBe(1);
     m.handleClose(c);
-    expect(screen.last('mirrors')).toEqual({ t: 'mirrors', count: 0, key });
+    expect(screen.last('mirrors')).toEqual({ t: 'mirrors', count: 0, key, ids: [] });
   });
 
   it('stops long-distance play on the main screen command: mirrors go, the old link dies', () => {
@@ -223,6 +223,100 @@ describe('far-away main screens (long-distance play)', () => {
     expect(b.last('error')).toEqual({ t: 'error', code: 'room_closed', fatal: true });
     expect(b.closedWith).toBe(CLOSE.roomClosed);
     expect(m.connectionCount).toBe(0);
+  });
+
+  it('gives every mirror connection its own id and tells the main screen', () => {
+    const m = makeManager();
+    const { screen, code, key, token } = openScreen(m);
+    const b = mirror(m, code, key);
+    const c = mirror(m, code, key);
+    expect(screen.last('mirrors')).toEqual({ t: 'mirrors', count: 2, key, ids: [1, 2] });
+    m.handleClose(b);
+    expect(screen.last('mirrors')?.ids).toEqual([2]);
+    // A reconnecting mirror is a new connection with a new id.
+    mirror(m, code, key);
+    expect(screen.last('mirrors')?.ids).toEqual([2, 3]);
+    m.handleClose(screen);
+    const again = new FakeConn('9.9.9.9');
+    m.handleMessage(again, { t: 'hello', role: 'screen', v: PROTOCOL_VERSION, resume: { code, token } });
+    expect(again.last('welcome')).toMatchObject({ mirrors: 2, mirrorIds: [2, 3] });
+    expect(c.closedWith).toBeNull();
+  });
+
+  it('carries direct-link offers to one mirror and its answer back, with the server naming the sender', () => {
+    const m = makeManager();
+    const { screen, code, key } = openScreen(m);
+    const phone = join(m, code, 'Rina');
+    const b = mirror(m, code, key);
+    const c = mirror(m, code, key);
+    const offer = { k: 'offer', gen: 1, sdp: 'v=0 offer' } as const;
+    m.handleMessage(screen, { t: 'mirrorRtc', to: 2, sig: offer });
+    expect(c.last('mirrorRtc')).toEqual({ t: 'mirrorRtc', from: 0, sig: offer });
+    expect(b.all('mirrorRtc')).toHaveLength(0);
+    expect(phone.all('mirrorRtc')).toHaveLength(0);
+    const answer = { k: 'answer', gen: 1, sdp: 'v=0 answer' } as const;
+    // A mirror never names the receiver: the server sends it to the main screen with its id.
+    m.handleMessage(c, { t: 'mirrorRtc', sig: answer });
+    expect(screen.last('mirrorRtc')).toEqual({ t: 'mirrorRtc', from: 2, sig: answer });
+    m.handleMessage(b, { t: 'mirrorRtc', sig: { k: 'hangup', gen: 4 } });
+    expect(screen.last('mirrorRtc')).toEqual({ t: 'mirrorRtc', from: 1, sig: { k: 'hangup', gen: 4 } });
+    expect(phone.all('mirrorRtc')).toHaveLength(0);
+  });
+
+  it('keeps direct-link signalling to its direction and roles', () => {
+    const m = makeManager();
+    const { screen, code, key } = openScreen(m);
+    const phone = join(m, code, 'Rina');
+    const b = mirror(m, code, key);
+    const c = mirror(m, code, key);
+    screen.sent = [];
+    // A mirror cannot offer, nor address another mirror.
+    m.handleMessage(b, { t: 'mirrorRtc', sig: { k: 'offer', gen: 1, sdp: 'x' } });
+    expect(screen.all('mirrorRtc')).toHaveLength(0);
+    m.handleMessage(b, { t: 'mirrorRtc', to: 2, sig: { k: 'hangup', gen: 1 } });
+    expect(b.last('error')).toEqual({ t: 'error', code: 'not_allowed', fatal: false });
+    expect(c.all('mirrorRtc')).toHaveLength(0);
+    // The main screen cannot answer, and must name a mirror that exists.
+    m.handleMessage(screen, { t: 'mirrorRtc', to: 1, sig: { k: 'answer', gen: 1, sdp: 'x' } });
+    m.handleMessage(screen, { t: 'mirrorRtc', to: 9, sig: { k: 'offer', gen: 1, sdp: 'x' } });
+    m.handleMessage(screen, { t: 'mirrorRtc', sig: { k: 'offer', gen: 1, sdp: 'x' } });
+    expect(screen.last('error')).toEqual({ t: 'error', code: 'not_allowed', fatal: false });
+    expect(b.all('mirrorRtc')).toHaveLength(0);
+    expect(c.all('mirrorRtc')).toHaveLength(0);
+    // Phones never take part.
+    m.handleMessage(phone, { t: 'mirrorRtc', to: 1, sig: { k: 'offer', gen: 1, sdp: 'x' } });
+    expect(phone.last('error')).toEqual({ t: 'error', code: 'not_allowed', fatal: false });
+    expect(b.all('mirrorRtc')).toHaveLength(0);
+    // Without its main screen, a mirror's answer goes nowhere.
+    m.handleClose(screen);
+    m.handleMessage(b, { t: 'mirrorRtc', sig: { k: 'answer', gen: 1, sdp: 'x' } });
+    expect(screen.all('mirrorRtc')).toHaveLength(0);
+  });
+
+  it('limits direct-link signals per mirror and direction', () => {
+    const m = makeManager();
+    const { screen, code, key } = openScreen(m);
+    const b = mirror(m, code, key);
+    for (let i = 0; i < 20; i++)
+      m.handleMessage(screen, { t: 'mirrorRtc', to: 1, sig: { k: 'hangup', gen: i } });
+    for (let i = 0; i < 20; i++) m.handleMessage(b, { t: 'mirrorRtc', sig: { k: 'hangup', gen: i } });
+    expect(b.all('mirrorRtc')).toHaveLength(12);
+    expect(screen.all('mirrorRtc')).toHaveLength(12);
+    clock += 10_000;
+    m.handleMessage(screen, { t: 'mirrorRtc', to: 1, sig: { k: 'hangup', gen: 99 } });
+    expect(b.last('mirrorRtc')?.sig).toEqual({ k: 'hangup', gen: 99 });
+  });
+
+  it('leaves out of a relay the mirrors the main screen reached directly', () => {
+    const m = makeManager();
+    const { screen, code, key } = openScreen(m);
+    const b = mirror(m, code, key);
+    const c = mirror(m, code, key);
+    m.handleMessage(screen, { t: 'relay', ch: 'p', to: 'mirror', data: { n: 1 }, skip: [1] });
+    expect(b.all('relay')).toHaveLength(0);
+    expect(c.last('relay')).toEqual({ t: 'relay', ch: 'p', from: 0, data: { n: 1 } });
+    m.handleMessage(screen, { t: 'relay', ch: 'p', to: 'mirror', data: { n: 2 }, skip: [1, 2] });
+    expect(c.all('relay')).toHaveLength(1);
   });
 
   it('keeps the link secret across a restart, without the mirrors', () => {

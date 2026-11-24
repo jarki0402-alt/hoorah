@@ -14,6 +14,7 @@ import {
   type ClientMsg,
   PLATFORM_PAGES,
   type PlatformPage,
+  parseRtcSignal,
   type RelayTarget,
 } from './messages';
 import { isPassCode, normalizePassCode, PASS_CODE_MAX } from './pass';
@@ -106,6 +107,16 @@ function isTarget(v: unknown): v is RelayTarget {
   return v === 'all' || v === 'screen' || v === 'mirror' || (isInt(v) && v >= 1 && v <= 255);
 }
 
+function isMirrorId(v: unknown): v is number {
+  return isInt(v) && v >= 1 && v <= LIMITS.maxMirrorId;
+}
+
+/** Far-away main screens a relay to 'mirror' leaves out: a short list of distinct ids. */
+function parseSkip(v: unknown): number[] | null {
+  if (!Array.isArray(v) || v.length > LIMITS.maxMirrors || !v.every(isMirrorId)) return null;
+  return new Set(v).size === v.length ? (v as number[]) : null;
+}
+
 function isChannel(v: unknown): v is Channel {
   return v === 'p' || v === 'g' || v === 'r';
 }
@@ -165,9 +176,17 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       }
       return null;
     }
-    case 'relay':
+    case 'relay': {
       if (!isChannel(m.ch) || !isTarget(m.to) || !('data' in m)) return null;
-      return { t: 'relay', ch: m.ch, to: m.to, data: m.data };
+      if (m.skip === undefined) return { t: 'relay', ch: m.ch, to: m.to, data: m.data };
+      const skip = m.to === 'mirror' && m.ch === 'p' ? parseSkip(m.skip) : null;
+      return skip ? { t: 'relay', ch: m.ch, to: m.to, data: m.data, skip } : null;
+    }
+    case 'mirrorRtc': {
+      const sig = parseRtcSignal(m.sig);
+      if (!sig || (m.to !== undefined && !isMirrorId(m.to))) return null;
+      return m.to === undefined ? { t: 'mirrorRtc', sig } : { t: 'mirrorRtc', to: m.to, sig };
+    }
     case 'ping':
       if (!isInt(m.id) || typeof m.ct !== 'number' || !Number.isFinite(m.ct)) return null;
       return { t: 'ping', id: m.id, ct: m.ct };

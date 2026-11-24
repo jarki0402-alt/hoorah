@@ -30,6 +30,14 @@ export const CHOKE_MS = 1200;
 export const CHEW_MS = 220;
 /** Press stamps older than this (relative to arrival) are clamped: a lagging or lying phone. */
 export const MAX_LAG_MS = 700;
+/**
+ * Long-distance play (a far-away main screen is watching, see `setFarPlay`): presses from phones
+ * at the far screen reach this one through the server 0.2 to 0.45 s after they were stamped, plus
+ * jitter. Their stamps are trusted further back, and a round's end (time cap or the first finish)
+ * waits FAR_SETTLE_MS of stamped time, so a far press made before it still counts by its stamp.
+ */
+export const FAR_MAX_LAG_MS = 1000;
+export const FAR_SETTLE_MS = 750;
 
 /** Round intro: banner, then the 3-2-1 countdown during the last COUNT_MS. */
 export const INTRO_MS = 5000;
@@ -172,10 +180,10 @@ export function phaseFraction(index: number, round: number): number {
   return v - Math.floor(v);
 }
 
-/** Press time to judge: the phone's stamp, clamped to [now - MAX_LAG_MS, now]. */
-export function pressTime(at: number, now: number): number {
+/** Press time to judge: the phone's stamp, clamped to [now - maxLag, now]. */
+export function pressTime(at: number, now: number, maxLag: number = MAX_LAG_MS): number {
   if (!Number.isFinite(at)) return now;
-  return Math.min(now, Math.max(now - MAX_LAG_MS, at));
+  return Math.min(now, Math.max(now - maxLag, at));
 }
 
 /**
@@ -286,6 +294,16 @@ export class KerupukLogic {
   readonly order: number[] = [];
   readonly stats = new Map<number, PlayerStats>();
 
+  /** Oldest press stamp trusted, relative to its arrival. */
+  maxLagMs = MAX_LAG_MS;
+  /** Stamped time the round end waits for late presses (0 = ends at once). */
+  settleMs = 0;
+  /**
+   * The earliest finishing bite of the running round while its end settles: presses stamped
+   * before it still count, later ones are ignored. Null when nobody has finished.
+   */
+  finish: { id: number; at: number } | null = null;
+
   private readonly connected = new Set<number>();
   private warned = false;
   private events: KerupukEvent[] = [];
@@ -337,6 +355,12 @@ export class KerupukLogic {
 
   /* ---------------- inputs */
 
+  /** Long-distance play on or off: widens the stamp window and lets the round end settle. */
+  setFarPlay(on: boolean): void {
+    this.maxLagMs = on ? FAR_MAX_LAG_MS : MAX_LAG_MS;
+    this.settleMs = on ? FAR_SETTLE_MS : 0;
+  }
+
   setRoster(roster: readonly RosterEntry[], _now: number): void {
     this.connected.clear();
     for (const r of roster) {
@@ -369,9 +393,11 @@ export class KerupukLogic {
     const l = this.lane(id);
     if (!l || l.finishedAt !== null) return 'ignored';
     l.presses++;
-    const t = pressTime(at, now);
-    if (t < this.goAt) return 'ignored';
-    if (l.choking && t < l.chokeUntil) return 'ignored';
+    const t = pressTime(at, now, this.maxLagMs);
+    if (t < this.goAt || t >= this.roundEndsAt) return 'ignored';
+    if (this.finish && t >= this.finish.at) return 'ignored';
+    // By stamp, not by the choking flag: a late press made during the lockout stays ignored.
+    if (t < l.chokeUntil) return 'ignored';
     if (t < l.lastBiteAt + CHEW_MS || t < l.lastPressAt) return 'ignored';
     l.lastPressAt = t;
     const verdict = judge(swingOffset(l.swing, t), l.bites);
@@ -394,7 +420,9 @@ export class KerupukLogic {
       const time = t - this.goAt;
       s.bestTime = s.bestTime === null ? time : Math.min(s.bestTime, time);
       s.timeBonus += finishBonus(time);
-      this.endRound(now, 'finish', id, time);
+      // An earlier stamped finish that arrived later takes the round from a provisional one.
+      if (!this.finish || t < this.finish.at) this.finish = { id, at: t };
+      if (now >= this.finish.at + this.settleMs) this.closeFinish(now);
       return 'finish';
     }
     return verdict === 'perfect' ? 'perfect' : 'bite';
@@ -427,12 +455,19 @@ export class KerupukLogic {
             this.emit({ type: 'recover', id: l.id });
           }
         }
+        if (this.finish) {
+          const settled = this.finish.at + this.settleMs;
+          if (now < settled) return false;
+          this.closeFinish(settled);
+          return true;
+        }
         if (!this.warned && now >= this.roundEndsAt - WARN_MS) {
           this.warned = true;
           this.emit({ type: 'warn' });
         }
-        if (now < this.roundEndsAt) return false;
-        this.endRound(this.roundEndsAt, 'time', null, null);
+        const settled = this.roundEndsAt + this.settleMs;
+        if (now < settled) return false;
+        this.endRound(settled, 'time', null, null);
         return true;
       }
       case 'roundEnd':
@@ -456,8 +491,16 @@ export class KerupukLogic {
     }
   }
 
+  /** The settled finish ends the round for its (earliest stamped) finisher. */
+  private closeFinish(at: number): void {
+    const f = this.finish;
+    if (!f) return;
+    this.endRound(at, 'finish', f.id, f.at - this.goAt);
+  }
+
   private startRound(at: number): void {
     this.phase = 'intro';
+    this.finish = null;
     this.goAt = at + INTRO_MS;
     this.roundEndsAt = this.goAt + ROUND_MS;
     this.phaseEndsAt = this.goAt;
@@ -493,6 +536,7 @@ export class KerupukLogic {
     time: number | null,
   ): void {
     for (const l of this.lanes) l.choking = false;
+    this.finish = null;
     const placements = placeLanes(this.lanes);
     for (const p of placements) {
       const s = this.stats.get(p.id)!;

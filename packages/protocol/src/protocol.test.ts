@@ -487,4 +487,43 @@ describe('long-distance play (mirror screens)', () => {
     expect(parseClientMsg('{"t":"relay","ch":"p","to":"mirrors","data":1}')).toBeNull();
     expect(parseClientMsg('{"t":"mirrorsOff"}')).toEqual({ t: 'mirrorsOff' });
   });
+
+  it('accepts a short list of distinct mirror ids to leave out, for mirror relays only', () => {
+    expect(parseClientMsg('{"t":"relay","ch":"p","to":"mirror","data":1,"skip":[1,3]}')).toEqual({
+      t: 'relay',
+      ch: 'p',
+      to: 'mirror',
+      data: 1,
+      skip: [1, 3],
+    });
+    expect(parseClientMsg('{"t":"relay","ch":"p","to":"mirror","data":1,"skip":[1,1]}')).toBeNull();
+    expect(parseClientMsg('{"t":"relay","ch":"p","to":"mirror","data":1,"skip":[1,2,3,4]}')).toBeNull();
+    expect(parseClientMsg('{"t":"relay","ch":"p","to":"mirror","data":1,"skip":[0]}')).toBeNull();
+    expect(parseClientMsg('{"t":"relay","ch":"p","to":"mirror","data":1,"skip":"1"}')).toBeNull();
+    expect(parseClientMsg('{"t":"relay","ch":"p","to":"all","data":1,"skip":[1]}')).toBeNull();
+    expect(parseClientMsg('{"t":"relay","ch":"g","to":"mirror","data":1,"skip":[1]}')).toBeNull();
+  });
+
+  it('accepts direct-link signals between the main screen and a mirror', () => {
+    expect(parseClientMsg('{"t":"mirrorRtc","to":2,"sig":{"k":"offer","gen":1,"sdp":"v=0"}}')).toEqual({
+      t: 'mirrorRtc',
+      to: 2,
+      sig: { k: 'offer', gen: 1, sdp: 'v=0' },
+    });
+    expect(parseClientMsg('{"t":"mirrorRtc","sig":{"k":"answer","gen":1,"sdp":"v=0"}}')).toEqual({
+      t: 'mirrorRtc',
+      sig: { k: 'answer', gen: 1, sdp: 'v=0' },
+    });
+    expect(parseClientMsg('{"t":"mirrorRtc","sig":{"k":"hangup","gen":3,"extra":1}}')).toEqual({
+      t: 'mirrorRtc',
+      sig: { k: 'hangup', gen: 3 },
+    });
+    expect(parseClientMsg('{"t":"mirrorRtc","to":0,"sig":{"k":"hangup","gen":1}}')).toBeNull();
+    expect(parseClientMsg('{"t":"mirrorRtc","to":"1","sig":{"k":"hangup","gen":1}}')).toBeNull();
+    expect(parseClientMsg('{"t":"mirrorRtc","sig":{"k":"offer","gen":1,"sdp":""}}')).toBeNull();
+    expect(parseClientMsg('{"t":"mirrorRtc","sig":{"k":"ice","gen":1}}')).toBeNull();
+    expect(parseClientMsg('{"t":"mirrorRtc"}')).toBeNull();
+    const huge = 'x'.repeat(7000);
+    expect(parseClientMsg(`{"t":"mirrorRtc","sig":{"k":"answer","gen":1,"sdp":"${huge}"}}`)).toBeNull();
+  });
 });

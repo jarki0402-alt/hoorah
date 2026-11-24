@@ -77,6 +77,9 @@ export interface HudModel {
 
 export type PopKind = 'bite' | 'perfect' | 'choke' | 'finish';
 
+/** How long the big GIGIT! stays up after the countdown. */
+export const GO_SHOW_MS = 800;
+
 const POOL = 16;
 
 export class Hud {

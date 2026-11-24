@@ -6,9 +6,12 @@
  * Graphics: the shared device profile (common/gfx.ts, `?gfx=low|medium|high` forces a level)
  * picks MSAA, shadows and pixel ratio (bajaj/quality.ts levels); the quality ladder steps down
  * while a babak plays if frames run slow. Debug pins: `?q=0..3` shadow tier, `?k=` pixel ratio.
+ *
+ * Long-distance play: the Host's screen publishes its display state (director.ts); a far-away
+ * mirror screen (`game.isMirror`) draws the same path and HUD from it with `LangkahReplica`.
  */
 import { FRUITS, lookOfFruit, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
-import { connect, type GameResult } from '@hoorah/sdk';
+import { connect, type GameResult, type HoorahGame } from '@hoorah/sdk';
 import { render } from 'preact';
 import { LEVELS, QualityLadder, readOverrides, startRatio } from '../bajaj/quality';
 import { ensureGfxProfile } from '../common/gfx';
@@ -18,6 +21,7 @@ import { Director, type GameLike, lineup } from './director';
 import './langkah.css';
 import { Hud, HudStore } from './hud';
 import { LangkahMatch } from './logic';
+import { LangkahReplica } from './replica';
 import { LangkahScene } from './scene';
 import { STR } from './strings';
 
@@ -88,10 +92,12 @@ async function boot(): Promise<void> {
   const profileP = ensureGfxProfile();
   const demo = Math.min(16, Math.max(0, Math.floor(Number(params.get('demo') ?? 0))));
   let game: GameLike & { ready?: () => void };
+  let sdk: HoorahGame | null = null;
   if (demo > 0) game = new DemoGame(demo);
   else {
     try {
-      game = await connect();
+      sdk = await connect();
+      game = sdk;
     } catch {
       root.textContent = STR.noShell;
       return;
@@ -109,7 +115,9 @@ async function boot(): Promise<void> {
   const hudHost = document.createElement('div');
   stage.appendChild(hudHost);
 
-  const { seats, cpus } = lineup(game);
+  const mirror = sdk?.isMirror === true;
+  // A far-away screen poses an empty match from the Host's states: no seats, no computer walkers.
+  const { seats, cpus } = mirror ? { seats: [], cpus: [] } : lineup(game);
   const rounds = Number(game.settings.rounds);
   const match = new LangkahMatch({
     players: seats,
@@ -144,9 +152,20 @@ async function boot(): Promise<void> {
 
   const hud = new HudStore();
   render(<Hud store={hud} />, hudHost);
+  if (sdk && mirror) {
+    bootMirror(sdk, new LangkahReplica(scene, hud, match), scene, ladder);
+    return;
+  }
   const director = new Director(game, match, cpus, scene, hud, (now) => ladder.pacer.due(now));
   director.onFrame = (now, running) => ladder.frame(now, running);
   director.onFps = (fps) => ladder.second(performance.now(), fps);
+  if (sdk) {
+    const link = sdk;
+    director.mirror = { active: () => link.mirrored, now: () => link.now(), send: (s) => link.publish(s) };
+    link.on('mirrors', (on) => {
+      if (on) director.publishNow();
+    });
+  }
   director.start();
   // `?setup=1` keeps the demo on the Host's babak menu (layout checks).
   if (demo > 0 && params.get('setup') !== '1') {
@@ -155,6 +174,38 @@ async function boot(): Promise<void> {
   }
   scene.stage.warmUp();
   game.ready?.();
+}
+
+/** Far-away screen: the path and HUD posed from the Host's published states (no rules, no phones). */
+function bootMirror(
+  game: HoorahGame,
+  replica: LangkahReplica,
+  scene: LangkahScene,
+  ladder: QualityLadder,
+): void {
+  game.on('mirror', (state) => replica.push(state, game.now()));
+  game.on('pause', (paused) => replica.setLocalPause(paused));
+  replica.setLocalPause(game.paused);
+  let last = -1;
+  let frames = 0;
+  let fpsAt = 0;
+  const loop = (now: number): void => {
+    requestAnimationFrame(loop);
+    if (!ladder.pacer.due(now)) return;
+    const dt = last < 0 ? 0 : Math.min(0.1, Math.max(0, (now - last) / 1000));
+    last = now;
+    replica.frame(game.now(), dt);
+    ladder.frame(now, replica.running);
+    frames++;
+    if (now - fpsAt >= 1000) {
+      ladder.second(performance.now(), (frames * 1000) / (now - fpsAt));
+      frames = 0;
+      fpsAt = now;
+    }
+  };
+  requestAnimationFrame(loop);
+  scene.stage.warmUp();
+  game.ready();
 }
 
 void boot();

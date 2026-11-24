@@ -10,10 +10,11 @@ import type { Sfx } from '../../shared/audio';
 import { celebrate } from '../../shared/confetti';
 import { CONTROL_TUNING } from '../../shared/controls';
 import { readRecord as readSoloRecord, submitRecord } from '../common/records';
-import type { Banner, HudPlayer, HudStore, PlayerCard } from './hud';
+import type { Banner, Bubble, HudPlayer, HudStore, PlayerCard, Popup, Shout } from './hud';
 import {
   balanceZone,
   type CollapseInfo,
+  FAR_PRESS_MS,
   type Fall,
   FLOOR_H,
   GameClock,
@@ -24,6 +25,7 @@ import {
   type ToppedInfo,
   TURN_MS,
 } from './logic';
+import { FX_KEPT, type FxRow, type MirrorFall, toMirror } from './mirror';
 import { buildResult, leaders, rankStandings, type SoloRecord, type Standing, soloRecord } from './results';
 import type { SceneDriver } from './scene';
 import { STR } from './strings';
@@ -102,6 +104,11 @@ export class RusunDriver implements SceneDriver {
   private ended = false;
   private side: 1 | -1 = -1;
   private bubbleSide = 0;
+  /** Long-distance play: rounds started, drops so far, the latest drop and recent call-outs. */
+  private intros = 0;
+  private drops = 0;
+  private mirrorFall: MirrorFall | null = null;
+  private fxLog: FxRow[] = [];
 
   constructor(
     private readonly game: HoorahGame,
@@ -159,6 +166,11 @@ export class RusunDriver implements SceneDriver {
     });
     this.soloStart = this.logicRef.order.length === 1;
     if (this.soloStart) this.recordBefore = readSoloRecord(GAME_ID, String(rounds));
+    this.setFarPresses(this.game.mirrored);
+    this.game.on('mirrors', (on) => {
+      this.setFarPresses(on);
+      if (on) this.publishMirror();
+    });
     this.game.on('players', () => this.onPlayers());
     this.game.on('action', (from, a) => this.onAction(from, a));
     this.game.on('pause', (p) => this.setPaused(p));
@@ -266,6 +278,16 @@ export class RusunDriver implements SceneDriver {
     this.onPause(paused);
     // Swing start and deadline are sent in server time, which shifted while paused.
     if (!paused && this.logicRef) this.syncViews();
+    // A far-away screen freezes (and resumes) on the Host's game clock.
+    this.publishMirror();
+  }
+
+  /**
+   * While a far-away screen watches, its phones reach this screen 0.2-0.45 s late: judge presses
+   * at their stamp and keep the turn open a little past its deadline (see FAR_PRESS_MS).
+   */
+  private setFarPresses(on: boolean): void {
+    if (this.logicRef) this.logicRef.pressWindowMs = on ? FAR_PRESS_MS : 0;
   }
 
   private react(from: number, kind: 'cheer' | 'boo' | 'rematch'): void {
@@ -278,7 +300,54 @@ export class RusunDriver implements SceneDriver {
     const x = left ? 120 + Math.random() * 260 : 880 + Math.random() * 120;
     const again = this.soloNow ? STR.phoneAgain : STR.reactRematch;
     const text = kind === 'cheer' ? STR.reactCheer : kind === 'boo' ? STR.reactBoo : again;
-    this.hud.addBubble({ id: ++this.seq, who: this.card(from), text, tone: kind, x, until: now + BUBBLE_MS });
+    this.bubble(
+      { id: ++this.seq, who: this.card(from), text, tone: kind, x, until: now + BUBBLE_MS },
+      BUBBLE_MS,
+    );
+    this.publishMirror();
+  }
+
+  /* ---------------------------------------------------------------- HUD call-outs */
+
+  private popup(p: Popup, ms: number): void {
+    this.hud.addPopup(p);
+    this.logFx({
+      n: p.id,
+      g: this.drops,
+      ms,
+      k: 'p',
+      x: p.x,
+      y: p.y,
+      pk: p.kind,
+      tx: p.text,
+      sb: p.sub,
+      tl: p.tilt,
+    });
+  }
+
+  private shout(s: Shout, ms: number): void {
+    this.hud.shout.value = s;
+    this.logFx({ n: s.id, g: this.drops, ms, k: 's', tx: s.text, sb: s.sub });
+  }
+
+  private bubble(b: Bubble, ms: number): void {
+    this.hud.addBubble(b);
+    const w = b.who;
+    this.logFx({
+      n: b.id,
+      g: this.drops,
+      ms,
+      k: 'b',
+      w: [w.id, w.name, w.fruit, w.look, w.color],
+      tx: b.text,
+      tn: b.tone,
+      x: b.x,
+    });
+  }
+
+  private logFx(fx: FxRow): void {
+    if (!this.game.mirrored) return;
+    this.fxLog = [...this.fxLog.slice(1 - FX_KEPT), fx];
   }
 
   /* ---------------------------------------------------------------- events */
@@ -296,8 +365,59 @@ export class RusunDriver implements SceneDriver {
     this.syncViews();
   }
 
+  /** Long-distance play: what a far-away screen needs to replay each drop and new tower. */
+  private track(e: RusunEvent): void {
+    switch (e.type) {
+      case 'intro':
+        this.intros++;
+        this.mirrorFall = null;
+        return;
+      case 'drop':
+        this.mirrorFall = { n: ++this.drops, fall: e.fall, result: null };
+        return;
+      case 'land':
+      case 'miss':
+        if (this.mirrorFall) this.mirrorFall.result = { strikes: null, topped: false };
+        return;
+      case 'collapse':
+        if (this.mirrorFall) {
+          const i = e.info;
+          const strikes = i.reason === 'strikes' ? { fromIndex: i.fromIndex, dir: i.dir } : null;
+          this.mirrorFall.result = { strikes, topped: false };
+        }
+        return;
+      case 'topped':
+        if (this.mirrorFall?.result) this.mirrorFall.result.topped = true;
+        return;
+      default:
+        return;
+    }
+  }
+
+  private publishMirror(): void {
+    const L = this.logicRef;
+    if (!L || !this.game.mirrored) return;
+    this.game.publish(
+      toMirror({
+        clock: { offset: this.clock.offsetMs, pausedAt: this.clock.pausedAtMs },
+        phase: L.phase,
+        round: L.round,
+        rounds: L.rounds,
+        intros: this.intros,
+        phaseEndsAt: L.phaseEndsAt,
+        deadline: L.deadline,
+        swing: L.swing,
+        floors: L.floors,
+        fall: this.mirrorFall,
+        fx: this.fxLog,
+        hud: this.hud.model.value,
+      }),
+    );
+  }
+
   private handle(e: RusunEvent): void {
     const L = this.logic;
+    this.track(e);
     switch (e.type) {
       case 'intro': {
         this.transient.clear();
@@ -369,32 +489,38 @@ export class RusunDriver implements SceneDriver {
     const topY = GROUND_Y - (f.floorIndex + 1) * FLOOR_H;
     this.side = this.side === 1 ? -1 : 1;
     const px = Math.max(150, Math.min(1130, f.outcome.x + this.side * (f.width / 2 + 84)));
-    this.hud.addPopup({
-      id: ++this.seq,
-      x: px,
-      y: topY - 24,
-      kind: pas ? 'pas' : 'land',
-      text: pas ? `${STR.popupPas} ${STR.popupPoints(points)}` : STR.popupPoints(points),
-      sub: pas && streak > 1 ? STR.popupStreak(streak) : null,
-      tilt: this.side * -6,
-      until: now + POPUP_MS,
-    });
+    this.popup(
+      {
+        id: ++this.seq,
+        x: px,
+        y: topY - 24,
+        kind: pas ? 'pas' : 'land',
+        text: pas ? `${STR.popupPas} ${STR.popupPoints(points)}` : STR.popupPoints(points),
+        sub: pas && streak > 1 ? STR.popupStreak(streak) : null,
+        tilt: this.side * -6,
+        until: now + POPUP_MS,
+      },
+      POPUP_MS,
+    );
 
     const L = this.logic;
     const prev = Math.max(this.recordBase, this.completedBest);
     if (!this.recordCelebrated && prev >= 3 && L.height === prev + 1) {
       this.recordCelebrated = true;
       this.sfx('correct');
-      this.hud.addPopup({
-        id: ++this.seq,
-        x: f.outcome.x,
-        y: topY - 80,
-        kind: 'record',
-        text: STR.popupRecord,
-        sub: null,
-        tilt: 3,
-        until: now + POPUP_MS,
-      });
+      this.popup(
+        {
+          id: ++this.seq,
+          x: f.outcome.x,
+          y: topY - 80,
+          kind: 'record',
+          text: STR.popupRecord,
+          sub: null,
+          tilt: 3,
+          until: now + POPUP_MS,
+        },
+        POPUP_MS,
+      );
     }
   }
 
@@ -405,12 +531,15 @@ export class RusunDriver implements SceneDriver {
     // On the final strike the ROBOH banner tells the story instead.
     if (strikes >= MAX_STRIKES) return;
     const now = this.clock.now();
-    this.hud.shout.value = {
-      id: ++this.seq,
-      text: STR.shoutMiss,
-      sub: STR.shoutMissSub(this.name(f.playerId), strikes, MAX_STRIKES),
-      until: now + SHOUT_MS,
-    };
+    this.shout(
+      {
+        id: ++this.seq,
+        text: STR.shoutMiss,
+        sub: STR.shoutMissSub(this.name(f.playerId), strikes, MAX_STRIKES),
+        until: now + SHOUT_MS,
+      },
+      SHOUT_MS,
+    );
   }
 
   private onTopped(info: ToppedInfo): void {
@@ -615,6 +744,7 @@ export class RusunDriver implements SceneDriver {
       recordSolo: this.soloNow,
       banner: this.banner,
     };
+    this.publishMirror();
   }
 
   private viewFor(id: number): ControllerView {

@@ -159,6 +159,11 @@ export const REMOTE = {
   ],
   waiting: 'Menunggu layar teman…',
   connected: (n: number) => (n > 1 ? `${n} layar teman tersambung` : 'Layar teman tersambung'),
+  /* How the screens reach each other: straight between the two places, or through the server. */
+  pathDirect: 'Jalur langsung',
+  pathSome: (direct: number, total: number) => `Jalur langsung ${direct} dari ${total}`,
+  pathServer: 'Lewat server',
+  pathRtt: (ms: number) => `${ms} ms`,
   gamesNote: 'Sementara ini baru sebagian game yang bisa dimainkan jarak jauh.',
   copy: 'Salin link',
   copied: 'Link disalin',

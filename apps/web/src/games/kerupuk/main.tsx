@@ -1,7 +1,7 @@
 /**
  * Makan Kerupuk entry: connect to the shell, rasterize the art, start Phaser (canvas 1.5x the
  * stage, camera zoom 1.5 over a 1280x720 world plus side wings) under a Preact HUD, then hand
- * control to the driver.
+ * control to the driver, or on a far-away screen (long-distance play) to the replica.
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -10,6 +10,7 @@ import './kerupuk.css';
 import { KERUPUK_SKY } from '../../shared/art/kerupuk';
 import { KerupukDriver } from './driver';
 import { Hud } from './hud';
+import { KerupukReplica } from './replica';
 import { KerupukScene } from './scene';
 import { STR } from './strings';
 import { loadTextures, RENDER_SCALE } from './textures';
@@ -78,7 +79,8 @@ async function boot(): Promise<void> {
   });
   await scene.ready;
   const hud = new Hud(hudHost);
-  const driver = new KerupukDriver(game, hud);
+  // Long-distance play: draw the Host's game from its published state, run nothing of our own.
+  const driver = game.isMirror ? new KerupukReplica(game, hud) : new KerupukDriver(game, hud);
   const origin = { x: 0, y: 0 };
   const fit = (w: number, h: number) => {
     scene.setViewSize(w, h);
@@ -105,7 +107,8 @@ async function boot(): Promise<void> {
   await nextFrame();
   await nextFrame();
   game.ready();
-  game.music('kerupuk');
+  // The Host's music reaches a far-away screen through the shell.
+  if (!game.isMirror) game.music('kerupuk');
 }
 
 void boot();

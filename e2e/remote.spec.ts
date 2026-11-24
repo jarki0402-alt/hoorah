@@ -91,6 +91,10 @@ test('long-distance play: a far-away main screen follows the Host screen, its ph
   await expect(b.locator('.far-badge-code')).toHaveText(shown);
   await expect(panel.getByText('Layar teman tersambung')).toBeVisible();
   await expect(b.locator('.home-scroll')).toBeVisible();
+  // Both screens link directly (WebRTC) and show the path with the measured round trip.
+  await expect(panel.locator('.remote-path')).toHaveText(/^Jalur langsung · \d+ ms$/);
+  await expect(b.locator('.remote-chip .remote-path')).toHaveText(/^Jalur langsung · \d+ ms$/);
+  console.log(`direct link A↔B: ${await panel.locator('.remote-path').textContent()}`);
   // Games it cannot show yet are marked on both screens while it watches.
   await expect(a.locator('.card', { hasText: 'Bajaj Rush' }).locator('.remote-tag')).toBeVisible();
   await expect(b.locator('.card', { hasText: 'Bajaj Rush' }).locator('.remote-tag')).toBeVisible();

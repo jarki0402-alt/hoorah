@@ -52,6 +52,8 @@ export type FallWhy = 'wrong' | 'late' | 'early';
 
 export const TIMING = {
   intro: 3.5,
+  /** The opening cues are built this long before the intro card ends (see `buildCues`). */
+  prebuild: 1.5,
   /** A babak ends after this long even if people are still standing. */
   babak: 60,
   /** No new cue starts this close to the end. */
@@ -66,7 +68,22 @@ export const TIMING = {
   debounce: 0.09,
   /** A press may claim at most this much network delay (clamped by the director). */
   maxLag: 0.5,
+  /**
+   * While a far-away main screen watches, its players' presses travel phone, server, Host screen
+   * (about 0.2 to 0.45 s plus jitter): a missed cue is only called after this longer grace, so
+   * their presses are judged by their stamp before the walker is dropped.
+   */
+  mirrorGrace: 0.6,
+  /** The delay a press may claim while a far-away main screen watches (covers `mirrorGrace`). */
+  mirrorMaxLag: 0.8,
 };
+
+/** Network allowances for judging: wider while a far-away main screen (and its phones) plays. */
+export function netTiming(mirrored: boolean): { grace: number; maxLag: number } {
+  return mirrored
+    ? { grace: TIMING.mirrorGrace, maxLag: TIMING.mirrorMaxLag }
+    : { grace: TIMING.grace, maxLag: TIMING.maxLag };
+}
 
 export const POINTS = {
   pas: 10,
@@ -200,6 +217,11 @@ export function speedAt(stage: Stage, t: number, lvl: number): number {
   return TEMPO[stage].start / intervalAt(stage, t, lvl);
 }
 
+/** Speed call-out level (0..2): "MAKIN CEPAT!" shows each time it climbs inside a babak. */
+export function speedLevelOf(speed: number): number {
+  return speed >= 2.2 ? 2 : speed >= 1.6 ? 1 : 0;
+}
+
 /** Directions a stage uses. */
 export function dirsOf(stage: Stage): readonly Dir[] {
   switch (stage) {
@@ -253,6 +275,8 @@ export class LangkahMatch {
   memo: { group: number; length: number; showAt: number; recallAt: number } | null = null;
   /** Best steps this session: who and how many. */
   record: { id: number; name: string; steps: number } | null = null;
+  /** How long after a window closes a missing press counts as late (see `netTiming`). */
+  grace = TIMING.grace;
   private nextCueAt = 0;
   private group = 0;
   private allDownAt: number | null = null;
@@ -505,6 +529,7 @@ export class LangkahMatch {
     this.phaseT += dt;
     switch (this.phase) {
       case 'intro':
+        if (this.phaseT >= TIMING.intro - TIMING.prebuild) this.buildCues();
         if (this.phaseT >= TIMING.intro) {
           this.setPhase('play');
           this.events.push({ k: 'play' });
@@ -553,6 +578,16 @@ export class LangkahMatch {
 
   /** Builds cues a little ahead of time so they can show before their beat. */
   private spawnCues(): void {
+    this.buildCues();
+    this.announce();
+  }
+
+  /**
+   * Builds the cues due within the next few seconds. Also runs late in the intro card (babak time
+   * still 0), so the opening cues exist, and reach a far-away screen, before play begins; the
+   * draws are the same as when built on the first play frame.
+   */
+  private buildCues(): void {
     const stage = this.stage;
     // Memory sequences start exactly when shown; other cues are built ahead so they can show early.
     const horizon = stage === 'ingat' ? this.t : this.t + 3;
@@ -608,7 +643,10 @@ export class LangkahMatch {
       });
       this.nextCueAt = at + gap;
     }
-    // Announce cues as they appear.
+  }
+
+  /** Announces cues as they appear, and the recall of a memory sequence. */
+  private announce(): void {
     while (this.announced < this.cues.length && this.cues[this.announced]!.show <= this.t) {
       this.events.push({ k: 'cue', i: this.announced });
       this.announced++;
@@ -701,12 +739,12 @@ export class LangkahMatch {
   private checkLate(): void {
     for (const p of this.alive()) {
       const c = this.cues[p.next];
-      if (c && this.t > c.close + TIMING.grace) this.fall(p, 'late', c.close);
+      if (c && this.t > c.close + this.grace) this.fall(p, 'late', c.close);
     }
   }
 
   private checkClock(): void {
-    const level = this.speed >= 2.2 ? 2 : this.speed >= 1.6 ? 1 : 0;
+    const level = speedLevelOf(this.speed);
     if (level > this.speedLevel) {
       this.speedLevel = level;
       this.events.push({ k: 'speed', level });

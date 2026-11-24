@@ -1,10 +1,15 @@
-/** Rusun bootstrap: connect to the shell, build textures, start Phaser + the DOM HUD. */
+/**
+ * Rusun bootstrap: connect to the shell, build textures, start Phaser + the DOM HUD. The Host's
+ * screen runs the rules (driver); a far-away screen (long-distance play) replays the Host's
+ * published state (replica).
+ */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
 import { render } from 'preact';
 import { fontsReady, mountStage } from '../common/stage';
 import { RusunDriver } from './driver';
 import { Hud, HudStore } from './hud';
+import { RusunReplica } from './replica';
 import { RusunScene } from './scene';
 import { STR } from './strings';
 import { preloadTextures, TEX_SCALE } from './textures';
@@ -49,7 +54,7 @@ async function boot(): Promise<void> {
   await scene.ready;
   const hud = new HudStore();
   render(<Hud store={hud} />, hudHost);
-  const driver = new RusunDriver(game, hud);
+  const driver = game.isMirror ? new RusunReplica(game, hud) : new RusunDriver(game, hud);
   const fit = (w: number, h: number) => {
     scene.setViewSize(w, h);
     driver.setStage(w);
@@ -64,11 +69,13 @@ async function boot(): Promise<void> {
     if (paused) phaser.scene.pause('rusun');
     else phaser.scene.resume('rusun');
   };
+  if (driver instanceof RusunReplica) driver.onResync = () => scene.syncTower();
   driver.start();
   scene.attach(driver);
 
   game.ready();
-  game.music('rusun');
+  // The Host's music reaches a far-away screen through the shell.
+  if (!game.isMirror) game.music('rusun');
 }
 
 void boot();

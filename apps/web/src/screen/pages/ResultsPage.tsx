@@ -4,6 +4,7 @@ import { GAMES } from '../../shared/games';
 import { KeyArt } from '../../shared/keyart';
 import { Avatar, Icon, type IconName } from '../../shared/ui';
 import { FocusButton } from '../components';
+import { useShellCountdown } from '../countdown';
 import { setFocusMap } from '../nav';
 import { isFinalGame } from '../party';
 import {
@@ -35,7 +36,6 @@ const AUTOPLAY_S = 10;
 
 export function ResultsPage() {
   const res = lastResult.value;
-  const [left, setLeft] = useState(AUTOPLAY_S);
   // Mode Pesta: on to the party table (and the next reveal, or the champion) instead of "Main lagi".
   const p = party.value;
   const final = p ? isFinalGame(p) : false;
@@ -75,19 +75,16 @@ export function ResultsPage() {
     );
   }, [offerOpen]);
 
-  useEffect(() => {
-    if (!auto) return;
-    if (left <= 0) {
-      setAuto(false);
-      const id = lastResult.peek()?.gameId;
-      if (party.peek()) nextPartyGame();
-      // A game this room can no longer start (the trial ended) does not restart by itself.
-      else if (id) restartGame();
-      return;
-    }
-    const t = window.setTimeout(() => setLeft((s) => s - 1), 1000);
-    return () => window.clearTimeout(t);
-  }, [left, auto]);
+  // Seconds left, or null without a countdown (a far-away screen shows the Host's exactly).
+  const timeLeft = useShellCountdown('results', AUTOPLAY_S, auto, () => {
+    setAuto(false);
+    const id = lastResult.peek()?.gameId;
+    if (party.peek()) nextPartyGame();
+    // A game this room can no longer start (the trial ended) does not restart by itself.
+    else if (id) restartGame();
+  });
+  const counting = timeLeft !== null;
+  const left = timeLeft ?? AUTOPLAY_S;
 
   if (!res) return null;
   const { result, gameId } = res;
@@ -98,7 +95,7 @@ export function ResultsPage() {
   // Classic podium order: 2nd, 1st, 3rd.
   const order = top.length === 3 ? [top[1]!, top[0]!, top[2]!] : top.length === 2 ? [top[0]!, top[1]!] : top;
   const heights = [148, 108, 84];
-  const countdown = auto ? (
+  const countdown = counting ? (
     <span style={{ position: 'relative', width: 30, height: 30, display: 'inline-block' }}>
       <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
         <circle cx="15" cy="15" r="12" fill="none" stroke="rgba(17,18,20,0.25)" stroke-width="4" />
@@ -303,10 +300,10 @@ export function ResultsPage() {
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
           {p
-            ? auto
+            ? counting
               ? PARTY.autoNext(left, final)
               : PARTY.pickNext
-            : auto
+            : counting
               ? `Lanjut otomatis dalam ${left} detik · Host bisa memilih lain dari HP`
               : 'Pilih langkah berikutnya'}
         </div>

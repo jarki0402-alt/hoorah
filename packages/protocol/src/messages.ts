@@ -59,7 +59,23 @@ export type ClientMsg =
       code: string;
       key: string;
     }
-  | { t: 'relay'; ch: Channel; to: RelayTarget; data: unknown }
+  | {
+      t: 'relay';
+      ch: Channel;
+      to: RelayTarget;
+      data: unknown;
+      /**
+       * Main screen, `to: 'mirror'` only: far-away main screens (by id) that already got this
+       * message over their direct link, so the relay leaves them out.
+       */
+      skip?: number[];
+    }
+  /**
+   * Direct link set-up between the main screen and one far-away main screen (long-distance play).
+   * The main screen names the far-away screen (`to`, its id from `mirrors`) and may only send
+   * `offer` or `hangup`; a far-away screen leaves `to` out and may only send `answer` or `hangup`.
+   */
+  | { t: 'mirrorRtc'; to?: number; sig: RtcSignal }
   /** Enter a Hoorah Pass code for the room (any phone in it, or the main screen). */
   | { t: 'pass'; code: string }
   /** Start the free trial for the room's main screen (the screen or any phone in the room). */
@@ -119,6 +135,8 @@ export type ServerMsg =
       mirrorKey: string;
       /** Far-away main screens watching right now. */
       mirrors: number;
+      /** Their ids (server-assigned per connection), for one direct link each. */
+      mirrorIds: number[];
     }
   | {
       t: 'welcome';
@@ -161,8 +179,13 @@ export type ServerMsg =
   | { t: 'relay'; ch: Channel; from: number; data: unknown }
   | { t: 'pong'; id: number; ct: number; st: number }
   | { t: 'screen'; online: boolean }
-  /** Main screen only: far-away main screens watching now, and the current link secret. */
-  | { t: 'mirrors'; count: number; key: string }
+  /** Main screen only: far-away main screens watching now (and their ids), and the current link secret. */
+  | { t: 'mirrors'; count: number; key: string; ids: number[] }
+  /**
+   * Direct link set-up (see the client message): to the main screen `from` is the far-away
+   * screen's id, to a far-away screen it is 0 (the main screen).
+   */
+  | { t: 'mirrorRtc'; from: number; sig: RtcSignal }
   | { t: 'error'; code: ErrorCode; fatal: boolean }
   | { t: 'kicked' }
   /** A Host offer is pending (sent to the Host who made it and to the asked player). */

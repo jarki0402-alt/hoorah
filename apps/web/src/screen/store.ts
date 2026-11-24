@@ -35,19 +35,25 @@ import { DEFAULT_SECTION, type HomeSection, isHomeSection } from '../shared/home
 import { Net, type NetStatus } from '../shared/net';
 import { adPlanner } from './ads';
 import { type BridgeInit, GameBridge } from './bridge';
+import { FarLink, FarLinks } from './farlink';
 import { canFullscreen, enterFullscreen, toggleFullscreen } from './fullscreen';
 import { cardGame, focusSection } from './homeFocus';
 import {
   changedKeys,
+  type FarPath,
   type GameSettings,
   type GameSnap,
   type HomeSnap,
   MAX_FX,
   type MirrorPacket,
   type MusicSnap,
+  PacketOrder,
   parseMirrorPacket,
   type RunSettings,
+  relayNeeded,
   type ShellSnap,
+  type ShellTimer,
+  type TimerId,
   type WheelSnap,
 } from './mirror';
 import { MIRROR } from './mode';
@@ -179,6 +185,16 @@ export const homeView = signal<HomeSnap | null>(null);
 export const runSettings = signal<RunSettings | null>(null);
 /** The Acak wheel while it is open (its slices, pick and spin), for the far-away screens. */
 export const wheelView = signal<WheelSnap | null>(null);
+/**
+ * How the far-away main screens are reached: over a direct link (and its round trip) or through
+ * the server. On a far-away screen: its own link to the Host's main screen.
+ */
+export const farPath = signal<FarPath>({ direct: 0, total: 0, rtt: null });
+/**
+ * The shell countdown running now (results, Mode Pesta, tutorial, ad break) with its deadline in
+ * server time: set on the Host's main screen (screen/countdown.ts), followed on a far-away one.
+ */
+export const shellTimer = signal<ShellTimer | null>(null);
 
 /* Host's main screen: what goes to the far-away screens with the next packet (see flushMirrors). */
 let fxQueue: string[] = [];
@@ -188,10 +204,15 @@ let lastGameState: GameSnap | null = null;
 /** The shell state last sent, as JSON ('' = send it whole with the next packet). */
 let sentShell = '';
 let flushTimer = 0;
+/** Far-away main screens watching (server ids) and the number of the last packet sent to them. */
+let mirrorIds: readonly number[] = [];
+let mirrorSeq = 0;
 
 /* Far-away main screen: what the Host's main screen sent last. */
 let appliedShell: ShellSnap | null = null;
 let mirrorGame: GameSnap | null = null;
+/** Packets arrive over the relay and the direct link: older parts than the newest applied are dropped. */
+const packetOrder = new PacketOrder();
 /** Run of the game that finished loading here (the loading screen waits for both screens). */
 let readyRun = -1;
 
@@ -240,6 +261,18 @@ net.setRecipients(() => players.value.filter((p) => p.connected).map((p) => p.id
 // screen has no phones of its own.
 if (!MIRROR) new ScreenRtc(net, (open) => reportDirect(open));
 else followOnly();
+// Long-distance play: a direct link between the two main screens, the relay stays the fallback.
+// A link that opens or closes gets the whole shell state again, whichever path it now takes.
+const farLinks = MIRROR
+  ? null
+  : new FarLinks(net, (path, linksChanged) => {
+      farPath.value = path;
+      if (linksChanged && mirrorCount.peek() > 0) resendMirrors();
+    });
+if (MIRROR)
+  new FarLink(net, onMirrorPacket, (path) => {
+    farPath.value = path;
+  });
 // Development builds only: lets latency tests listen to the input stream.
 if (import.meta.env.DEV) (window as unknown as { __hoorahNet?: Net }).__hoorahNet = net;
 
@@ -301,11 +334,15 @@ function onServer(m: ServerMsg): void {
         players.value = m.players;
         mirrorKey.value = m.mirrorKey;
       });
+      mirrorIds = m.mirrorIds;
+      farLinks?.sync(m.mirrorIds);
       onMirrorCount(m.mirrors, true);
       sendPage();
       return;
     case 'mirrors':
       mirrorKey.value = m.key;
+      mirrorIds = m.ids;
+      farLinks?.sync(m.ids);
       onMirrorCount(m.count);
       return;
     case 'screen':
@@ -1201,7 +1238,25 @@ function shellSnap(): ShellSnap {
     recent: recent.value,
     music: musicNow.value,
     settings: p === 'game' ? runSettings.value : null,
+    timer: shellTimer.value,
   };
+}
+
+/** Synced server time in ms (the clock both main screens share for countdowns). */
+export function serverNow(): number {
+  return net.now();
+}
+
+/** Host's main screen: a shell countdown starts (or moves on a step); far-away screens follow it. */
+export function publishTimer(timer: ShellTimer): void {
+  if (isMirror) return;
+  shellTimer.value = timer;
+}
+
+/** Host's main screen: the countdown `id` stopped (finished, cancelled, or its page closed). */
+export function clearTimer(id: TimerId): void {
+  if (isMirror || shellTimer.peek()?.id !== id) return;
+  shellTimer.value = null;
 }
 
 function scheduleFlush(): void {
@@ -1247,8 +1302,26 @@ function sendAlone(packet: MirrorPacket): boolean {
   return relayMirrors(packet);
 }
 
+/**
+ * One numbered packet to every far-away main screen: over its direct link when that is open, the
+ * relay carries it to the rest (all of them when no link is open). False when it reached nobody.
+ */
 function relayMirrors(packet: MirrorPacket): boolean {
-  return net.send({ t: 'relay', ch: 'p', to: 'mirror', data: packet });
+  const out: MirrorPacket = { ...packet, e: net.epoch, n: ++mirrorSeq };
+  const reached = farLinks?.send(out) ?? [];
+  if (!relayNeeded(mirrorIds, reached)) return true;
+  return net.send(
+    reached.length > 0
+      ? { t: 'relay', ch: 'p', to: 'mirror', data: out, skip: reached }
+      : { t: 'relay', ch: 'p', to: 'mirror', data: out },
+  );
+}
+
+/** Everything goes out again with the next packet: the whole shell state and the latest game state. */
+function resendMirrors(): void {
+  sentShell = '';
+  gameOut = lastGameState;
+  scheduleFlush();
 }
 
 /**
@@ -1259,10 +1332,8 @@ function onMirrorCount(n: number, fresh = false): void {
   const before = mirrorCount.peek();
   mirrorCount.value = n;
   if (n > 0 && (n > before || fresh)) {
-    sentShell = '';
-    gameOut = lastGameState;
     if (bridge.active) bridge.mirrors(true);
-    scheduleFlush();
+    resendMirrors();
   } else if (n === 0 && before > 0 && bridge.active) {
     bridge.mirrors(false);
   }
@@ -1308,7 +1379,8 @@ export function stopMirrors(): void {
 
 /** A packet from the Host's main screen. */
 function onMirrorPacket(data: unknown): void {
-  const p = parseMirrorPacket(data);
+  const parsed = parseMirrorPacket(data);
+  const p = parsed && packetOrder.filter(parsed);
   if (!p) return;
   if (p.s) applyShell(p.s);
   if (p.g) {
@@ -1379,6 +1451,9 @@ function applyShell(next: ShellSnap): void {
           break;
         case 'settings':
           if (next.settings) runSettings.value = next.settings;
+          break;
+        case 'timer':
+          shellTimer.value = next.timer;
           break;
         case 'focus':
           break;

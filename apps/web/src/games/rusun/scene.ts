@@ -13,10 +13,11 @@ import {
   type CollapseInfo,
   type Fall,
   FLOOR_H,
+  type Floor,
   GROUND_Y,
   INTRO_MS,
+  type Phase,
   type RusunEvent,
-  type RusunLogic,
   SWING_AMPLITUDE,
 } from './logic';
 import { FloorTextures, floorKey, TEX_SCALE } from './textures';
@@ -60,8 +61,23 @@ const TIP_MS = 640;
 const AIR_MAX = 62 * DEG;
 const SPIN_DAMP = 1.6;
 
+/**
+ * What the scene reads of the game: the rules on the Host's screen (RusunLogic), or the replayed
+ * tower on a far-away screen (MirrorTower).
+ */
+export interface SceneLogic {
+  readonly phase: Phase;
+  readonly phaseEndsAt: number;
+  readonly floors: readonly Floor[];
+  readonly top: Floor;
+  readonly floorIndex: number;
+  readonly fall: Fall | null;
+  /** Where the hanging floor's center is at game time `t`. */
+  swingX(t: number): number;
+}
+
 export interface SceneDriver {
-  readonly logic: RusunLogic;
+  readonly logic: SceneLogic;
   /** Game time (frozen while paused). */
   now(): number;
   step(): void;
@@ -412,6 +428,25 @@ export class RusunScene extends Phaser.Scene {
     this.tex.ensure(1, 4);
   }
 
+  /**
+   * Far-away screen: rebuild the standing tower from the logic's floors without animation (it
+   * joined mid-game, or missed a step). Loose floors already tumbling finish on their own.
+   */
+  syncTower(): void {
+    const L = this.driver?.logic;
+    if (!L) return;
+    const n = L.floors.length;
+    this.tex.ensure(0, n + 4);
+    for (const img of this.tower) img.destroy();
+    this.tower = L.floors.map((f, i) =>
+      this.floorSprite(i, i > 0 && i === n - 1).setPosition(f.x, GROUND_Y - i * FLOOR_H),
+    );
+    // A floor already in the air keeps falling.
+    if (L.phase !== 'falling') this.falling.setVisible(false);
+    this.focus = null;
+    this.resetRigFrom(this.driver!.now());
+  }
+
   private sink(img: Phaser.GameObjects.Image): void {
     this.puff(img.x, img.y - 6, 3);
     this.tweens.add({
@@ -433,17 +468,17 @@ export class RusunScene extends Phaser.Scene {
   }
 
   /**
-   * Let go exactly where the floor hangs (same x, height and tilt); it then falls straight down.
-   * The empty hook swings on smoothly: no bounce.
+   * Let go exactly where the floor hangs (same x, height and tilt); it then falls straight down
+   * (gliding to the judged x if that differs, see Fall.fromX). The empty hook swings on smoothly.
    */
   private onDrop(fall: Fall): void {
     const r = this.rope + SLING_Y + FLOOR_H / 2;
-    const a = swingAngle(fall.dropX, r);
+    const a = swingAngle(fall.fromX, r);
     this.fallCY0 = this.camY - this.extra + PIVOT_Y + r * Math.cos(a);
     this.fallTop0 = this.fallCY0 - FLOOR_H / 2;
     this.fallRot0 = -a * FLOOR_TILT;
     this.falling.setTexture(this.tex.key(fall.floorIndex, true)).setScale(S).setVisible(true);
-    placeFloor(this.falling, fall.dropX, this.fallCY0, this.fallRot0);
+    placeFloor(this.falling, fall.fromX, this.fallCY0, this.fallRot0);
     this.hangFloor.setVisible(false);
     this.slings.setVisible(false);
   }
@@ -637,7 +672,7 @@ export class RusunScene extends Phaser.Scene {
     d.frame(this.camY, t, dt * 1000);
   }
 
-  private updateCamera(L: RusunLogic, dt: number): void {
+  private updateCamera(L: SceneLogic, dt: number): void {
     let target = Math.min(0, GROUND_Y - L.floors.length * FLOOR_H - TOP_SCREEN_Y);
     let rate = 3;
     if (this.focus) {
@@ -662,7 +697,7 @@ export class RusunScene extends Phaser.Scene {
    * Cable length that hangs the floor HANG_GAP above the tower top at the bottom of its arc
    * (world space), never so short that the arc gets steep.
    */
-  private reach(L: RusunLogic): number {
+  private reach(L: SceneLogic): number {
     const top = GROUND_Y - L.floors.length * FLOOR_H;
     const pivot = this.camY - this.extra + PIVOT_Y;
     const fit = top - HANG_GAP - FLOOR_H - SLING_Y - pivot;
@@ -670,11 +705,11 @@ export class RusunScene extends Phaser.Scene {
   }
 
   /** Cable angle that puts the hanging floor's center at the logic's swing x. */
-  private loadAngle(L: RusunLogic, t: number, rope: number): number {
+  private loadAngle(L: SceneLogic, t: number, rope: number): number {
     return swingAngle(L.swingX(t), rope + SLING_Y + FLOOR_H / 2);
   }
 
-  private updateRig(L: RusunLogic, t: number): void {
+  private updateRig(L: SceneLogic, t: number): void {
     let angle = this.angle;
     let rope = this.rope;
     let showFloor = false;
@@ -755,15 +790,19 @@ export class RusunScene extends Phaser.Scene {
     }
   }
 
-  /** Straight down from where it hung, levelling out on the way; x never changes. */
-  private updateFalling(L: RusunLogic, t: number): void {
+  /**
+   * Down from where it hung, levelling out on the way. x stays put unless the drop was judged
+   * elsewhere (long-distance play): then it glides there early in the fall.
+   */
+  private updateFalling(L: SceneLogic, t: number): void {
     const f = L.fall;
     if (L.phase !== 'falling' || !f || !this.falling.visible) return;
     const p = clamp01((t - f.startAt) / Math.max(1, f.landAt - f.startAt));
     const cy1 = GROUND_Y - f.floorIndex * FLOOR_H - FLOOR_H / 2;
     const cy = this.fallCY0 + (cy1 - this.fallCY0) * p * p;
-    const rot = this.fallRot0 * (1 - easeOutCubic(clamp01(p * 1.6)));
-    placeFloor(this.falling, f.dropX, cy, rot);
+    const level = easeOutCubic(clamp01(p * 1.6));
+    const rot = this.fallRot0 * (1 - level);
+    placeFloor(this.falling, lerp(f.fromX, f.dropX, level), cy, rot);
   }
 
   private updateTumbles(dt: number): void {
@@ -923,7 +962,7 @@ export class RusunScene extends Phaser.Scene {
     }
   }
 
-  private updateMarker(L: RusunLogic): void {
+  private updateMarker(L: SceneLogic): void {
     const on = L.phase === 'aim' || L.phase === 'waiting';
     this.marker.setVisible(on);
     if (!on) return;

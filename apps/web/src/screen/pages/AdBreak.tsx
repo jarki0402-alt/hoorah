@@ -12,6 +12,7 @@ import { Avatar, Icon } from '../../shared/ui';
 import { AD_STR } from '../adStrings';
 import { showcaseGames } from '../ads';
 import { FocusButton } from '../components';
+import { useShellCountdown } from '../countdown';
 import { setFocusMap } from '../nav';
 import { prefetchGame } from '../prefetch';
 import './adbreak.css';
@@ -55,7 +56,6 @@ function Countdown({ seconds, left }: { seconds: number; left: number }) {
 
 export function AdBreak({ next, seconds, trialMinutes, trialUsed, onTrial, onPass, onDone }: AdBreakProps) {
   const total = Math.max(1, Math.round(seconds));
-  const [left, setLeft] = useState(total);
   const [games] = useState(() => showcaseGames(next, shows++));
   // Latest callbacks without restarting the timer or the focus map on every parent render.
   const cb = useRef({ onTrial, onPass, onDone });
@@ -65,21 +65,8 @@ export function AdBreak({ next, seconds, trialMinutes, trialUsed, onTrial, onPas
     void prefetchGame(next);
   }, [next]);
 
-  useEffect(() => {
-    const start = performance.now();
-    let done = false;
-    const tick = () => {
-      const remaining = Math.max(0, Math.ceil(total - (performance.now() - start) / 1000));
-      setLeft(remaining);
-      if (remaining === 0 && !done) {
-        done = true;
-        window.clearInterval(timer);
-        cb.current.onDone();
-      }
-    };
-    const timer = window.setInterval(tick, 200);
-    return () => window.clearInterval(timer);
-  }, [total]);
+  // In server time, so a far-away main screen shows the Host's seconds exactly (it never ends it).
+  const left = useShellCountdown('ad', total, true, () => cb.current.onDone()) ?? total;
 
   useEffect(() => {
     const ids = trialUsed ? ['pass'] : ['trial', 'pass'];

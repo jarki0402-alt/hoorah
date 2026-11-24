@@ -567,7 +567,8 @@ export class LangkahScene {
     const from = lead ? lead.next : 0;
     for (const c of m.cues) {
       if (n >= 12) break;
-      if (c.i < from - 1 || c.show > m.t) continue;
+      // Opening cues exist during the intro card already (logic.ts `buildCues`): beams wait for play.
+      if (c.i < from - 1 || c.show > m.t || m.phase === 'intro') continue;
       const passed = c.close + 0.4 < m.t;
       if (passed) continue;
       const high = c.dir === 'down';

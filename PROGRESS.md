@@ -68,6 +68,27 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-24 · Jalur langsung layar A↔B (WebRTC), hitung mundur sinkron, Langkah Maut + Rusun + Makan Kerupuk (20 game jarak jauh)
+
+**Apa yang diubah** (eksekusi pemilik 2026-11-24: "paling optimal dan smooth"):
+- **Jalur langsung A↔B:** layar A membuka WebRTC ke setiap layar teman (`screen/farlink.ts`): kanal `ms` (berurutan, andal: tampilan shell + suara) dan `mg` (tanpa urutan, tanpa kirim ulang: keadaan game, terbaru menang). Sinyal lewat pesan baru `mirrorRtc` (A hanya offer/hangup, cermin hanya answer/hangup, 12 sinyal per 10 dtk, divalidasi server, server mengisi `from`), id per cermin (`mirrors.ids`). Relay ke `'mirror'` bisa membawa `skip` (cermin yang sudah tersambung langsung tidak dikirimi lagi). Jalur putus/belum terbuka: otomatis lewat server, kirim ulang penuh saat jalur terbuka atau mati; B membuang paket lama (`PacketOrder`), detak tiap 1 dtk, mati setelah 3,5 dtk, coba lagi 2/5/15/30/60 dtk. Panel A dan chip B menampilkan "Jalur langsung · N ms" atau "Lewat server". Tanpa TURN (keputusan terkunci): di sebagian jaringan seluler/CGNAT tetap lewat server.
+- **Hitung mundur shell di B sinkron:** hasil, Mode Pesta, jeda iklan, dan tutorial dikirim sebagai batas waktu server (`timer`), B hanya menampilkan (`screen/countdown.ts`).
+- **Skema jam server untuk game adu tepat waktu:** jadwal gerak dikirim berpatokan jam server, B menggambar dari `game.now()` (tidak menunggu paket), tekanan dinilai dari stempel HP:
+  - **Langkah Maut** (`remote: true`): panah di B tepat waktu (jangkar `o` jam server, isyarat awal dibangun 1,5 dtk sebelum main), toleransi saat ada cermin 0,6 dtk (normal 0,25), umur stempel maks 0,8 dtk.
+  - **Rusun** (`remote: true`): posisi troli dihitung dari jam server di B. **Menyimpang dari PRD 6.3** (dicatat di PRD, menunggu konfirmasi pemilik): hanya selama ada layar teman, tekanan dinilai pada stempel HP (maks 600 ms ke belakang) dan lantai bergeser ke titik itu selama jatuh; jatuh otomatis 600 ms setelah batas waktu. Tanpa layar teman perilaku sama seperti sebelumnya.
+  - **Makan Kerupuk** (`remote: true`): ayunan tiap kerupuk dihitung dari jam server di B; selama ada cermin stempel dipercaya sampai 1 dtk dan akhir ronde menunggu 750 ms (stempel). Dua aturan diperketat untuk semua mode: tekanan yang distempel saat tersedak atau setelah batas waktu diabaikan.
+- Kasus e2e baru untuk ketiganya; `e2e/remote.spec.ts` memeriksa "Jalur langsung · N ms" di A dan B.
+
+**File:** `packages/protocol/src/{constants,messages,validate,protocol.test}.ts`, `apps/server/src/{rooms.ts,rooms.mirror.test.ts}`, `apps/web/src/shared/{net,games}.ts`, `apps/web/src/screen/{farlink.ts,countdown.ts,mirror.ts,mirror.test.ts,store.ts,remote.tsx,strings.ts,screen.css,pages/ResultsPage.tsx,pages/PartyPage.tsx,pages/AdBreak.tsx,tutorial/TutorialOverlay.tsx}`, `apps/web/src/games/langkah/**`, `apps/web/src/games/rusun/**`, `apps/web/src/games/kerupuk/**`, `PRD-Hoorah.md`, `e2e/remote.spec.ts`, `e2e/remote-games.spec.ts`.
+
+**Verifikasi:**
+- `npx tsc --noEmit` server, protocol, web: lulus. `npx biome check` file terkait: lulus.
+- `npx vitest run` server + protocol + screen + shared: 494 lulus; langkah 37, rusun 58, kerupuk 47 lulus.
+- `npx playwright test e2e/remote.spec.ts e2e/remote-games.spec.ts` (kecuali Tarik/Karung/Wilayah yang sedang disempurnakan agen lain): 10/10 lulus, jalur langsung A↔B "2 ms" di localhost. Cuplikan Langkah Maut dan Makan Kerupuk A/B sama.
+- `npm run check` penuh dan Docker menunggu penyempurnaan 6 game real-time selesai (entri berikutnya).
+
+**Berikutnya / sisa:** pemilik konfirmasi pengecualian Rusun. Ingat Jalan (Langkah Maut): pemain di B kehilangan ±0,1–0,3 dtk waktu menghafal. Penyempurnaan Tarik, Karung, Wilayah, Bom, Runtuh, Es masih berjalan. Server dan web harus dideploy bersama (keduanya satu image).
+
 ### 2026-11-24 · Main bareng teman jauh: Rebut Wilayah (17 game jarak jauh)
 
 **Apa yang diubah:** Rebut Wilayah bisa ditampilkan di layar teman jauh (`remote: true`). Lantai wilayah tidak dikirim utuh: setiap paket membawa perubahan pemilik petak bernomor (diulang 600 ms) dan beberapa pita 4 baris lantai yang bergilir (seluruh lantai ±1,8 detik), jadi paket hilang pulih sendiri dan layar yang baru tersambung mendapat lantai penuh dalam ≤6 paket. Jejak dan posisi pemain di setiap paket, ±12 paket per detik, rata-rata 1,6 KB (maks 3,2 KB, batas 7.000 karakter). `scene.ts` menggambar dari antarmuka `StageModel` (dipakai pertandingan asli dan replika). Kasus Wilayah di `e2e/remote-games.spec.ts`.

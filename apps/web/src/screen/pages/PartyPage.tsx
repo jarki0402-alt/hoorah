@@ -11,6 +11,7 @@ import { GAMES, type GameId } from '../../shared/games';
 import { KeyArt } from '../../shared/keyart';
 import { Avatar, Icon } from '../../shared/ui';
 import { FocusButton } from '../components';
+import { useShellCountdown } from '../countdown';
 import { setFocusMap } from '../nav';
 import { lastOvertake, type Party, partyPool, partyStep, type Standing, standings } from '../party';
 import {
@@ -68,7 +69,6 @@ function Reveal({ p, slot }: { p: Party; slot: number }) {
   // The Hoorah Pass offer owns the remote while open and stops the countdown.
   const offerOpen = offer.value !== null;
   const limit = after ? NEXT_S : START_S;
-  const [left, setLeft] = useState(limit);
   const timers = useRef<number[]>([]);
 
   // The roll: fast flicks through the party games that slow down, then the real one.
@@ -95,16 +95,13 @@ function Reveal({ p, slot }: { p: Party; slot: number }) {
   }, []);
 
   const ready = roll.phase === 'ready';
-  useEffect(() => {
-    if (!ready || !auto) return;
-    if (left <= 0) {
-      setAuto(false);
-      playPartyGame();
-      return;
-    }
-    const t = window.setTimeout(() => setLeft((s) => s - 1), 1000);
-    return () => window.clearTimeout(t);
-  }, [ready, auto, left]);
+  // Seconds left, or null without a countdown (a far-away screen shows the Host's exactly).
+  const timeLeft = useShellCountdown('party', limit, ready && auto, () => {
+    setAuto(false);
+    playPartyGame();
+  });
+  const counting = ready && timeLeft !== null;
+  const left = timeLeft ?? limit;
 
   const readyRef = useRef(ready);
   readyRef.current = ready;
@@ -203,7 +200,7 @@ function Reveal({ p, slot }: { p: Party; slot: number }) {
       <footer class="party-foot">
         <div class="party-buttons">
           <FocusButton id="party-play" class="btn primary party-play">
-            {ready && auto ? (
+            {counting ? (
               <Countdown left={left} total={limit} />
             ) : (
               <Icon name="play" size={16} color="#111214" />
@@ -215,7 +212,7 @@ function Reveal({ p, slot }: { p: Party; slot: number }) {
           </FocusButton>
         </div>
         <span class="party-hint">
-          {ready && auto ? PARTY.startsIn(left) : PARTY.hint}
+          {counting ? PARTY.startsIn(left) : PARTY.hint}
           {final && ready ? ` · ${PARTY.grandFinal}: ${PARTY.doubleNote.toLowerCase()}` : ''}
         </span>
       </footer>

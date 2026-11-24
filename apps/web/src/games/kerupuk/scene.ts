@@ -60,6 +60,12 @@ const BITE_ANIM_MS = 300;
 const CHEW_FACE_MS = 650;
 const COUGH_EVERY_MS = 380;
 const STRING_COLOR = 0xe8352e;
+/**
+ * A bite speeds the swing up from the moment it was stamped. Where that news arrives late (a
+ * far-away screen) the new phase differs a little from the drawn one: glide into it this fast
+ * instead of jumping. Only the drawing glides; judging is by the stamp.
+ */
+const SWING_GLIDE_MS = 160;
 
 interface Actor {
   id: number;
@@ -82,6 +88,13 @@ interface Actor {
   jolt: number;
   lastCough: number;
   seed: number;
+  /** The swing drawn last frame, and the one being glided away from after a bite. */
+  swStart: number;
+  swPeriod: number;
+  swBites: number;
+  glideStart: number;
+  glidePeriod: number;
+  glideAt: number;
   /** Current kerupuk centre (world), for effects. */
   kx: number;
   ky: number;
@@ -278,7 +291,7 @@ export class KerupukScene extends Phaser.Scene {
       const a = this.actors[i]!;
       const l = lanes[i]!;
       const t = now * 0.001 + a.seed;
-      const off = swingOffset(l.swing, now);
+      const off = this.offsetOf(a, l, now);
       const dx = off * amp;
       const dy = Math.sqrt(Math.max(1, a.len * a.len - dx * dx));
       const kx = a.x + dx;
@@ -366,6 +379,26 @@ export class KerupukScene extends Phaser.Scene {
     }
   }
 
+  /** Kerupuk offset this frame, gliding into a swing a bite just changed. */
+  private offsetOf(a: Actor, l: LaneModel, now: number): number {
+    const sw = l.swing;
+    if (sw.start !== a.swStart || sw.period !== a.swPeriod) {
+      const bitten = l.bites === a.swBites + 1 && Number.isFinite(a.swStart);
+      a.glideStart = a.swStart;
+      a.glidePeriod = a.swPeriod;
+      a.glideAt = bitten ? now : Number.NEGATIVE_INFINITY;
+      a.swStart = sw.start;
+      a.swPeriod = sw.period;
+    }
+    a.swBites = l.bites;
+    const off = swingOffset(sw, now);
+    const k = (now - a.glideAt) / SWING_GLIDE_MS;
+    if (!(k >= 0 && k < 1)) return off;
+    const from = Math.sin(((now - a.glideStart) / a.glidePeriod) * Math.PI * 2);
+    const e = k * k * (3 - 2 * k);
+    return from + (off - from) * e;
+  }
+
   /** A look's head textures finished rasterizing: swap them in for its contestants. */
   private headsReady(look: Look): void {
     for (const a of this.actors)
@@ -427,6 +460,12 @@ export class KerupukScene extends Phaser.Scene {
         jolt: 0,
         lastCough: Number.NEGATIVE_INFINITY,
         seed: i * 1.7,
+        swStart: Number.NaN,
+        swPeriod: Number.NaN,
+        swBites: l.bites,
+        glideStart: 0,
+        glidePeriod: 1,
+        glideAt: Number.NEGATIVE_INFINITY,
         kx: x,
         ky: restY,
       };

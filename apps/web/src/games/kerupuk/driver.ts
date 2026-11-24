@@ -9,8 +9,8 @@ import type { Sfx } from '../../shared/audio';
 import { celebrate } from '../../shared/confetti';
 import { type RecordResult, readRecord, submitRecord } from '../common/records';
 import { Commentator, type CommentEvent } from './commentary';
-import type { Hud, Overlay, PlateModel, PopKind, ResultRow } from './hud';
-import { FEET_Y, kerupukRestY, laneLayout } from './layout';
+import { GO_SHOW_MS, type Hud, type Overlay, type PlateModel, type PopKind, type ResultRow } from './hud';
+import { FEET_Y, laneLayout, PLATE_MAX_W, PopStack } from './layout';
 import {
   BITES,
   COUNT_MS,
@@ -22,18 +22,16 @@ import {
   soloScore,
   swingZone,
 } from './logic';
+import { type MirrorLaneSource, toMirror } from './mirror';
 import { buildResult, buildSoloResult, rankStandings, recordKind, recordLine } from './results';
 import type { LaneModel, SceneDriver } from './scene';
 import { STR } from './strings';
 import * as V from './views';
 
 const TICK_MS = 100;
-const GO_SHOW_MS = 800;
 /** The round-end card waits a moment so everyone sees the last bite. */
 const CARD_DELAY_MS = 1300;
 const REACTION_GAP_MS = 1500;
-const PLATE_MAX_W = 230;
-const POP_STACK_MS = 700;
 /** Key for the solo records (PRD 6.4); the variant is the number of rounds. */
 const GAME_ID = 'kerupuk';
 
@@ -59,7 +57,7 @@ export class KerupukDriver implements SceneDriver {
   private readonly lastBite = new Map<number, 'perfect' | 'bite'>();
   private readonly comment = new Commentator();
   private readonly reactAt = new Map<number, number>();
-  private readonly popAt = new Map<number, { at: number; n: number }>();
+  private readonly pops = new PopStack();
   private result: GameResult | null = null;
   private overlay: Overlay = { kind: 'none' };
   private pendingOverlay: { at: number; overlay: Overlay } | null = null;
@@ -108,7 +106,13 @@ export class KerupukDriver implements SceneDriver {
     this.recordBefore = readRecord(GAME_ID, String(rounds));
     this.connected = new Set(this.game.allPlayers.filter((p) => p.connected).map((p) => p.id));
     this.logicRef = new KerupukLogic({ rounds, roster: this.roster(), now: this.clock.now() });
+    this.logicRef.setFarPlay(this.game.mirrored);
     this.game.on('players', () => this.onPlayers());
+    // Long-distance play: phones at a far-away screen press late, so judging waits for them.
+    this.game.on('mirrors', (on) => {
+      this.logicRef?.setFarPlay(on);
+      if (on) this.publishMirror();
+    });
     this.game.on('action', (from, a) => this.onAction(from, a));
     this.game.on('pause', (p) => this.setPaused(p));
     if (this.game.paused) this.setPaused(true);
@@ -191,6 +195,8 @@ export class KerupukDriver implements SceneDriver {
     this.onPause(paused);
     // Swing starts are sent in server time, which shifted while paused.
     if (!paused && this.logicRef) this.syncViews();
+    // No ticks run while paused, so tell a far-away screen right here.
+    this.publishMirror();
   }
 
   private react(from: number): void {
@@ -453,15 +459,8 @@ export class KerupukDriver implements SceneDriver {
     const L = this.logic;
     const i = L.lanes.findIndex((l) => l.id === id);
     if (i < 0) return;
-    const lay = laneLayout(L.lanes.length);
-    const x = this.origin.x + lay.xs[i]!;
-    // A second word for the same lane while the first is still rising goes above it.
-    const now = this.clock.now();
-    const last = this.popAt.get(id);
-    const stack = last && now - last.at < POP_STACK_MS ? last.n + 1 : 0;
-    this.popAt.set(id, { at: now, n: stack % 3 });
-    const y = this.origin.y + kerupukRestY(lay.unit) - (46 + (stack % 3) * 30) * lay.unit;
-    this.hud.pop(x, y, text, kind);
+    const at = this.pops.place(id, i, L.lanes.length, this.clock.now(), this.origin);
+    this.hud.pop(at.x, at.y, text, kind);
   }
 
   /* ---------------------------------------------------------------- HUD + views */
@@ -585,6 +584,53 @@ export class KerupukDriver implements SceneDriver {
       plateY: this.origin.y + FEET_Y + 14,
       overlay,
     };
+    this.publishMirror();
+  }
+
+  /**
+   * Long-distance play: the stage for a far-away main screen. It holds no clock, only the
+   * schedule and swings in server time, so it changes (and is sent) only when something happens.
+   */
+  private publishMirror(): void {
+    const L = this.logicRef;
+    if (!L || !this.game.mirrored) return;
+    const plates = this.hud.model.value.plates;
+    const lanes: MirrorLaneSource[] = [];
+    for (const m of this.models) {
+      const s = L.stats.get(m.id);
+      const plate = plates.find((p) => p.id === m.id);
+      if (!s || !plate) continue;
+      lanes.push({
+        id: m.id,
+        name: plate.name,
+        look: m.look,
+        color: m.color,
+        connected: m.connected,
+        bites: m.bites,
+        swing: m.swing,
+        chokeUntil: m.chokeUntil,
+        finished: m.finished,
+        mood: m.mood,
+        score: plate.score,
+        gain: plate.gain,
+        marks: { bites: s.bites, perfect: s.perfect, chokes: s.chokes },
+      });
+    }
+    this.game.publish(
+      toMirror({
+        phase: L.phase,
+        round: L.round,
+        rounds: L.rounds,
+        now: this.clock.now(),
+        goAt: L.goAt,
+        endsAt: L.roundEndsAt,
+        held: this.clock.paused,
+        toServer: (t) => this.clock.toServer(t),
+        lanes,
+        overlay: this.hud.model.value.overlay,
+        line: this.hud.line.value,
+      }),
+    );
   }
 
   private viewFor(id: number): ControllerView {

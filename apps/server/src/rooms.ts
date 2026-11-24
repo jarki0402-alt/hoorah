@@ -26,6 +26,7 @@ import {
   type RelayTarget,
   type RoomAccess,
   type RoomPass,
+  type RtcSignal,
   type ServerMsg,
   stampInput,
   type TrialReject,
@@ -95,8 +96,18 @@ interface Room {
   hostOffer: HostOffer | null;
   /** Secret of the far-away main screen link (long-distance play); only the main screen gets it. */
   mirrorKey: string;
-  /** Far-away main screens watching (listen only, never players). */
-  mirrors: Set<Conn>;
+  /** Far-away main screens watching (listen only, never players), with their direct-link set-up state. */
+  mirrors: Map<Conn, FarScreen>;
+  /** Id for the next far-away main screen (wraps at LIMITS.maxMirrorId). */
+  nextMirrorId: number;
+}
+
+/** One far-away main screen's connection: its id and its recent direct-link signals. */
+interface FarScreen {
+  id: number;
+  /** When signals from the main screen to it, and from it, went through (the last 10 s). */
+  toSignals: number[];
+  fromSignals: number[];
 }
 
 interface HostOffer {
@@ -119,6 +130,12 @@ const TRIAL_TRIES_PER_MINUTE = 10;
  */
 const TRIAL_OTHER_SCREENS_PER_IP = 2;
 const TRIAL_IP_WINDOW_MS = 30 * 24 * 60 * 60_000;
+/**
+ * Direct-link signals (offer, answer, hangup) per far-away main screen and direction within
+ * SIGNAL_WINDOW_MS. A healthy set-up needs two; retries back off from 2 s, so this is generous.
+ */
+const SIGNALS_PER_WINDOW = 12;
+const SIGNAL_WINDOW_MS = 10_000;
 
 type Binding =
   | { room: Room; role: 'screen' }
@@ -279,8 +296,10 @@ export class RoomManager {
     }
     const room = b.room;
     if (b.role === 'mirror') {
-      // A far-away main screen only listens: its pings keep the clock in sync, nothing else goes.
+      // A far-away main screen only listens: its pings keep the clock in sync and it may answer
+      // the main screen's direct-link offer. Nothing else goes.
       if (msg.t === 'ping') conn.send({ t: 'pong', id: msg.id, ct: msg.ct, st: this.opts.now() });
+      else if (msg.t === 'mirrorRtc' && msg.to === undefined) this.signalFromMirror(conn, room, msg.sig);
       else this.fail(conn, 'not_allowed', false);
       return;
     }
@@ -291,7 +310,7 @@ export class RoomManager {
         conn.send({ t: 'pong', id: msg.id, ct: msg.ct, st: this.opts.now() });
         return;
       case 'relay':
-        this.relay(b, msg.ch, msg.to, msg.data);
+        this.relay(b, msg.ch, msg.to, msg.data, msg.skip);
         return;
       case 'host': {
         if (!this.canManage(b)) {
@@ -387,6 +406,13 @@ export class RoomManager {
           return;
         }
         this.stopMirrors(room);
+        return;
+      case 'mirrorRtc':
+        if (b.role !== 'screen' || msg.to === undefined) {
+          this.fail(conn, 'not_allowed', false);
+          return;
+        }
+        this.signalToMirror(room, msg.to, msg.sig);
         return;
     }
   }
@@ -571,7 +597,8 @@ export class RoomManager {
         peakPlayers: players.size,
         hostOffer: null,
         mirrorKey: isMirrorKey(s.mirrorKey) ? s.mirrorKey : this.newMirrorKey(),
-        mirrors: new Set(),
+        mirrors: new Map(),
+        nextMirrorId: 1,
       };
       this.loadScreen(room, now);
       this.refreshAccess(room);
@@ -686,6 +713,7 @@ export class RoomManager {
         resumed: true,
         mirrorKey: existing.mirrorKey,
         mirrors: existing.mirrors.size,
+        mirrorIds: this.mirrorIds(existing),
       });
       if (changed) {
         this.toControllers(existing, this.roomMsg(existing));
@@ -737,7 +765,8 @@ export class RoomManager {
       peakPlayers: 0,
       hostOffer: null,
       mirrorKey: this.newMirrorKey(),
-      mirrors: new Set(),
+      mirrors: new Map(),
+      nextMirrorId: 1,
     };
     this.loadScreen(room, now);
     this.refreshAccess(room);
@@ -756,6 +785,7 @@ export class RoomManager {
       resumed: false,
       mirrorKey: room.mirrorKey,
       mirrors: 0,
+      mirrorIds: [],
     });
     this.emit((e) => e.roomCreated(now));
     this.opts.log.info('room_created', { code });
@@ -885,7 +915,7 @@ export class RoomManager {
       this.fail(conn, 'room_full', true);
       return;
     }
-    room.mirrors.add(conn);
+    room.mirrors.set(conn, { id: this.nextMirrorId(room), toSignals: [], fromSignals: [] });
     this.bindings.set(conn, { room, role: 'mirror' });
     conn.send({
       t: 'welcome',
@@ -906,7 +936,7 @@ export class RoomManager {
   private stopMirrors(room: Room): void {
     room.mirrorKey = this.newMirrorKey();
     const notice: ServerMsg = { t: 'error', code: 'mirror_stopped', fatal: true };
-    for (const m of room.mirrors) {
+    for (const m of room.mirrors.keys()) {
       m.send(notice);
       this.bindings.delete(m);
       m.close(CLOSE.roomClosed, 'mirror_stopped');
@@ -916,11 +946,58 @@ export class RoomManager {
   }
 
   private tellMirrorCount(room: Room): void {
-    room.screen?.send({ t: 'mirrors', count: room.mirrors.size, key: room.mirrorKey });
+    room.screen?.send({
+      t: 'mirrors',
+      count: room.mirrors.size,
+      key: room.mirrorKey,
+      ids: this.mirrorIds(room),
+    });
   }
 
-  private toMirrors(room: Room, msg: ServerMsg): void {
-    for (const m of room.mirrors) m.send(msg);
+  private mirrorIds(room: Room): number[] {
+    return [...room.mirrors.values()].map((f) => f.id);
+  }
+
+  /** A free id for a new far-away main screen (at most a few are ever in use at once). */
+  private nextMirrorId(room: Room): number {
+    const used = new Set(this.mirrorIds(room));
+    let id = room.nextMirrorId;
+    while (used.has(id)) id = (id % LIMITS.maxMirrorId) + 1;
+    room.nextMirrorId = (id % LIMITS.maxMirrorId) + 1;
+    return id;
+  }
+
+  /** `skip`: far-away screens the main screen already reached over their direct link. */
+  private toMirrors(room: Room, msg: ServerMsg, skip?: readonly number[]): void {
+    for (const [m, f] of room.mirrors) if (!skip?.includes(f.id)) m.send(msg);
+  }
+
+  /** True when one more direct-link signal fits the window (and counts it). */
+  private signalAllowed(times: number[]): boolean {
+    const now = this.opts.now();
+    while (times.length > 0 && now - times[0]! >= SIGNAL_WINDOW_MS) times.shift();
+    if (times.length >= SIGNALS_PER_WINDOW) return false;
+    times.push(now);
+    return true;
+  }
+
+  /** The main screen offers (or ends) a direct link to one far-away main screen. */
+  private signalToMirror(room: Room, to: number, sig: RtcSignal): void {
+    if (sig.k === 'answer') return;
+    for (const [m, f] of room.mirrors) {
+      if (f.id !== to) continue;
+      if (this.signalAllowed(f.toSignals)) m.send({ t: 'mirrorRtc', from: 0, sig });
+      else this.opts.log.debug('mirror_signal_limited', { code: room.code, to });
+      return;
+    }
+  }
+
+  /** A far-away main screen answers (or ends) the main screen's direct-link offer. */
+  private signalFromMirror(conn: Conn, room: Room, sig: RtcSignal): void {
+    const f = room.mirrors.get(conn);
+    if (!f || sig.k === 'offer' || !room.screen) return;
+    if (this.signalAllowed(f.fromSignals)) room.screen.send({ t: 'mirrorRtc', from: f.id, sig });
+    else this.opts.log.debug('mirror_signal_limited', { code: room.code, from: f.id });
   }
 
   private newMirrorKey(): string {
@@ -955,7 +1032,7 @@ export class RoomManager {
     return null;
   }
 
-  private relay(b: Binding, ch: Channel, to: RelayTarget, data: unknown): void {
+  private relay(b: Binding, ch: Channel, to: RelayTarget, data: unknown, skip?: number[]): void {
     const room = b.room;
     if (b.role === 'mirror') return;
     if (b.role === 'controller') {
@@ -966,7 +1043,7 @@ export class RoomManager {
     }
     if (to === 'screen') return;
     const msg: ServerMsg = { t: 'relay', ch, from: 0, data };
-    if (to === 'mirror') this.toMirrors(room, msg);
+    if (to === 'mirror') this.toMirrors(room, msg, skip);
     else if (to === 'all') this.toControllers(room, msg);
     else room.players.get(to)?.conn?.send(msg);
   }
@@ -1003,7 +1080,7 @@ export class RoomManager {
       this.bindings.delete(room.screen);
       room.screen.close(CLOSE.roomClosed, 'room_closed');
     }
-    for (const m of room.mirrors) {
+    for (const m of room.mirrors.keys()) {
       m.send(notice);
       this.bindings.delete(m);
       m.close(CLOSE.roomClosed, 'room_closed');

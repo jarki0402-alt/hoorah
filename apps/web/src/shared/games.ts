@@ -152,6 +152,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'aksi',
     mood: 'santai',
     available: true,
+    remote: true,
     badge: 'BARU',
     logoColor: '#FF5A1F',
     howTo: [
@@ -279,6 +280,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'lomba',
     mood: 'ramai',
     available: true,
+    remote: true,
     badge: 'BARU',
     logoColor: '#FF5A1F',
     howTo: [
@@ -747,6 +749,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'aksi',
     mood: 'ramai',
     available: true,
+    remote: true,
     badge: 'BARU',
     logoColor: '#FFC928',
     howTo: [

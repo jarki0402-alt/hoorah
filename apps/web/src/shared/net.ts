@@ -136,7 +136,10 @@ export class Net {
   }
 
   send(msg: ClientMsg): boolean {
-    if (msg.t === 'relay' && msg.ch !== 'r') return this.sendRelay(msg.ch, msg.to, msg.data);
+    // Far-away main screens (long-distance play) take whole, self-numbered packets as they are
+    // (screen/mirror.ts): the relay stream numbering below is for phones only.
+    if (msg.t === 'relay' && msg.ch !== 'r' && msg.to !== 'mirror')
+      return this.sendRelay(msg.ch, msg.to, msg.data);
     return this.sendWs(msg);
   }
 
@@ -177,10 +180,7 @@ export class Net {
     return true;
   }
 
-  private sendRelay(ch: Exclude<Channel, 'r'>, to: RelayTarget, data: unknown): boolean {
-    // Far-away main screens (long-distance play) take whole snapshots over the server only:
-    // nothing to number, a lost one is replaced by the next.
-    if (to === 'mirror') return this.sendWs({ t: 'relay', ch, to, data });
+  private sendRelay(ch: Exclude<Channel, 'r'>, to: Exclude<RelayTarget, 'mirror'>, data: unknown): boolean {
     if (to !== 'all') return this.sendRelayTo(ch, to, data);
     if (!this.recipients) return this.sendWs({ t: 'relay', ch, to, data });
     let ok = true;

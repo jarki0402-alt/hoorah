@@ -8,11 +8,12 @@ import { useEffect } from 'preact/hooks';
 import { pointerMoved } from '../shared/cursor';
 import { Icon } from '../shared/ui';
 import { FocusButton, inviteUrl, joinOrigin, QrCard } from './components';
-import { mirrorPath } from './mirror';
+import { type FarPath, mirrorPath } from './mirror';
 import { focus, focused, setFocusMap } from './nav';
 import {
   closeRemotePanel,
   code,
+  farPath,
   host,
   inviting,
   isMirror,
@@ -35,6 +36,19 @@ export const REMOTE_ID = 'remote';
 /** The far-away main screen link as people read and copy it (`192.168.1.5:1010/J/482917-K7M2Q9XA`). */
 export function mirrorUrl(roomCode: string, key: string): string {
   return `${joinOrigin()}${mirrorPath(roomCode, key)}`;
+}
+
+/** How the far-away screens are reached now, short: the path and the measured round trip. */
+export function farPathText(path: FarPath): string {
+  if (path.direct === 0) return REMOTE.pathServer;
+  const name = path.direct < path.total ? REMOTE.pathSome(path.direct, path.total) : REMOTE.pathDirect;
+  return path.rtt === null ? name : `${name} · ${REMOTE.pathRtt(path.rtt)}`;
+}
+
+/** The path as a small tag: filled green on a direct link, plain through the server. */
+function PathTag() {
+  const path = farPath.value;
+  return <span class={`remote-path ${path.direct > 0 ? 'is-direct' : ''}`}>{farPathText(path)}</span>;
 }
 
 /** Copying needs a secure page (HTTPS or localhost); elsewhere the button is left out. */
@@ -87,6 +101,7 @@ export function RemoteChip() {
       <Icon name="wifi" size={15} stroke={2.6} color="#111214" />
       {REMOTE.farChip}
       {h && <span class="remote-chip-host">{REMOTE.farHost(h.name)}</span>}
+      <PathTag />
     </div>
   );
 }
@@ -141,6 +156,7 @@ export function RemotePanel() {
           <div class={`remote-status ${on ? 'is-on' : ''}`} role="status">
             {on ? <span class="dot" /> : <span class="spinner" />}
             {on ? REMOTE.connected(n) : REMOTE.waiting}
+            {on && <PathTag />}
           </div>
           <div class="remote-note">{REMOTE.gamesNote}</div>
           <div class="remote-actions">
@@ -192,7 +208,8 @@ export function FarBadge() {
 /** Far-away main screen: the Host's main screen is away (waiting), or the link stopped working. */
 export function FarOverlay() {
   const end = mirrorEnd.value;
-  const waiting = !end && netStatus.value === 'open' && !leadOnline.value;
+  // A direct link still carrying the Host's screen means it is there (only its server socket dropped).
+  const waiting = !end && netStatus.value === 'open' && !leadOnline.value && farPath.value.direct === 0;
   useEffect(() => {
     if (!end) return;
     // A remote or keyboard on this screen can still try again (Enter / OK).

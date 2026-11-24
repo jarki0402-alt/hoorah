@@ -40,6 +40,14 @@ export const FINALE_MS = 4500;
 /** Presses stamped this long before the turn began belong to an earlier turn and are ignored. */
 export const STALE_PRESS_MS = 150;
 
+/**
+ * Long-distance play (a far-away main screen watches): a phone there reaches this screen about
+ * 0.2-0.45 s after the press. While far screens watch, a press is judged at its own stamp (where
+ * both screens showed the floor at that server time, at most this far back), and a turn waits
+ * this long after the ring empties before the floor drops by itself, so late presses still count.
+ */
+export const FAR_PRESS_MS = 600;
+
 export const PAS_PX = 8;
 
 /** Balance meter zones (ratio of load offset to the support's half-width). */
@@ -112,12 +120,15 @@ export interface Fall {
   playerId: number;
   floorIndex: number;
   width: number;
-  /** Game time the drop was evaluated at (= startAt: where the floor was on the TV). */
+  /** Game time the drop was judged at: startAt, or the press stamp in long-distance play. */
   at: number;
   /** When the floor was released (receipt time) and when it reaches the tower top. */
   startAt: number;
   landAt: number;
-  /** Floor position when released; the floor falls straight down, so both are equal. */
+  /**
+   * Floor position when released (fromX) and where it was judged (dropX). Equal unless a press
+   * is judged at its stamp (long-distance play): then it glides to dropX while it falls.
+   */
   fromX: number;
   dropX: number;
   auto: boolean;
@@ -324,6 +335,16 @@ export class GameClock {
     this.pausedAt = null;
   }
 
+  /** Server time minus game time (grows by every pause). */
+  get offsetMs(): number {
+    return this.offset;
+  }
+
+  /** Game time the clock froze at, or null while it runs. */
+  get pausedAtMs(): number | null {
+    return this.pausedAt;
+  }
+
   toServer(t: number): number {
     return t + this.offset;
   }
@@ -364,6 +385,12 @@ export class RusunLogic {
   topped: ToppedInfo | null = null;
   /** Tallest tower this game (warung included). */
   bestHeight = 1;
+  /**
+   * 0 normally: a press lets go where the floor is when it arrives. While far-away screens watch
+   * the driver sets FAR_PRESS_MS: presses are judged at their stamp (at most this far back) and a
+   * turn drops by itself this long after its deadline.
+   */
+  pressWindowMs = 0;
   /** Join order of everyone who has been in the game. */
   readonly order: number[] = [];
   readonly stats = new Map<number, PlayerStats>();
@@ -488,16 +515,35 @@ export class RusunLogic {
   }
 
   /**
-   * A JATUHKAN press. `at` is the phone's press time in game time; it only filters out presses
-   * meant for an earlier turn. The floor lets go where it is on the TV right now and falls
-   * straight down: no rewinding to the press time, so it never jumps sideways.
+   * A JATUHKAN press. `at` is the phone's press time in game time; it filters out presses meant
+   * for an earlier turn. Normally the floor lets go where it is on the main screen right now and
+   * falls straight down: no rewinding to the press time, so it never jumps sideways. With a
+   * press window (long-distance play) it is judged where it was at the stamp, never earlier than
+   * the turn start or the window, never later than now, and glides there while falling.
    */
   drop(playerId: number, at: number, now: number): boolean {
     if (this.phase !== 'aim' || playerId !== this.current) return false;
     const pressedAt = Number.isFinite(at) ? at : now;
     if (pressedAt < this.turnStartAt - STALE_PRESS_MS) return false;
-    this.release(now, now, false);
+    this.release(this.judgedAt(pressedAt, now), now, false);
     return true;
+  }
+
+  /** Game time a press stamped `pressedAt` and received at `now` is judged at. */
+  judgedAt(pressedAt: number, now: number): number {
+    const win = this.pressWindow;
+    if (win <= 0) return now;
+    return Math.min(now, Math.max(pressedAt, this.turnStartAt, now - win));
+  }
+
+  /** When the current turn's floor drops by itself (the deadline plus any press window). */
+  get autoDropAt(): number {
+    return this.deadline + this.pressWindow;
+  }
+
+  private get pressWindow(): number {
+    const w = this.pressWindowMs;
+    return Number.isFinite(w) ? Math.max(0, Math.min(FAR_PRESS_MS, w)) : 0;
   }
 
   /** Advance timers up to `now`. Safe to call as often as you like. */
@@ -520,10 +566,12 @@ export class RusunLogic {
         if (now < this.phaseEndsAt) return false;
         this.beginTurn(this.phaseEndsAt, this.nextPlayer(this.lastTurnPlayer), null);
         return true;
-      case 'aim':
-        if (now < this.deadline) return false;
-        this.release(this.deadline, this.deadline, true);
+      case 'aim': {
+        const end = this.autoDropAt;
+        if (now < end) return false;
+        this.release(end, end, true);
         return true;
+      }
       case 'falling':
         if (now < this.phaseEndsAt) return false;
         this.land();

@@ -9,8 +9,19 @@ import { KeyArt } from '../../shared/keyart';
 import { cachedTutorial, loadTutorial } from '../../shared/tutorial';
 import type { Tutorial } from '../../shared/tutorial/types';
 import { Avatar, Icon } from '../../shared/ui';
+import { elapsedOf } from '../countdown';
 import { setFocusMap } from '../nav';
-import { connected, finishTutorial, players, type TutorialRun } from '../store';
+import {
+  clearTimer,
+  connected,
+  finishTutorial,
+  isMirror,
+  players,
+  publishTimer,
+  serverNow,
+  shellTimer,
+  type TutorialRun,
+} from '../store';
 import { TUTORIAL as STR } from '../strings';
 import { PhoneMock } from './PhoneMock';
 import './tutorial.css';
@@ -20,8 +31,10 @@ const STEP_MS = 5_500;
 
 export function TutorialOverlay({ run }: { run: TutorialRun }) {
   const [data, setData] = useState<Tutorial | null>(() => cachedTutorial(run.id));
-  // -1: the origin card; 0..n-1: the steps.
-  const [at, setAt] = useState(-1);
+  // -1: the origin card; 0..n-1: the steps. A far-away main screen shows the Host's step.
+  const [ownAt, setAt] = useState(-1);
+  const followed = isMirror && shellTimer.value?.id === 'tutorial' ? shellTimer.value : null;
+  const at = isMirror ? (followed ? followed.step - 1 : -1) : ownAt;
 
   useEffect(() => {
     let live = true;
@@ -39,14 +52,16 @@ export function TutorialOverlay({ run }: { run: TutorialRun }) {
   }, [run.id]);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || isMirror) return;
     const last = at >= data.steps.length - 1;
-    const t = window.setTimeout(
-      () => (last ? finishTutorial() : setAt((i) => i + 1)),
-      at < 0 ? ORIGIN_MS : STEP_MS,
-    );
+    const ms = at < 0 ? ORIGIN_MS : STEP_MS;
+    // The step's deadline in server time, so a far-away main screen turns the page with this one.
+    publishTimer({ id: 'tutorial', step: at + 1, end: serverNow() + ms });
+    const t = window.setTimeout(() => (last ? finishTutorial() : setAt((i) => i + 1)), ms);
     return () => window.clearTimeout(t);
   }, [data, at]);
+
+  useEffect(() => () => clearTimer('tutorial'), []);
 
   useEffect(
     () =>
@@ -74,7 +89,7 @@ export function TutorialOverlay({ run }: { run: TutorialRun }) {
           {Array.from({ length: total }, (_, i) => (
             <span key={i} class={i < at + 1 ? 'done' : i === at + 1 ? 'on' : ''}>
               {i === at + 1 && (
-                <i key={at} style={{ animationDuration: `${at < 0 ? ORIGIN_MS : STEP_MS}ms` }} />
+                <i key={at} style={stepBar(at < 0 ? ORIGIN_MS : STEP_MS, followed?.end ?? null)} />
               )}
             </span>
           ))}
@@ -148,4 +163,11 @@ export function TutorialOverlay({ run }: { run: TutorialRun }) {
       </footer>
     </div>
   );
+}
+
+/** The step bar fills over the step; on a far-away main screen it starts where the Host's is. */
+function stepBar(ms: number, end: number | null): Record<string, string> {
+  const style: Record<string, string> = { animationDuration: `${ms}ms` };
+  if (end !== null) style.animationDelay = `-${Math.round(elapsedOf(end, ms))}ms`;
+  return style;
 }

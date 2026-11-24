@@ -33,6 +33,8 @@ export const LIMITS = {
   messagesPerSecond: 60,
   /** Far-away main screens (long-distance play) one room may have watching at once. */
   maxMirrors: 3,
+  /** Highest far-away main screen id before the room's counter wraps. */
+  maxMirrorId: 65_535,
 } as const;
 
 /**
