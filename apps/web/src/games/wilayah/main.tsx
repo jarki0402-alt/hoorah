@@ -2,7 +2,8 @@
  * Rebut Wilayah entry: connect to the shell, then stack three layers: the
  * ground canvas (courtyard, floor and smooth territories, drawn on demand), a transparent Phaser
  * canvas (trails, markers, effects; 1.5x the stage, camera zoom 1.5 over the 1280x720 world) and
- * the Preact HUD. Then hand control to the director.
+ * the Preact HUD. Then hand control to the director (or, on a far-away screen in long-distance
+ * play, to the replica that draws the Host's match).
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -10,6 +11,7 @@ import { fontsReady, mountStage } from '../common/stage';
 import './hud.css';
 import { Director } from './director';
 import { Hud } from './hud';
+import { WilayahReplica } from './replica';
 import { WilayahScene } from './scene';
 import { STR } from './strings';
 import { RENDER_SCALE } from './textures';
@@ -83,7 +85,12 @@ async function boot(): Promise<void> {
     fit(w, h);
   });
 
-  new Director(game, scene, hud, phaser).start();
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's match from its published state, run nothing of our own.
+    new WilayahReplica(game, scene, hud, phaser).start();
+  } else {
+    new Director(game, scene, hud, phaser).start();
+  }
   // Let the first frame paint before the shell removes its loading screen.
   await nextFrame();
   await nextFrame();

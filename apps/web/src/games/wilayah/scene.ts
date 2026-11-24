@@ -16,9 +16,10 @@
 import { type Look, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
+import type { Field } from './field';
 import { Ground } from './ground';
 import { FIELD_W, FIELD_X, FIELD_Y, WORLD_H, WORLD_W } from './layout';
-import type { MatchEvent, Runner, WilayahMatch } from './logic';
+import type { Geometry, MatchEvent, Phase, Runner } from './logic';
 import { HeadBank, RENDER_SCALE } from './textures';
 import { hexToInt, mix } from './tiles';
 import { wrapAngle } from './trail';
@@ -62,6 +63,28 @@ interface Marker {
   busy: boolean;
 }
 
+/** What the scene draws of a runner: a match's runner, or a far-away screen's copy of one. */
+export type StageRunner = Pick<
+  Runner,
+  'id' | 'v' | 'name' | 'look' | 'color' | 'alive' | 'x' | 'y' | 'px' | 'py' | 'angle' | 'pangle'
+> & {
+  readonly trail: { readonly len: number; readonly xs: ArrayLike<number>; readonly ys: ArrayLike<number> };
+};
+
+/**
+ * What the scene reads: the Host's match itself, or (long-distance play) the state a far-away
+ * screen rebuilt from the Host's published packets.
+ */
+export interface StageModel {
+  readonly phase: Phase;
+  readonly field: Pick<Field, 'cols' | 'rows' | 'size' | 'owner'>;
+  readonly geo: Pick<Geometry, 'unit'>;
+  all(): readonly StageRunner[];
+  runner(id: number): StageRunner | undefined;
+  isProtected(r: StageRunner, t: number): boolean;
+  isHome(r: StageRunner): boolean;
+}
+
 interface TrailStyle {
   color: number;
   light: number;
@@ -79,7 +102,7 @@ export class WilayahScene extends Phaser.Scene {
   private heads!: HeadBank;
   private readonly groundHost: HTMLElement;
   private ground: Ground | null = null;
-  private match: WilayahMatch | null = null;
+  private match: StageModel | null = null;
   private viewW = WORLD_W;
   private viewH = WORLD_H;
   private cols = 1;
@@ -142,8 +165,11 @@ export class WilayahScene extends Phaser.Scene {
   }
 
   /** Build the layers for this match's floor. Call once, after `ready`. */
-  setup(match: WilayahMatch): void {
+  setup(match: StageModel): void {
     this.match = match;
+    this.waves = [];
+    this.dirty0 = Number.POSITIVE_INFINITY;
+    this.dirty1 = -1;
     const { cols, rows, size } = match.field;
     this.cols = cols;
     this.cell = FIELD_W / cols;
@@ -246,6 +272,39 @@ export class WilayahScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Long-distance play: cells whose owner changed on a far-away screen. 'fresh' land reveals as a
+   * wave from its centre and flashes like a capture, 'plain' reveals as a quick wave, 'instant'
+   * shows at once (corrections and the first picture).
+   */
+  paint(cells: readonly number[], t: number, kind: 'fresh' | 'plain' | 'instant'): void {
+    const n = cells.length;
+    if (n === 0 || !this.match) return;
+    if (kind === 'instant') {
+      for (let k = 0; k < n; k++) this.reveal(cells[k]!, false);
+      return;
+    }
+    const cols = this.cols;
+    let sx = 0;
+    let sy = 0;
+    for (let k = 0; k < n; k++) {
+      const i = cells[k]!;
+      sx += (i % cols) + 0.5;
+      sy += ((i / cols) | 0) + 0.5;
+    }
+    const fresh = kind === 'fresh';
+    this.queueRadial(
+      cells,
+      sx / n,
+      sy / n,
+      t,
+      fresh ? WAVE_STEP_MS : CLEAR_STEP_MS,
+      fresh ? 'flash' : 'plain',
+    );
+    const wave = this.waves[this.waves.length - 1];
+    if (fresh && wave) this.waves.push({ ...wave, t0: t + FLASH_MS, k: 0, kind: 'settle' });
+  }
+
   /** Short white flash over the whole view (time up). */
   flash(): void {
     this.cameras.main.flash(240, 255, 255, 255);
@@ -267,7 +326,7 @@ export class WilayahScene extends Phaser.Scene {
     this.drawBeacons(m);
   }
 
-  private drawBeacons(m: WilayahMatch): void {
+  private drawBeacons(m: StageModel): void {
     const g = this.beaconG;
     g.clear();
     if (m.phase !== 'countdown') return;
@@ -366,12 +425,12 @@ export class WilayahScene extends Phaser.Scene {
   }
 
   /** A runner changed colour (a computer player making way for a newcomer): repaint its land. */
-  private restyle(m: WilayahMatch): void {
+  private restyle(m: StageModel): void {
     for (const r of m.all()) this.ensureOwner(r);
   }
 
   /** Ground palette and trail colours for a runner's slot. */
-  private ensureOwner(r: Runner): void {
+  private ensureOwner(r: StageRunner): void {
     if (this.slotColor.get(r.v) === r.color) return;
     this.slotColor.set(r.v, r.color);
     this.ground?.setOwnerColor(r.v, r.color);
@@ -380,7 +439,7 @@ export class WilayahScene extends Phaser.Scene {
 
   /* ------------------------------------------------------------------ trails */
 
-  private drawTrails(m: WilayahMatch): void {
+  private drawTrails(m: StageModel): void {
     const g = this.trailG;
     g.clear();
     const u = this.unitPx;
@@ -411,7 +470,7 @@ export class WilayahScene extends Phaser.Scene {
   }
 
   /** A runner's trail in world px into `pts`, ending at its head drawn between steps. Returns the point count. */
-  private trailPoints(r: Runner, alpha: number): number {
+  private trailPoints(r: StageRunner, alpha: number): number {
     const tr = r.trail;
     const need = (tr.len + 1) * 2;
     if (this.pts.length < need) this.pts = new Float64Array(need * 2);
@@ -494,7 +553,7 @@ export class WilayahScene extends Phaser.Scene {
     return Math.min(38, Math.max(30, this.unitPx * 3));
   }
 
-  private marker(r: Runner): Marker {
+  private marker(r: StageRunner): Marker {
     let mk = this.markers.get(r.id);
     if (mk && sameLook(mk.look, r.look) && mk.color === r.color) return mk;
     mk?.root.destroy();
@@ -604,7 +663,7 @@ export class WilayahScene extends Phaser.Scene {
     });
   }
 
-  private drawMarkers(m: WilayahMatch, dt: number): void {
+  private drawMarkers(m: StageModel, dt: number): void {
     const alpha = this.alpha;
     for (const r of m.all()) {
       const mk = this.marker(r);

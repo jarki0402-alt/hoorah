@@ -15,7 +15,8 @@ import { bySkill, cpuSkill, isCpu, reportSoloResult, soloOpponents } from '../co
 import { fieldSkills, styleFor, TAKEOVER_STYLE, TerritoryBrain } from './brain';
 import { GameClock } from './clock';
 import type { BoardRow, Hud, HudState, Overlay } from './hud';
-import { type MatchEvent, parseMinutes, type Runner, WilayahMatch } from './logic';
+import { type MatchEvent, type OutCause, parseMinutes, type Runner, WilayahMatch } from './logic';
+import { MIRROR_MS, MirrorFeed } from './mirror';
 import { buildResult, soloOutcome } from './results';
 import type { WilayahScene } from './scene';
 import { formatClock, formatPct, STR } from './strings';
@@ -33,8 +34,29 @@ const QUIET_LOOP = 3;
 const OUT_SFX_MS = 120;
 /** Captures smaller than this share (%) get no pop-up. */
 const FLOAT_MIN_PCT = 0.25;
-const FEED_BIG_PCT = 5;
-const OUT_RED = '#FF6B5E';
+export const FEED_BIG_PCT = 5;
+export const OUT_RED = '#FF6B5E';
+
+/** Pop-up size for a capture of `pct` percent of the floor. */
+export const gainFloatSize = (pct: number): number => Math.round(Math.min(64, 26 + pct * 4));
+
+/** Feed line for a knock-out (null when it gets none), in the colour of whoever caused it. */
+export function outFeedLine(
+  cause: OutCause,
+  victim: { name: string; color: string },
+  by: { name: string; color: string } | undefined,
+): { text: string; color: string } | null {
+  switch (cause) {
+    case 'cut':
+      return by ? { text: STR.feedCut(by.name, victim.name), color: by.color } : null;
+    case 'wiped':
+      return by ? { text: STR.feedWiped(by.name, victim.name), color: by.color } : null;
+    case 'self':
+      return { text: STR.feedSelf(victim.name), color: victim.color };
+    case 'crash':
+      return { text: STR.feedCrash(victim.name), color: victim.color };
+  }
+}
 
 export class Director {
   private readonly clock = new GameClock();
@@ -57,6 +79,9 @@ export class Director {
   private lastCaptureSfx = Number.NEGATIVE_INFINITY;
   private lastOutSfx = Number.NEGATIVE_INFINITY;
   private readonly at = { x: 0, y: 0 };
+  /** Long-distance play: what a far-away screen needs, and when it was last sent. */
+  private readonly mirror = new MirrorFeed();
+  private lastMirror = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly game: HoorahGame,
@@ -83,6 +108,11 @@ export class Director {
     this.game.on('players', () => this.onPlayers());
     this.game.on('input', (input) => this.onInput(input));
     this.game.on('pause', (paused) => this.setHold('shell', paused));
+    this.game.on('mirrors', (on) => {
+      if (!on) return;
+      this.mirror.resync();
+      this.publishMirror(this.clock.now(), true);
+    });
     this.phaser.events.on('hidden', () => this.setHold('hidden', true));
     this.phaser.events.on('visible', () => this.setHold('hidden', false));
     if (this.game.paused) this.setHold('shell', true);
@@ -100,6 +130,8 @@ export class Director {
     this.hud.setPaused(paused);
     if (paused) this.phaser.pause();
     else this.phaser.resume();
+    // No frames run while paused, so tell a far-away screen right here.
+    this.publishMirror(this.clock.now(), true);
   }
 
   private onPlayers(): void {
@@ -199,6 +231,7 @@ export class Director {
       this.lastHud = t;
       this.hud.setState(this.hudState(t));
     }
+    this.publishMirror(t, false);
   }
 
   private onEvent(e: MatchEvent, t: number): void {
@@ -218,6 +251,7 @@ export class Director {
         return;
       case 'spawn':
         if (!e.first) {
+          this.mirror.note(e);
           this.buzz(e.id, 50);
           this.sendView(e.id, true);
         }
@@ -228,9 +262,9 @@ export class Director {
         if (!r) return;
         if (e.loop < QUIET_LOOP && pct < FLOAT_MIN_PCT) return;
         if (pct >= FLOAT_MIN_PCT) {
+          this.mirror.note(e);
           this.scene.toWorld(e.x, e.y, this.at);
-          const size = Math.round(Math.min(64, 26 + pct * 4));
-          this.hud.float(STR.gainFloat(formatPct(pct)), this.at.x, this.at.y, r.color, size);
+          this.hud.float(STR.gainFloat(formatPct(pct)), this.at.x, this.at.y, r.color, gainFloatSize(pct));
         }
         // Small computer captures stay quiet so a busy solo floor does not chatter.
         const audible = !isCpu(e.id) || pct >= 1.2;
@@ -246,6 +280,7 @@ export class Director {
       case 'out': {
         const r = match.runner(e.id);
         const by = e.by === null ? undefined : match.runner(e.by);
+        this.mirror.note(e);
         this.scene.toWorld(e.x, e.y, this.at);
         this.hud.float(STR.outFloat, this.at.x, this.at.y - 18, OUT_RED, 34, 40);
         if (t - this.lastOutSfx >= OUT_SFX_MS) {
@@ -254,7 +289,8 @@ export class Director {
         }
         this.buzz(e.id, [140, 60, 220]);
         if (by) this.buzz(by.id, [40, 30, 40]);
-        if (r) this.pushOutFeed(e, r, by);
+        const line = r ? outFeedLine(e.cause, r, by) : null;
+        if (line) this.hud.pushFeed(line.text, line.color);
         this.sendView(e.id, true);
         if (by) this.sendView(by.id, false);
         return;
@@ -282,23 +318,6 @@ export class Director {
         this.game.end(this.result ?? this.finalResult());
         return;
       case 'leave':
-        return;
-    }
-  }
-
-  private pushOutFeed(e: Extract<MatchEvent, { type: 'out' }>, r: Runner, by: Runner | undefined): void {
-    switch (e.cause) {
-      case 'cut':
-        if (by) this.hud.pushFeed(STR.feedCut(by.name, r.name), by.color);
-        return;
-      case 'wiped':
-        if (by) this.hud.pushFeed(STR.feedWiped(by.name, r.name), by.color);
-        return;
-      case 'self':
-        this.hud.pushFeed(STR.feedSelf(r.name), r.color);
-        return;
-      case 'crash':
-        this.hud.pushFeed(STR.feedCrash(r.name), r.color);
         return;
     }
   }
@@ -405,7 +424,32 @@ export class Director {
       urgent: m.phase === 'play' && left <= m.tuning.warnMs,
       rows: this.rows(t),
       overlay: this.overlay(t),
-      hint: m.phase === 'countdown' || (m.phase === 'play' && t - this.goAt < HINT_MS),
+      hint: this.hint(t),
     };
+  }
+
+  private hint(t: number): boolean {
+    const phase = this.match.phase;
+    return phase === 'countdown' || (phase === 'play' && t - this.goAt < HINT_MS);
+  }
+
+  /* ------------------------------------------------------------------ long-distance play */
+
+  /** The stage for far-away screens, throttled unless `now` is set. */
+  private publishMirror(t: number, now: boolean): void {
+    if (!this.game.mirrored) return;
+    if (!now && t - this.lastMirror < MIRROR_MS) return;
+    this.lastMirror = t;
+    this.game.publish(
+      this.mirror.pack({
+        match: this.match,
+        t,
+        server: this.game.now(),
+        overlay: this.overlay(t),
+        hint: this.hint(t),
+        away: this.takeover,
+        held: this.clock.paused,
+      }),
+    );
   }
 }

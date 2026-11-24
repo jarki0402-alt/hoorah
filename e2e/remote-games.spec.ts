@@ -18,6 +18,7 @@ const CASES: { id: string; title: string; players: number; settle?: number; star
   { id: 'es', title: 'Seluncur Es', players: 2, settle: 9000 },
   { id: 'karung', title: 'Balap Karung', players: 2, settle: 6000 },
   { id: 'runtuh', title: 'Lantai Runtuh', players: 2, settle: 7000 },
+  { id: 'wilayah', title: 'Rebut Wilayah', players: 2, settle: 7000 },
 ];
 const NAMES = ['Rina', 'Bayu', 'Sari', 'Dodi', 'Wulan', 'Tono'];
 

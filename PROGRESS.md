@@ -68,6 +68,19 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-24 · Main bareng teman jauh: Rebut Wilayah (17 game jarak jauh)
+
+**Apa yang diubah:** Rebut Wilayah bisa ditampilkan di layar teman jauh (`remote: true`). Lantai wilayah tidak dikirim utuh: setiap paket membawa perubahan pemilik petak bernomor (diulang 600 ms) dan beberapa pita 4 baris lantai yang bergilir (seluruh lantai ±1,8 detik), jadi paket hilang pulih sendiri dan layar yang baru tersambung mendapat lantai penuh dalam ≤6 paket. Jejak dan posisi pemain di setiap paket, ±12 paket per detik, rata-rata 1,6 KB (maks 3,2 KB, batas 7.000 karakter). `scene.ts` menggambar dari antarmuka `StageModel` (dipakai pertandingan asli dan replika). Kasus Wilayah di `e2e/remote-games.spec.ts`.
+
+**File:** `apps/web/src/games/wilayah/{mirror.ts,mirror.test.ts,replica.ts,scene.ts,director.ts,main.tsx}`, `apps/web/src/shared/games.ts`, `apps/web/src/screen/mirror.test.ts`, `e2e/remote-games.spec.ts`.
+
+**Verifikasi:**
+- `npx vitest run` wilayah + rollout 62/62 lulus; `npx playwright test e2e/remote-games.spec.ts --grep Wilayah` lulus, cuplikan A dan B sama (tabrakan di tengah, B dipotret sesaat sesudah A).
+- Semua game paket ini masuk, lalu `npm run check` lulus (11 peringatan lint lama, 129 file / 2217 tes unit, build).
+- `npm run docker:up` lulus, `curl http://192.168.0.104:1010/health` → `{"ok":true,...}`, katalog di aset container berisi 17 game `remote`.
+
+**Berikutnya / sisa:** di B, wilayah baru menyebar dari tengah area yang direbut (di A dari jejak). Game jarak jauh sekarang 17; sisanya (Ular Arena, Nyebrang, Hantu, Warna, Dapur, dan game cepat/3D) belum, karena telat 0,2–0,4 detik terasa tidak adil.
+
 ### 2026-11-24 · Main bareng teman jauh: Seluncur Es, Balap Karung, Lantai Runtuh
 
 **Apa yang diubah** (eksekusi pemilik 2026-11-24, saat sedang main bareng teman):
