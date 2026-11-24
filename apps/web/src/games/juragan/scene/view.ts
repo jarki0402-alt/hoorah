@@ -997,6 +997,37 @@ export class JuraganView {
     return blob;
   }
 
+  /** Owner (player id) and level each tile shows, as `showTiles` last drew them. */
+  private readonly shownTiles: { owner: number | null; level: number }[] = TILES.map(() => ({
+    owner: null,
+    level: 0,
+  }));
+
+  /**
+   * Bring owner frames and buildings in line with the rules' tiles: a city that changes hands
+   * plays the takeover; `animate` false draws a whole board at once (a far screen joining late).
+   */
+  showTiles(
+    tiles: readonly { owner: number | null; level: number }[],
+    colorOf: (id: number) => string,
+    animate = true,
+  ): void {
+    tiles.forEach((s, i) => {
+      const was = this.shownTiles[i];
+      if (!was || (was.owner === s.owner && was.level === s.level)) return;
+      // Transport tiles have no levels: an owner shows its marker.
+      const level = TILES[i]!.kind === 'transport' ? (s.owner === null ? 0 : 1) : s.level;
+      if (was.owner !== s.owner) this.setOwner(i, s.owner === null ? null : colorOf(s.owner), animate);
+      if (animate && s.owner !== null && was.owner !== null && was.owner !== s.owner) {
+        this.takeover(i, level, colorOf(s.owner));
+      } else {
+        const owner = s.owner ?? was.owner;
+        this.setBuilding(i, level, owner === null ? '#C4C7CC' : colorOf(owner), animate);
+      }
+      this.shownTiles[i] = { owner: s.owner, level: s.level };
+    });
+  }
+
   /**
    * A city changes hands: its building jumps, spins once and lands in the new owner's colour while
    * paint splashes over the tile. Without a building on the board yet it simply appears.

@@ -1,5 +1,7 @@
 /**
  * Juragan Nusantara bootstrap: connect to the shell, mount the stage, the 3D tabletop and the DOM HUD.
+ * A far-away main screen (long-distance play, `game.isMirror`) mounts the same and draws the
+ * Host's published state through `JuraganReplica` instead of running the rules.
  *
  * `?poster=1` skips the shell and renders the key-art shot at the stage size, then sets
  * `window.__posterReady` (add `&cam=x,y,z,tx,ty,tz,fov` to tune the camera).
@@ -14,6 +16,7 @@ import { ensureGfxProfile, type GfxTier, isGfxTier } from '../common/gfx';
 import { fontsReady, mountStage } from '../common/stage';
 import { JuraganDriver } from './driver';
 import { Hud, HudStore } from './hud';
+import { JuraganReplica } from './replica';
 import { pickTier } from './scene/quality';
 import { type Frame, JuraganView, type ViewStats } from './scene/view';
 import { STR } from './strings';
@@ -84,6 +87,14 @@ async function boot(): Promise<void> {
   await view.warmUp();
   const hud = new HudStore();
   render(<Hud store={hud} />, layer(stage));
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's game from its published state, run nothing of our own.
+    const replica = new JuraganReplica(game, view, hud);
+    onResize((h, w) => view.setSize(w, h, HUD_FRAME));
+    replica.start();
+    game.ready();
+    return;
+  }
   const driver = new JuraganDriver(game, view, hud);
   driver.autopilot = demo > 0;
   onResize((h, w) => {

@@ -12,6 +12,7 @@ const SHOTS = 'test-results/screens';
 const CASES: { id: string; title: string; players: number }[] = [
   { id: 'penyusup', title: 'Penyusup', players: 3 },
   { id: 'siluman', title: 'Kampung Siluman', players: 5 },
+  { id: 'juragan', title: 'Juragan Nusantara', players: 2 },
 ];
 const NAMES = ['Rina', 'Bayu', 'Sari', 'Dodi', 'Wulan', 'Tono'];
 

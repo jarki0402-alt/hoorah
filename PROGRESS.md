@@ -68,6 +68,16 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-24 · Main bareng teman jauh: Juragan Nusantara
+
+**Apa yang diubah:** Juragan bisa ditampilkan di layar teman jauh (`remote: true`). `mirror.ts` (pemilik petak sebagai dua larik 24 angka, pemain sebagai tuple, ±2 KB untuk 6 pemain akhir game) dan `replica.ts` mengisi `JuraganView` + `HudStore` yang sama dengan A. Dadu, jalan bidak, koin, dan kartu Kabar diputar ulang di B menurut nomor efek (8 terakhir disimpan; yang terlambat digambar langsung di tempat). Sinkron pemilik/bangunan dipindah ke `view.showTiles` supaya A dan B memakai satu jalur. Kasus Juragan ditambahkan ke `e2e/remote-games.spec.ts`.
+
+**File:** `apps/web/src/games/juragan/{mirror.ts,mirror.test.ts,replica.ts,driver.ts,main.tsx,scene/view.ts}`, `apps/web/src/shared/games.ts`, `apps/web/src/screen/mirror.test.ts`, `e2e/remote-games.spec.ts`.
+
+**Verifikasi:** `npx tsc --noEmit -p apps/web` lulus (di luar folder Tarik/Bom yang sedang dikerjakan), `npx biome check` lulus, `npx vitest run` juragan + rollout 94/94 lulus, `npx playwright test e2e/remote-games.spec.ts --grep Juragan` lulus; cuplikan A dan B sama (papan, HUD, kartu petak). `npm run check` penuh dan Docker belum dijalankan (alasan sama dengan entri di bawah).
+
+**Berikutnya / sisa:** lempar dadu dan goyang koin acak per layar (angka dadu sama). Jeda lokal di B diabaikan, hanya jeda A yang membekukan B.
+
 ### 2026-11-24 · Main bareng teman jauh: Penyusup + Kampung Siluman
 
 **Apa yang diubah** (eksekusi pemilik 2026-11-24, paket cepat agar bisa langsung main bareng teman):

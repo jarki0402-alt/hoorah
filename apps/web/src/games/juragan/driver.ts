@@ -61,6 +61,7 @@ import {
   UPGRADE_MS,
   upgradeCost,
 } from './logic';
+import { FX_KEEP, type MirrorFx, type MirrorFxBody, toMirror } from './mirror';
 import { buildResult, headline } from './results';
 import type { Anchor, JuraganView } from './scene/view';
 import {
@@ -149,11 +150,12 @@ export class JuraganDriver {
   private readonly deltas = new Map<number, { key: number; amount: number; until: number }[]>();
   /** Game-time callbacks (paused with the game). */
   private readonly later: { at: number; fn: () => void }[] = [];
-  /** Owner and level the view currently shows, per tile. */
-  private readonly shown: { owner: number | null; level: number }[] = TILES.map(() => ({
-    owner: null,
-    level: 0,
-  }));
+  /** What the board shows beyond the rules' state, for far-away main screens (long-distance play). */
+  private activePawn: number | null = null;
+  private focusPawn: number | null = null;
+  private glow: { tile: number; color: string } | null = null;
+  /** Recent board effects (dice, walks, coins, Kabar cards), numbered, newest last. */
+  private readonly fx: MirrorFx[] = [];
   private soloReported = false;
   private shellPaused = false;
   /** Offline demo (`?demo=N`): the brain plays every seat. */
@@ -213,6 +215,9 @@ export class JuraganDriver {
     this.game.on('players', () => this.onPlayers());
     this.game.on('action', (from, a) => this.onAction(from, a));
     this.game.on('pause', (p) => this.setPaused(p));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publish();
+    });
     if (this.game.paused) this.setPaused(true);
     this.flush();
     this.refreshHud();
@@ -365,6 +370,7 @@ export class JuraganDriver {
     if (hold) this.clock.pause();
     else this.clock.resume();
     this.hud.paused.value = hold;
+    this.publish();
     // Deadlines are sent in server time, which shifted while paused.
     if (!hold) {
       this.view.holdGovernor(1000);
@@ -486,7 +492,7 @@ export class JuraganDriver {
         if (!bonus) this.transient.clear();
         this.bonus = bonus;
         this.lastCount = 0;
-        this.view.setActive(e.player);
+        this.setActive(e.player);
         this.hint =
           e.type === 'jail' ? STR.hintJail : this.brainSeat(e.player) ? STR.hintRollAuto : STR.hintRoll;
         if (!this.brainSeat(e.player)) {
@@ -508,6 +514,7 @@ export class JuraganDriver {
         this.model.rolling = true;
         this.hint = STR.hintRolling;
         this.view.rollDice(e.dice, this.view.pawnPoint(e.player), (DICE_MS / 1000) * 0.88);
+        this.effect({ k: 'd', p: e.player, v: [e.dice[0], e.dice[1]] });
         this.sfx('clap');
         this.after(DICE_MS * 0.7, () => {
           this.sfx(e.doubles ? 'correct' : 'drop');
@@ -522,6 +529,7 @@ export class JuraganDriver {
       case 'move': {
         this.view.place(this.places());
         this.view.walk(e.player, e.path, e.kind, HOP_MS / 1000, JUMP_MS / 1000);
+        this.effect({ k: 'w', p: e.player, m: e.kind, path: [...e.path] });
         if (e.kind === 'jump') {
           this.sfx('jump');
         } else {
@@ -564,7 +572,7 @@ export class JuraganDriver {
           `+${rp(e.amount)}`,
           'neutral',
         );
-        this.view.coins('bank', { pawn: e.player }, e.amount);
+        this.coins(null, e.player, e.amount);
         this.addDelta(e.player, e.amount);
         return;
       case 'bankrupt':
@@ -578,6 +586,7 @@ export class JuraganDriver {
         const text = CARD_TEXT[e.card];
         this.hint = text.title;
         this.view.drawCard();
+        this.effect({ k: 'k' });
         this.sfx('reveal');
         this.after(420, () => {
           this.model.card = { key: ++this.seq, title: text.title, body: text.body, tone: cardTone(e.card) };
@@ -670,11 +679,9 @@ export class JuraganDriver {
   }
 
   private onPay(e: Extract<JuraganEvent, { type: 'pay' }>): void {
-    const from: Anchor = e.from === null ? 'bank' : { pawn: e.from };
-    const to: Anchor = e.to === null ? 'bank' : { pawn: e.to };
     const delay = e.step !== undefined ? (e.step + 1) * HOP_MS : 0;
     this.after(delay, () => {
-      this.view.coins(from, to, e.amount);
+      this.coins(e.from, e.to, e.amount);
       if (e.from !== null) this.addDelta(e.from, -e.amount);
       if (e.to !== null) this.after(500, () => this.addDelta(e.to as number, e.amount));
       const sound: Partial<Record<PayReason, Sfx>> = {
@@ -723,38 +730,46 @@ export class JuraganDriver {
 
   /** Bring the board's owner frames and buildings in line with the rules' state. */
   private syncTiles(): void {
-    const L = this.logic;
-    L.tiles.forEach((s, i) => {
-      const was = this.shown[i]!;
-      if (was.owner === s.owner && was.level === s.level) return;
-      // Transport tiles have no levels: an owner shows its marker.
-      const level = TILES[i]!.kind === 'transport' ? (s.owner === null ? 0 : 1) : s.level;
-      if (was.owner !== s.owner) this.view.setOwner(i, s.owner === null ? null : this.color(s.owner));
-      if (s.owner !== null && was.owner !== null && was.owner !== s.owner) {
-        this.view.takeover(i, level, this.color(s.owner));
-      } else {
-        const owner = s.owner ?? was.owner;
-        this.view.setBuilding(i, level, owner === null ? '#C4C7CC' : this.color(owner));
-      }
-      this.shown[i] = { owner: s.owner, level: s.level };
-    });
+    this.view.showTiles(this.logic.tiles, (id) => this.color(id));
   }
 
   private updateFocus(): void {
     const L = this.logic;
     if (L.phase === 'intro' || L.phase === 'finale' || L.phase === 'ended') {
+      this.focusPawn = null;
+      this.glow = null;
       this.view.focusPawn(null);
       this.view.highlight(null);
-      if (L.phase !== 'intro') this.view.setActive(null);
+      if (L.phase !== 'intro') this.setActive(null);
       return;
     }
+    this.focusPawn = L.player.id;
     this.view.focusPawn(L.player.id);
     const offer = L.phase === 'buy' || L.phase === 'upgrade' || L.phase === 'takeover' ? L.offerTile : null;
     const pick = L.phase === 'renovate' && this.renovatePick >= 0 ? this.renovatePick : null;
-    this.view.highlight(
-      pick ?? offer,
-      L.phase === 'takeover' ? '#FF6B5E' : L.phase === 'upgrade' || pick !== null ? '#5BD08A' : '#FFC928',
-    );
+    const tile = pick ?? offer;
+    const color =
+      L.phase === 'takeover' ? '#FF6B5E' : L.phase === 'upgrade' || pick !== null ? '#5BD08A' : '#FFC928';
+    this.glow = tile === null ? null : { tile, color };
+    this.view.highlight(tile, color);
+  }
+
+  private setActive(id: number | null): void {
+    this.activePawn = id;
+    this.view.setActive(id);
+  }
+
+  /** Coins fly between two pawns (null is the bank). */
+  private coins(from: number | null, to: number | null, amount: number): void {
+    const anchor = (id: number | null): Anchor => (id === null ? 'bank' : { pawn: id });
+    this.view.coins(anchor(from), anchor(to), amount);
+    this.effect({ k: 'c', f: from, t: to, a: amount });
+  }
+
+  /** Remember a board effect so a far-away main screen plays it too. */
+  private effect(fx: MirrorFxBody): void {
+    this.fx.push({ ...fx, n: ++this.seq, at: this.clock.now() });
+    while (this.fx.length > FX_KEEP) this.fx.shift();
   }
 
   private onFinish(winner: number | null, reason: EndReason): void {
@@ -789,7 +804,8 @@ export class JuraganDriver {
       line: w ? STR.finaleSub(rp(worth)) : null,
       winner: w ? { name: w.name, look: w.look, color: w.color } : null,
     };
-    this.view.setActive(null);
+    this.setActive(null);
+    this.focusPawn = null;
     this.view.focusOn(null);
     this.sfx('win');
     celebrate();
@@ -1006,6 +1022,28 @@ export class JuraganDriver {
       tile: focus === null ? null : this.tileCard(focus),
     };
     this.hud.model.value = this.model;
+    this.publish();
+  }
+
+  /** Long-distance play: what this screen shows, for far-away main screens (only while watched). */
+  private publish(): void {
+    const L = this.L;
+    if (!L || !this.game.mirrored) return;
+    const human = L.deciding && !this.brainSeat(L.player.id);
+    this.game.publish(
+      toMirror({
+        model: this.model,
+        tiles: L.tiles,
+        places: this.places(),
+        active: this.activePawn,
+        focus: this.focusPawn,
+        highlight: this.glow,
+        fx: this.fx,
+        ring: human ? { deadline: L.deadline, total: DECISION_MS[L.phase] ?? ROLL_MS } : null,
+        frozenAt: this.clock.paused ? this.clock.now() : null,
+        toServer: (t) => this.clock.toServer(t),
+      }),
+    );
   }
 
   /* ---------------------------------------------------------------- phones */

@@ -518,6 +518,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'papan',
     mood: 'santai',
     available: true,
+    remote: true,
     long: true,
     badge: 'BARU',
     logoColor: '#FFC928',
