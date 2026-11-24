@@ -71,6 +71,16 @@ export function ghostFor(people: readonly number[], round: number, offset: numbe
   return people[(((offset + round) % n) + n) % n]!;
 }
 
+/** A copy of `ids` in random order (Fisher-Yates). */
+export function shuffled(ids: readonly number[], rnd: () => number): number[] {
+  const out = ids.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
 export interface MatchOptions {
   rounds: number;
   /** Rotation start remembered between sessions on this screen. */
@@ -186,7 +196,8 @@ export class HauntMatch {
       rnd: this.rnd,
       ghostSpeedMul: ghostId === this.cpuId ? this.cpuSpeed : 1,
     });
-    this.cast = ghostId === this.cpuId ? residents : [...residents, ghostId];
+    // Shuffled: a human ghost always shown last would give the secret role away on the screen.
+    this.cast = shuffled(ghostId === this.cpuId ? residents : [...residents, ghostId], this.rnd);
     const t = this.tallies.get(ghostId);
     if (t) t.ghostRounds++;
     this.events.push({ type: 'round', index: this.round });

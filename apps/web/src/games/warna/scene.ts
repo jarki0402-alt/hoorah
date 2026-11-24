@@ -623,7 +623,10 @@ export class WarnaScene extends Phaser.Scene {
     });
     w.gems.forEach((g, i) => {
       const img = this.gems[i];
-      if (!img || g.taken) return;
+      if (!img) return;
+      // A far-away screen may learn of a gem from the state alone (no pickup effect seen).
+      if (img.visible === g.taken) img.setVisible(!g.taken);
+      if (g.taken) return;
       img.y = g.y * TILE + TILE / 2 + Math.sin(now * 3 + i) * 3;
       img.setAngle(Math.sin(now * 2 + i) * 6);
     });

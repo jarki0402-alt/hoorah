@@ -4,22 +4,72 @@
  * which softens their edges for free), the residents with their flashlight cones on top, film
  * grain over everything. The ghost is drawn only where a flashlight or a firefly lights it
  * (a geometry mask built from the same cones), and in full while dazzled or in the fuse flash.
- * It only renders: rules live in world.ts.
+ * It only renders: rules live in world.ts. It draws a `StageModel`: the Host's world itself, or on a
+ * far-away screen in long-distance play the replica rebuilt from the Host's published state.
  *
  * Coordinates: map px (tile 40); the camera scrolls so the 1280×720 map sits centred in the stage.
  */
 import { type Look, lookOfFruit, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
-import { conePolygon } from './light';
-import { COLS, ROWS } from './maps';
+import {
+  CONE_RAYS,
+  conePolygon,
+  FLY_MASK_SHARE,
+  GHOST_BOB_TILES,
+  GHOST_LIFT_TILES,
+  GHOST_SPRITE_TILES,
+  type Opaque,
+} from './light';
+import { COLS, type HauntMap, ROWS } from './maps';
 import { drawMap, GLOW, GRAIN, HeadBank, KEY, makeSprites, RENDER_SCALE, skinKey, TILE } from './textures';
-import { type HauntWorld, PING_S, TUNE } from './world';
+import { type GhostPing, PING_S, type Skin, TUNE } from './world';
 
 const MAP_W = COLS * TILE;
 const MAP_H = ROWS * TILE;
 const DARK_SCALE = 2;
-const RAYS = 28;
+
+/** A resident as the scene draws it. */
+export interface StageResident {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly face: number;
+  readonly state: 'in' | 'fly' | 'out';
+  /** Heartbeat 0..1 (0.7 and up: a scared face). */
+  readonly heart: number;
+  /** Below 0.15 the beam flickers. */
+  readonly battery: number;
+}
+
+/** The ghost as the scene draws it. */
+export interface StageGhost {
+  readonly x: number;
+  readonly y: number;
+  readonly inX: number;
+  readonly silau: number;
+  readonly skin: Skin;
+}
+
+/** What the scene reads each frame: a `HauntWorld`, or a far-away screen's replica of one. */
+export interface StageModel {
+  readonly map: HauntMap;
+  readonly tune: { readonly ambient: number; readonly range: number };
+  readonly keys: readonly { readonly x: number; readonly y: number; readonly taken: boolean }[];
+  readonly residents: readonly StageResident[];
+  /** Null: nothing of the ghost is drawn (a far-away screen only learns where it is while it shows). */
+  readonly ghost: StageGhost | null;
+  readonly ping: GhostPing | null;
+  readonly exitOpen: boolean;
+  readonly fuse: number;
+  readonly fuseOn: boolean;
+  readonly flash: number;
+  isShut(x: number, y: number): boolean;
+  sight(): Opaque;
+  shining(r: StageResident): boolean;
+  ghostRevealed(): boolean;
+  lampOn(): boolean;
+}
 
 export interface ResidentLook {
   name: string;
@@ -42,7 +92,7 @@ export class HantuScene extends Phaser.Scene {
   oy = 0;
   private resolveReady!: () => void;
   private heads!: HeadBank;
-  private world: HauntWorld | null = null;
+  private world: StageModel | null = null;
   private look: (id: number) => ResidentLook = () => ({
     name: '',
     look: lookOfFruit('jeruk'),
@@ -53,6 +103,7 @@ export class HantuScene extends Phaser.Scene {
   private under!: Phaser.GameObjects.Graphics;
   private keys: Phaser.GameObjects.Image[] = [];
   private ghost!: Phaser.GameObjects.Image;
+  private ghostSkin: Skin = 'bayangan';
   private ghostGlow!: Phaser.GameObjects.Image;
   private maskG!: Phaser.GameObjects.Graphics;
   private mask!: Phaser.Display.Masks.GeometryMask;
@@ -92,7 +143,7 @@ export class HantuScene extends Phaser.Scene {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(3);
     this.ghost = this.add
-      .image(0, 0, skinKey('bayangan'))
+      .image(0, 0, skinKey(this.ghostSkin))
       .setDepth(4)
       .setScale(1 / RENDER_SCALE);
     this.maskG = this.make.graphics({}, false);
@@ -131,7 +182,7 @@ export class HantuScene extends Phaser.Scene {
     this.outside.fillRect(MAP_W, 0, w - MAP_W - this.ox, MAP_H);
   }
 
-  attach(world: HauntWorld, look: (id: number) => ResidentLook): void {
+  attach(world: StageModel, look: (id: number) => ResidentLook): void {
     this.world = world;
     this.look = look;
     const key = `h-map-${++this.mapSeq}`;
@@ -184,8 +235,33 @@ export class HantuScene extends Phaser.Scene {
         .setResolution(RENDER_SCALE);
       this.residents.set(r.id, { body, ring, tag, face: 'happy', look: l.look });
     }
-    this.ghost.setTexture(skinKey(world.ghost.skin));
+    if (world.ghost) this.setSkin(world.ghost.skin);
     this.ghost.setMask(this.mask);
+  }
+
+  /** Back to the empty dark house (a far-away screen whose Host has no round going). */
+  detach(): void {
+    this.world = null;
+    for (const k of this.keys) k.destroy();
+    this.keys = [];
+    for (const v of this.residents.values()) {
+      v.body.destroy();
+      v.ring.destroy();
+      v.tag.destroy();
+    }
+    this.residents.clear();
+    this.mapImg?.setVisible(false);
+    this.under.clear();
+    this.beams.clear();
+    this.pingG.clear();
+    this.ghost.setVisible(false);
+    this.ghostGlow.setVisible(false);
+  }
+
+  private setSkin(skin: Skin): void {
+    if (skin === this.ghostSkin) return;
+    this.ghostSkin = skin;
+    this.ghost.setTexture(skinKey(skin));
   }
 
   toStage(x: number, y: number): { x: number; y: number } {
@@ -218,7 +294,7 @@ export class HantuScene extends Phaser.Scene {
     this.flashRect.setFillStyle(0xfff6dc, flash);
   }
 
-  private drawUnder(w: HauntWorld, now: number): void {
+  private drawUnder(w: StageModel, now: number): void {
     const g = this.under;
     g.clear();
     // Doors: a panel across the doorway while shut, a thin open leaf otherwise.
@@ -252,7 +328,7 @@ export class HantuScene extends Phaser.Scene {
   }
 
   /** Three red blinks with a growing ring where the ghost was when the ping fired. */
-  private drawPing(w: HauntWorld): void {
+  private drawPing(w: StageModel): void {
     const g = this.pingG;
     g.clear();
     const p = w.ping;
@@ -268,11 +344,16 @@ export class HantuScene extends Phaser.Scene {
     g.strokeCircle(x, y, 26 + grow * 22);
   }
 
-  private drawGhost(w: HauntWorld, now: number): void {
+  private drawGhost(w: StageModel, now: number): void {
     const gh = w.ghost;
+    this.ghost.setVisible(gh !== null);
+    this.ghostGlow.setVisible(gh !== null);
+    if (!gh) return;
+    this.setSkin(gh.skin);
     const x = gh.x * TILE;
-    const y = gh.y * TILE + Math.sin(now * 2.6) * 3;
-    this.ghost.setPosition(x, y - 6);
+    const y = gh.y * TILE + Math.sin(now * 2.6) * GHOST_BOB_TILES * TILE;
+    this.ghost.setPosition(x, y - GHOST_LIFT_TILES * TILE);
+    this.ghost.setDisplaySize(GHOST_SPRITE_TILES * TILE, GHOST_SPRITE_TILES * TILE);
     this.ghost.setAngle(Math.sin(now * 1.8) * 6);
     this.ghost.setFlipX(gh.inX < 0);
     const revealed = w.ghostRevealed();
@@ -284,11 +365,11 @@ export class HantuScene extends Phaser.Scene {
     this.ghostGlow.setAlpha(revealed ? 0.35 : 0);
   }
 
-  private cone(w: HauntWorld, x: number, y: number, face: number, range: number): number[] {
-    return conePolygon(w.sight(), x, y, face, TUNE.coneHalf, range, RAYS, this.poly);
+  private cone(w: StageModel, x: number, y: number, face: number, range: number): number[] {
+    return conePolygon(w.sight(), x, y, face, TUNE.coneHalf, range, CONE_RAYS, this.poly);
   }
 
-  private drawLights(w: HauntWorld, now: number): void {
+  private drawLights(w: StageModel, now: number): void {
     const L = this.lightG;
     const M = this.maskG;
     const B = this.beams;
@@ -313,7 +394,7 @@ export class HantuScene extends Phaser.Scene {
       if (r.state === 'fly') {
         const rad = TUNE.flyGlow * TILE * (0.92 + 0.08 * Math.sin(now * 5 + r.id));
         this.softCircle(L, px * k, py * k, rad * k, 0.75);
-        M.fillCircle(px, py, rad * 0.8);
+        M.fillCircle(px, py, rad * FLY_MASK_SHARE);
         continue;
       }
       if (r.state !== 'in') continue;
@@ -367,7 +448,7 @@ export class HantuScene extends Phaser.Scene {
     }
   }
 
-  private drawResidents(w: HauntWorld, now: number): void {
+  private drawResidents(w: StageModel, now: number): void {
     for (const r of w.residents) {
       const v = this.residents.get(r.id);
       if (!v) continue;

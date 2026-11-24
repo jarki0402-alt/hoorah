@@ -2,7 +2,8 @@
  * Glue between the Hoorah SDK, the pure session (logic.ts + world.ts), the Phaser scene and the
  * DOM HUD: phone input, Host menu and power actions, the computer ghost (alone, or covering a
  * ghost whose phone dropped), sounds, adaptive music by how close the ghost is, phone views
- * (throttled and deduplicated; the ghost's carries the secret map) and the result.
+ * (throttled and deduplicated; the ghost's carries the secret map), the result, and in
+ * long-distance play the display state far-away main screens draw (mirror.ts).
  */
 import { lookOfFruit, type PlayerInfo, type RelayedInput } from '@hoorah/protocol';
 import type { GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
@@ -15,9 +16,10 @@ import { GameClock } from './clock';
 import type { EndRow, Hud, HudState, Overlay, Who } from './hud';
 import { type StickCommand, StickInputs } from './input';
 import { HauntMatch, type MatchEvent } from './logic';
+import { FxLog, goalHud, HURRY_S, MIRROR_IDLE_MS, MIRROR_LIVE_MS, toMirror } from './mirror';
 import { buildResult, standings } from './results';
 import type { HantuScene, ResidentLook } from './scene';
-import { FRIGHT_NAME, formatClock, MAP_NAME, SKIN_NAME, STR } from './strings';
+import { FRIGHT_NAME, MAP_NAME, SKIN_NAME, STR } from './strings';
 import { resultView, type ViewContext, viewFor } from './views';
 import type { HauntEvent } from './world';
 
@@ -25,7 +27,6 @@ const HUD_MS = 100;
 const VIEW_MS = 280;
 const FEED_MS = 6000;
 const CALLOUT_MS = 2000;
-const HURRY_S = 30;
 const TAKEOVER_SKILL = 0.5;
 const OFFSET_KEY = 'hantu.next';
 
@@ -53,6 +54,10 @@ export class Driver {
   private lastFuseTick = 0;
   private lastFuseProgress = 0;
   private reported = false;
+  /** Long-distance play: this session's number, the flashes to replay, the last publish. */
+  private readonly epoch = Math.floor(Math.random() * 1_000_000_000);
+  private readonly fx = new FxLog();
+  private lastMirror = Number.NEGATIVE_INFINITY;
   private readonly apply = (id: number, cmd: StickCommand): void => {
     const w = this.match.world;
     if (!w || this.match.phase !== 'hunt') return;
@@ -85,6 +90,9 @@ export class Driver {
     this.game.on('input', (input) => this.onInput(input));
     this.game.on('action', (from, a) => this.onAction(from, a.id, a.value));
     this.game.on('pause', (paused) => this.setHold('shell', paused));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publishMirror(this.clock.now(), true);
+    });
     this.phaser.events.on('hidden', () => this.setHold('hidden', true));
     this.phaser.events.on('visible', () => this.setHold('hidden', false));
     if (this.game.paused) this.setHold('shell', true);
@@ -104,6 +112,8 @@ export class Driver {
     this.hud.setPaused(paused);
     if (paused) this.phaser.pause();
     else this.phaser.resume();
+    // No frames run while paused, so tell a far-away screen right here.
+    this.publishMirror(this.clock.now(), true);
   }
 
   private onPlayers(): void {
@@ -178,6 +188,7 @@ export class Driver {
     }
     this.drain();
     this.sendViews();
+    this.publishMirror(this.clock.now(), true);
   }
 
   private onInput(input: RelayedInput & { atMs: number }): void {
@@ -225,6 +236,7 @@ export class Driver {
       this.hud.pruneFeed(t, FEED_MS);
       this.updateMusic();
     }
+    this.publishMirror(t, false);
   }
 
   private drain(): void {
@@ -269,6 +281,8 @@ export class Driver {
   }
 
   private onEvent(e: MatchEvent): void {
+    // Anything that happened goes to a far-away screen with the next frame, not the next tick.
+    this.lastMirror = Number.NEGATIVE_INFINITY;
     switch (e.type) {
       case 'phase':
         this.lastHud = Number.NEGATIVE_INFINITY;
@@ -302,6 +316,7 @@ export class Driver {
         this.sfx('super');
         window.setTimeout(() => this.game.sfx('bell'), 300);
         this.scene.flash(1);
+        this.fx.note(1);
         this.hud.pushFeed(STR.feedFuse(this.nameOf(e.id)), t);
         return;
       case 'exitOpen':
@@ -315,6 +330,7 @@ export class Driver {
           this.sfx('growl');
           this.sfx('stinger-fall');
           this.scene.flash(0.6);
+          this.fx.note(0.6);
         } else this.sfx('boo');
         this.hud.pushFeed(STR.feedCatch(this.nameOf(e.id)), t);
         this.buzz(e.id, [120, 60, 200]);
@@ -508,20 +524,56 @@ export class Driver {
     const m = this.match;
     const w = m.world;
     const hunting = m.phase === 'hunt' && w !== null;
-    if (t - this.calloutAt > CALLOUT_MS) this.callout = '';
+    const goal = w
+      ? goalHud({
+          keysFound: w.keysFound,
+          keysTotal: w.keys.length,
+          fuse: w.fuse,
+          fuseOn: w.fuseOn,
+          exitOpen: w.exitOpen,
+          left: w.timeLeft,
+          inside: w.residents.filter((r) => r.state === 'in').length,
+        })
+      : { keys: '', fuse: '', fuseOn: false, exitOpen: false, timer: '', urgent: false, safe: '' };
     return {
       show: hunting,
       place: MAP_NAME[m.map],
       fright: FRIGHT_NAME[m.fright],
-      keys: w ? STR.hudKeys(w.keysFound, w.keys.length) : '',
-      fuse: !w ? '' : w.fuseOn ? STR.hudFuseOn : w.fuse > 0 ? STR.hudFusePct(w.fuse) : STR.hudFuseOff,
-      fuseOn: Boolean(w?.fuseOn),
-      exitOpen: Boolean(w?.exitOpen),
-      timer: w ? formatClock(w.timeLeft) : '',
-      urgent: Boolean(w && w.timeLeft <= HURRY_S),
-      safe: w ? STR.hudSafe(w.residents.filter((r) => r.state === 'in').length) : '',
-      callout: this.callout,
+      ...goal,
+      callout: this.liveCallout(t),
       overlay: this.overlay(),
     };
+  }
+
+  /** The centre callout still showing at game time `t` ('' once it has run its time). */
+  private liveCallout(t: number): string {
+    if (t - this.calloutAt > CALLOUT_MS) this.callout = '';
+    return this.callout;
+  }
+
+  /* ------------------------------------------------------------------ long-distance play */
+
+  /** The stage for far-away screens: every 60 ms in the hunt, 250 ms otherwise, at once when `now`. */
+  private publishMirror(t: number, now: boolean): void {
+    if (!this.game.mirrored || this.ended) return;
+    if (!now && t - this.lastMirror < (this.match.phase === 'hunt' ? MIRROR_LIVE_MS : MIRROR_IDLE_MS)) return;
+    this.lastMirror = t;
+    const server = this.game.now();
+    this.game.publish(
+      toMirror(
+        {
+          match: this.match,
+          server,
+          held: this.clock.paused,
+          overlay: this.overlay(),
+          callout: this.liveCallout(t),
+          feed: this.hud.feed.value,
+          who: (id) => this.who(id),
+          fx: this.fx.recent(server),
+          fxTop: this.fx.top,
+        },
+        this.epoch,
+      ),
+    );
   }
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GhostBrain, nextStep } from './brain';
 import { castRay, inCone, lineOfSight, opaqueFor } from './light';
-import { ghostFor, HauntMatch, REVEAL_S } from './logic';
+import { ghostFor, HauntMatch, REVEAL_S, shuffled } from './logic';
 import { COLS, MAP_IDS, MAPS, pickKeys, ROWS, Tile, tileAt } from './maps';
 import { buildResult, pickAwards } from './results';
 import { HauntWorld, PING_S, TUNE } from './world';
@@ -300,5 +300,23 @@ describe('ghost ping (red blink on the main screen)', () => {
     // Staying close does not blink again before the gap is over.
     near.update(1 / 60);
     expect(pings(near)).toBe(0);
+  });
+});
+
+describe('role deal order', () => {
+  it('does not always put the ghost last on the screen card', () => {
+    const ids = [1, 2, 3, 4];
+    let seed = 7;
+    const rnd = () => {
+      seed = (seed * 16807) % 2147483647;
+      return (seed - 1) / 2147483646;
+    };
+    const lastSeen = new Set<number>();
+    for (let i = 0; i < 40; i++) {
+      const out = shuffled(ids, rnd);
+      expect([...out].sort()).toEqual(ids);
+      lastSeen.add(out[out.length - 1]!);
+    }
+    expect(lastSeen.size).toBeGreaterThan(1);
   });
 });

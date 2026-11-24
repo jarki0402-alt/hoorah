@@ -225,6 +225,17 @@ export class Hud {
     this.feed.value = [...this.feed.value, { key: this.feedKey++, text, at: now }].slice(-4);
   }
 
+  /** A far-away screen in long-distance play: the Host's feed lines exactly as they are. */
+  setFeed(lines: readonly { key: number; text: string }[]): void {
+    const cur = this.feed.value;
+    if (
+      cur.length === lines.length &&
+      cur.every((f, i) => f.key === lines[i]!.key && f.text === lines[i]!.text)
+    )
+      return;
+    this.feed.value = lines.map((l) => ({ key: l.key, text: l.text, at: 0 }));
+  }
+
   pruneFeed(now: number, maxAge: number): void {
     const keep = this.feed.value.filter((f) => now - f.at < maxAge);
     if (keep.length !== this.feed.value.length) this.feed.value = keep;

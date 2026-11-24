@@ -87,6 +87,18 @@ export function resumeLevel(world: BiomeId, progress: Progress, limited = false)
   return last;
 }
 
+/** The level after `lv` in its world, unless there is none or it needs Hoorah Pass. */
+export function nextLevelOf(lv: Level, limited: boolean): Level | undefined {
+  const next = biomeOf(lv.biome).levels[lv.number];
+  return next && !needsPass(next, limited) ? next : undefined;
+}
+
+/** The level after `lv` exists but needs Hoorah Pass (a free main screen at the end of its stages). */
+export function nextNeedsPassOf(lv: Level, limited: boolean): boolean {
+  const next = biomeOf(lv.biome).levels[lv.number];
+  return next !== undefined && needsPass(next, limited);
+}
+
 /** Stars earned in a world and the most it can give. */
 export function worldStars(world: BiomeId, progress: Progress): { got: number; of: number } {
   const levels = biomeOf(world).levels;
@@ -304,19 +316,12 @@ export class WarnaMatch {
 
   /** The level after the current one in its world, if there is one (it is open once this is done). */
   nextLevel(): Level | undefined {
-    const next = this.followingLevel();
-    return next && !needsPass(next, this.limited) ? next : undefined;
+    return nextLevelOf(this.level, this.limited);
   }
 
   /** The next level exists but needs Hoorah Pass (a free main screen at the end of its stages). */
   nextNeedsPass(): boolean {
-    const next = this.followingLevel();
-    return next !== undefined && needsPass(next, this.limited);
-  }
-
-  private followingLevel(): Level | undefined {
-    const lv = this.level;
-    return biomeOf(lv.biome).levels[lv.number];
+    return nextNeedsPassOf(this.level, this.limited);
   }
 
   /** Seconds left before the next level starts by itself (0 when there is no next level). */

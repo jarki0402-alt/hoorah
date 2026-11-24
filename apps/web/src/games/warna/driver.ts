@@ -2,6 +2,7 @@
  * Glue between the Hoorah SDK, the pure session (logic.ts + world.ts), the Phaser scene and the
  * DOM HUD: phone input, Host menu actions, sounds, adaptive music, phone views (throttled and
  * deduplicated), the stage picker memory (best stars per stage on this screen) and the result.
+ * In long-distance play it also publishes the display state for far-away main screens.
  */
 import { lookOfFruit, type PlayerInfo, type RelayedInput } from '@hoorah/protocol';
 import type { GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
@@ -9,25 +10,17 @@ import type * as Phaser from 'phaser';
 import { celebrate } from '../../shared/confetti';
 import { loadJson, saveJson } from '../common/store';
 import { GameClock } from './clock';
-import type { Hud, HudState, LegendRow, Overlay } from './hud';
+import { type FxEvent, isFx, showEffect } from './effects';
+import type { Hud, HudState } from './hud';
+import { hudOf } from './hudstate';
 import { type StickCommand, StickInputs } from './input';
-import { BIOMES, biomeOf, Cell, LEVELS, type Slot } from './levels';
-import {
-  canPlayLevel,
-  type MatchEvent,
-  needsPass,
-  type Person,
-  type Progress,
-  secondLook,
-  WarnaMatch,
-  worldNeedsPass,
-  worldStars,
-} from './logic';
+import { LEVELS } from './levels';
+import { type MatchEvent, type Person, type Progress, secondLook, WarnaMatch } from './logic';
+import { MIRROR_MS, MirrorFeed } from './mirror';
 import { buildResult } from './results';
 import type { CharLook, WarnaScene } from './scene';
-import { BIOME_TEXT, formatClock, levelName, levelTip, STR } from './strings';
 import { resultView, type ViewContext, viewFor } from './views';
-import { TUNE, type World, type WorldEvent } from './world';
+import type { World, WorldEvent } from './world';
 
 const HUD_MS = 100;
 
@@ -63,6 +56,10 @@ export class Driver {
   private lastViews = Number.NEGATIVE_INFINITY;
   private tipFrom = 0;
   private intensity: MusicIntensity = 0;
+  /** Long-distance play: effect numbering, last publish, and the number of the stage on screen. */
+  private readonly mirror = new MirrorFeed();
+  private lastMirror = Number.NEGATIVE_INFINITY;
+  private serial = 0;
   private readonly apply = (id: number, cmd: StickCommand): void => this.match.setStick(id, cmd.x, cmd.jump);
 
   constructor(
@@ -81,6 +78,9 @@ export class Driver {
     this.game.on('input', (input) => this.onInput(input));
     this.game.on('action', (from, a) => this.onAction(from, a.id, a.value));
     this.game.on('pause', (paused) => this.setHold('shell', paused));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publishMirror(true);
+    });
     this.phaser.events.on('hidden', () => this.setHold('hidden', true));
     this.phaser.events.on('visible', () => this.setHold('hidden', false));
     if (this.game.paused) this.setHold('shell', true);
@@ -100,6 +100,8 @@ export class Driver {
     this.hud.setPaused(paused);
     if (paused) this.phaser.pause();
     else this.phaser.resume();
+    // No frames run while paused, so tell a far-away screen right here.
+    this.publishMirror(true);
   }
 
   private people(all: readonly PlayerInfo[]): Person[] {
@@ -189,6 +191,7 @@ export class Driver {
     }
     this.drain();
     this.sendViews();
+    this.publishMirror(true);
   }
 
   private onInput(input: RelayedInput & { atMs: number }): void {
@@ -220,15 +223,26 @@ export class Driver {
       this.hud.setState(this.hudState());
       this.updateMusic();
     }
+    this.publishMirror(false);
   }
 
   private drain(): void {
     const m = this.match;
     if (m.sim && m.sim !== this.attached) {
       this.attached = m.sim;
+      this.serial++;
+      this.mirror.newStage();
       this.scene.attach(m.sim, (key) => this.look(key));
     }
-    for (const e of m.drainEvents()) this.onEvent(e);
+    let urgent = false;
+    for (const e of m.drainEvents()) {
+      this.onEvent(e);
+      // Motion effects ride the regular packets; everything else goes out at once.
+      const motion =
+        e.type === 'world' && (e.e.type === 'jump' || e.e.type === 'land' || e.e.type === 'bounce');
+      if (!motion && e.type !== 'vote' && e.type !== 'voteEnd') urgent = true;
+    }
+    if (urgent) this.publishMirror(true);
   }
 
   private look(key: number): CharLook {
@@ -275,20 +289,17 @@ export class Driver {
       case 'restart':
         this.sfx('back');
         this.tipFrom = 0;
-        this.hud.float(STR.restarted, this.scene.ox + 640, this.scene.oy + 360, '#FFE27A');
+        this.effect(e);
         return;
       case 'swap':
         this.sfx('select');
         this.sendViews();
         return;
-      case 'ping': {
-        const c = m.sim?.chars[e.key];
-        if (!c) return;
+      case 'ping':
+        if (!m.sim?.chars[e.key]) return;
         this.sfx('bell', 250);
-        const p = this.scene.toStage(c.x + TUNE.charW / 2, c.y);
-        this.hud.float(STR.pingFloat, p.x, p.y - 74, '#FFFFFF');
+        this.effect(e);
         return;
-      }
       case 'stage':
         return;
       case 'hint':
@@ -298,7 +309,7 @@ export class Driver {
         return;
       case 'skip':
         this.sfx('back');
-        this.hud.float(STR.skipFloat, this.scene.ox + 640, this.scene.oy + 300, '#FFE27A');
+        this.effect(e);
         this.saveProgress();
         return;
       case 'world':
@@ -307,54 +318,43 @@ export class Driver {
     }
   }
 
+  /** Plays an effect on this screen and keeps it for far-away screens. */
+  private effect(e: FxEvent): void {
+    showEffect(this.scene, this.hud, this.match.sim, e);
+    if (this.game.mirrored) this.mirror.note(e);
+  }
+
   private onWorld(e: WorldEvent): void {
     const w = this.match.sim;
     if (!w) return;
+    if (isFx(e)) this.effect(e);
     switch (e.type) {
       case 'jump':
-        this.scene.onJump(e.key);
         this.sfx('jump', 70);
         return;
       case 'land':
-        this.scene.onLand(e.key, e.hard);
         if (e.hard) this.sfx('drop', 120);
         return;
       case 'die': {
-        this.scene.onDie(e.key, e.x, e.y);
         this.sfx('splash', 120);
         const c = w.chars[e.key];
-        if (c) {
-          this.buzz(c.owner, [60, 40, 60]);
-          const p = this.scene.toStage(e.x, e.y);
-          this.hud.float(STR.backFloat, p.x, p.y - 30, '#FFFFFF');
-        }
+        if (c) this.buzz(c.owner, [60, 40, 60]);
         this.sendViews();
         return;
       }
       case 'respawn':
-        this.scene.onRespawn(e.key);
         this.sfx('ready', 120);
         this.sendViews();
         return;
       case 'gem': {
-        this.scene.onGem(e.gem);
         this.sfx('ding');
-        const g = w.gems[e.gem];
         const c = w.chars[e.key];
-        if (g) {
-          const p = this.scene.toStage(g.x + 0.5, g.y);
-          this.hud.float(STR.gemFloat, p.x, p.y - 8, '#FFE27A');
-        }
         if (c) this.buzz(c.owner, 30);
         return;
       }
-      case 'checkpoint': {
-        this.scene.onCheckpoint(e.x, e.y);
+      case 'checkpoint':
         this.sfx('correct');
-        const p = this.scene.toStage(e.x + 0.5, e.y);
-        this.hud.float(STR.checkpointFloat, p.x, p.y - 12, '#FFE27A');
         return;
-      }
       case 'plate':
         this.sfx(e.on ? 'tick' : 'tock', 80);
         return;
@@ -379,25 +379,14 @@ export class Driver {
         return;
       }
       case 'bounce':
-        this.scene.onBounce(e.x, e.y);
         this.sfx('jump', 70);
         return;
       case 'assist':
-        this.scene.onAssist(e.y, e.x0, e.x1);
         this.sfx('reveal', 300);
         return;
       case 'clear':
-        this.scene.onClear();
         return;
     }
-  }
-
-  /** A plate that only moves a lift says so; others open doors. */
-  private plateHint(target: string): string {
-    const ch = Number(target.slice(2));
-    const lv = this.match.level;
-    const door = lv.meta.some((m, i) => m === ch && lv.cells[i] === Cell.Door);
-    return !door && lv.lifts.some((l) => l.ch === ch) ? STR.hintLift : STR.hintPlate;
   }
 
   private saveProgress(): void {
@@ -475,141 +464,60 @@ export class Driver {
 
   /* ------------------------------------------------------------------ HUD */
 
-  private legend(): LegendRow[] {
-    const m = this.match;
-    const w = m.sim;
-    if (!w) return [];
-    const rows: LegendRow[] = [];
-    for (let s = 0; s < w.colors; s++) {
-      const people = w.chars
-        .filter((c) => c.slot === s)
-        .map((c) => {
-          const look = this.look(c.key);
-          return { name: look.name, look: look.look, color: m.person(c.owner)?.color ?? '#FFFFFF' };
-        });
-      rows.push({ slot: s as Slot, people });
-    }
-    return rows;
-  }
-
-  private overlay(): Overlay {
-    const m = this.match;
-    const worldName = BIOME_TEXT[m.level.biome].name;
-    switch (m.phase) {
-      case 'select': {
-        const host = this.nameOf(this.hostId());
-        if (m.pickStep === 'world') {
-          return {
-            kind: 'worlds',
-            host,
-            selected: m.world,
-            worlds: BIOMES.map((b) => {
-              const pass = b.ready && worldNeedsPass(b.id, m.limited);
-              return {
-                id: b.id,
-                name: BIOME_TEXT[b.id].name,
-                sub: pass ? STR.passSub : b.ready ? BIOME_TEXT[b.id].sub : STR.soon,
-                ready: b.ready,
-                pass,
-                ...worldStars(b.id, m.progress),
-              };
-            }),
-          };
-        }
-        const levels = biomeOf(m.world).levels;
-        return {
-          kind: 'journey',
-          host,
-          world: m.world,
-          title: STR.screenLevelTitle(BIOME_TEXT[m.world].name),
-          selected: LEVELS[m.pick]?.id ?? '',
-          nodes: levels.map((lv) => ({
-            id: lv.id,
-            number: lv.number,
-            name: levelName(lv.id),
-            stars: m.progress[lv.id] ?? 0,
-            done: m.progress[lv.id] !== undefined,
-            open: canPlayLevel(lv, m.progress, m.limited),
-            pass: needsPass(lv, m.limited),
-          })),
-        };
-      }
-      case 'intro':
-        return {
-          kind: 'intro',
-          eyebrow: STR.worldLevel(worldName, m.level.number),
-          name: levelName(m.level.id),
-          tip: levelTip(m.level.id),
-          goal: STR.goal,
-          legend: this.legend(),
-          solo: m.solo,
-        };
-      case 'clear':
-      case 'next': {
-        const s = m.lastScore();
-        const next = m.nextLevel();
-        const choosing = m.phase === 'next';
-        const host = this.nameOf(this.hostId());
-        return {
-          kind: 'clear',
-          eyebrow: STR.worldLevel(worldName, m.level.number),
-          title: s?.skipped ? STR.skippedTitle : STR.clearTitle,
-          stars: s?.skipped
-            ? []
-            : [
-                { label: STR.starClear, on: true },
-                { label: STR.starGems, on: Boolean(s?.starGems) },
-                { label: STR.starTime(formatClock(m.level.par)), on: Boolean(s?.starTime) },
-              ],
-          time: s?.skipped ? STR.skippedNote : STR.clearTime(formatClock(s?.time ?? 0)),
-          gems: s?.skipped ? '' : STR.clearGems(s?.gems ?? 0, s?.gemTotal ?? 0),
-          next: !choosing
-            ? next
-              ? STR.nextStage(levelName(next.id))
-              : m.nextNeedsPass()
-                ? STR.passNext
-                : STR.lastStage
-            : next
-              ? STR.nextIn(next.number, Math.ceil(m.nextLeft()), host)
-              : m.nextNeedsPass()
-                ? STR.passNextHost(host)
-                : STR.worldDone(host),
-        };
-      }
-      default:
-        return { kind: 'none' };
-    }
-  }
-
   private hudState(): HudState {
     const m = this.match;
-    const w = m.sim;
-    const playing = m.phase === 'play' && w !== null;
-    const chips = [];
-    if (w) for (let s = 0; s < w.colors; s++) chips.push({ slot: s as Slot, ...w.exitCount(s as Slot) });
-    const g = w?.allGems() ?? { taken: 0, total: 0 };
-    const showTip = playing && m.playT - this.tipFrom < TIP_S;
-    const hint = m.currentHint();
-    const hintText = hint
-      ? hint.kind === 'box'
-        ? STR.hintBox
-        : hint.kind === 'plate'
-          ? this.plateHint(hint.target)
-          : hint.kind === 'lever'
-            ? STR.hintLever
-            : STR.hintExit
-      : '';
-    return {
-      show: m.phase === 'play' || m.phase === 'clear' || m.phase === 'next',
-      stage: STR.worldLevel(BIOME_TEXT[m.level.biome].name, m.level.number),
-      name: levelName(m.level.id),
-      timer: formatClock(m.playT),
-      gems: `${STR.hudGems} ${g.taken}/${g.total}`,
-      chips,
-      tip: hintText || (showTip ? levelTip(m.level.id) : ''),
-      hint: Boolean(hintText),
-      vote: playing && m.voteLeft > 0 ? `${STR.voteTitle} ${STR.voteCount(m.votes.size, m.voteNeed())}` : '',
-      overlay: this.overlay(),
-    };
+    const score = m.lastScore();
+    return hudOf({
+      phase: m.phase,
+      pickStep: m.pickStep,
+      world: m.world,
+      pick: m.pick,
+      level: m.level,
+      progress: m.progress,
+      limited: m.limited,
+      host: this.nameOf(this.hostId()),
+      playT: m.playT,
+      nextLeft: m.nextLeft(),
+      tip: this.tipShown(),
+      hint: m.currentHint(),
+      vote: m.phase === 'play' && m.voteLeft > 0 ? { count: m.votes.size, need: m.voteNeed() } : null,
+      score: score ?? null,
+      solo: m.solo,
+      sim: m.sim,
+      look: (key) => this.look(key),
+      color: (owner) => this.colorOf(owner),
+    });
+  }
+
+  private tipShown(): boolean {
+    const m = this.match;
+    return m.phase === 'play' && m.playT - this.tipFrom < TIP_S;
+  }
+
+  private colorOf(owner: number): string {
+    return this.match.person(owner)?.color ?? '#FFFFFF';
+  }
+
+  /* ------------------------------------------------------------------ long-distance play */
+
+  /** The display state for far-away screens, throttled unless `now` is set. */
+  private publishMirror(now: boolean): void {
+    // The last state (phase done) still goes out after the end: no more frames follow it.
+    if (!this.game.mirrored) return;
+    const t = this.clock.now();
+    if (!now && t - this.lastMirror < MIRROR_MS) return;
+    this.lastMirror = t;
+    this.game.publish(
+      this.mirror.pack({
+        match: this.match,
+        server: this.game.now(),
+        serial: this.serial,
+        host: this.nameOf(this.hostId()),
+        held: this.clock.paused,
+        tip: this.tipShown(),
+        look: (key) => this.look(key),
+        color: (owner) => this.colorOf(owner),
+      }),
+    );
   }
 }

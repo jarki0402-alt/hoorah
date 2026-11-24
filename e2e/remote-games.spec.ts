@@ -9,7 +9,7 @@ const BASE = 'http://localhost:5173';
 const SHOTS = 'test-results/screens';
 
 /** Games released for long-distance play since stage 2, with the players each needs to start. */
-const CASES: { id: string; title: string; players: number; settle?: number; start?: string }[] = [
+const CASES: { id: string; title: string; players: number; settle?: number; start?: string | string[] }[] = [
   { id: 'penyusup', title: 'Penyusup', players: 3 },
   { id: 'siluman', title: 'Kampung Siluman', players: 5 },
   { id: 'juragan', title: 'Juragan Nusantara', players: 2 },
@@ -23,6 +23,8 @@ const CASES: { id: string; title: string; players: number; settle?: number; star
   { id: 'rusun', title: 'Rusun', players: 2, settle: 6000 },
   { id: 'langkah', title: 'Langkah Maut', players: 2, settle: 8000, start: 'Mulai' },
   { id: 'tali', title: 'Satu Tali', players: 2, settle: 9000, start: 'Mulai' },
+  { id: 'hantu', title: 'Hantu Tak Terlihat', players: 2, settle: 9000, start: ['Lanjut', 'Mulai'] },
+  { id: 'warna', title: 'Petualangan Warna', players: 2, settle: 7000, start: ['Pilih level', 'Mulai'] },
 ];
 const NAMES = ['Rina', 'Bayu', 'Sari', 'Dodi', 'Wulan', 'Tono'];
 
@@ -118,7 +120,9 @@ for (const c of CASES) {
       // Landscape games first ask the phone to turn; the test keeps it upright.
       const upright = host.getByRole('button', { name: 'Tetap tegak' });
       await upright.click({ timeout: 5_000 }).catch(() => {});
-      await host.getByRole('button', { name: c.start, exact: true }).click();
+      for (const label of typeof c.start === 'string' ? [c.start] : c.start) {
+        await host.getByRole('button', { name: label, exact: true }).click();
+      }
     }
     await a.waitForTimeout(c.settle ?? 3000);
     await a.screenshot({ path: `${SHOTS}/remote-${c.id}-a.png` });

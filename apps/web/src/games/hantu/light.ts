@@ -7,6 +7,16 @@ import { COLS, type HauntMap, ROWS, Tile, tileAt } from './maps';
 
 export type Opaque = (x: number, y: number) => boolean;
 
+/** Rays per flashlight cone outline (the scene's beams and mask, and the mirror's ghost test). */
+export const CONE_RAYS = 28;
+/** A firefly's glow reveals the ghost within this share of its light radius. */
+export const FLY_MASK_SHARE = 0.8;
+/** The ghost sprite's width and height in tiles, and how far it floats above its body centre. */
+export const GHOST_SPRITE_TILES = 1.6;
+export const GHOST_LIFT_TILES = 0.15;
+/** How far the ghost bobs up and down (tiles). */
+export const GHOST_BOB_TILES = 0.075;
+
 /** The opacity test for a map given which doors are shut and whether the exit is open. */
 export function opaqueFor(
   m: HauntMap,

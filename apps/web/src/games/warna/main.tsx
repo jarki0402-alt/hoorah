@@ -1,6 +1,7 @@
 /**
  * Petualangan Warna entry: connect to the shell, start Phaser (canvas 1.5x the stage) under a
- * Preact HUD, then hand control to the driver. The scene rasterizes player faces as looks show up.
+ * Preact HUD, then hand control to the driver (or, on a far-away screen in long-distance play, to
+ * the replica that draws the Host's stage). The scene rasterizes player faces as looks show up.
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -8,6 +9,7 @@ import { fontsReady, mountStage } from '../common/stage';
 import './warna.css';
 import { Driver } from './driver';
 import { Hud } from './hud';
+import { WarnaReplica } from './replica';
 import { WarnaScene } from './scene';
 import { STR } from './strings';
 import { RENDER_SCALE } from './textures';
@@ -63,13 +65,17 @@ async function boot(): Promise<void> {
   });
   await scene.ready;
   const hud = new Hud(hudHost);
-  const driver = new Driver(game, scene, hud, phaser);
   scene.setViewSize(stageWidth(), stageHeight());
   onResize((h, w) => {
     phaser.scale.resize(w * RENDER_SCALE, h * RENDER_SCALE);
     scene.setViewSize(w, h);
   });
-  driver.start();
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's stage from its published state, run nothing of our own.
+    new WarnaReplica(game, scene, hud, phaser).start();
+  } else {
+    new Driver(game, scene, hud, phaser).start();
+  }
   await nextFrame();
   await nextFrame();
   game.ready();
