@@ -9,6 +9,7 @@ import { fontsReady, mountStage } from '../common/stage';
 import './hud.css';
 import { Director } from './director';
 import { Hud } from './hud';
+import { TarikReplica } from './replica';
 import { TarikScene } from './scene';
 import { STR } from './strings';
 import { loadTextures, RENDER_SCALE } from './textures';
@@ -81,12 +82,18 @@ async function boot(): Promise<void> {
     fit(w, h);
   });
 
-  new Director(game, scene, hud, phaser).start();
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's match from its published state, run nothing of our own.
+    new TarikReplica(game, scene, hud, phaser).start();
+  } else {
+    new Director(game, scene, hud, phaser).start();
+  }
   // Let the first frame paint before the shell removes its loading screen.
   await nextFrame();
   await nextFrame();
   game.ready();
-  game.music('tarik');
+  // The Host's music reaches a far-away screen through the shell.
+  if (!game.isMirror) game.music('tarik');
 }
 
 void boot();

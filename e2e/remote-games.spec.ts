@@ -9,10 +9,12 @@ const BASE = 'http://localhost:5173';
 const SHOTS = 'test-results/screens';
 
 /** Games released for long-distance play since stage 2, with the players each needs to start. */
-const CASES: { id: string; title: string; players: number }[] = [
+const CASES: { id: string; title: string; players: number; settle?: number; start?: string }[] = [
   { id: 'penyusup', title: 'Penyusup', players: 3 },
   { id: 'siluman', title: 'Kampung Siluman', players: 5 },
   { id: 'juragan', title: 'Juragan Nusantara', players: 2 },
+  { id: 'tarik', title: 'Tarik Tambang', players: 2, settle: 9000 },
+  { id: 'bom', title: 'Bom Oper', players: 2, settle: 9000, start: 'Mulai' },
 ];
 const NAMES = ['Rina', 'Bayu', 'Sari', 'Dodi', 'Wulan', 'Tono'];
 
@@ -102,7 +104,15 @@ for (const c of CASES) {
     // The far-away copy draws a stage of its own (not an empty frame).
     const far = b.frameLocator(frameSel);
     await expect.poll(async () => far.locator('body *').count(), { timeout: 15_000 }).toBeGreaterThan(20);
-    await a.waitForTimeout(3000);
+    // Real-time games get past their countdown, so the shots show the play itself.
+    // Games that open on a picker are started from the Host's phone.
+    if (c.start) {
+      // Landscape games first ask the phone to turn; the test keeps it upright.
+      const upright = host.getByRole('button', { name: 'Tetap tegak' });
+      await upright.click({ timeout: 5_000 }).catch(() => {});
+      await host.getByRole('button', { name: c.start, exact: true }).click();
+    }
+    await a.waitForTimeout(c.settle ?? 3000);
     await a.screenshot({ path: `${SHOTS}/remote-${c.id}-a.png` });
     await b.screenshot({ path: `${SHOTS}/remote-${c.id}-b.png` });
 

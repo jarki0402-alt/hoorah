@@ -11,10 +11,12 @@ import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import type * as Phaser from 'phaser';
 import { celebrate } from '../../shared/confetti';
 import { cpuSkill, isCpu, reportSoloResult, soloOpponents } from '../common/cpu';
+import { factsOf, hudFrom, strongerOf } from './board';
 import { PullBrain, type Ring, TAKEOVER_SKILL } from './brain';
 import { GameClock } from './clock';
 import { Commentator } from './commentary';
-import type { Hud, HudMember, HudState, Overlay, TeamHud } from './hud';
+import { StageEffects } from './effects';
+import type { Hud } from './hud';
 import {
   buildResult,
   type MatchEvent,
@@ -22,25 +24,23 @@ import {
   otherTeam,
   parseRounds,
   TarikMatch,
-  TEAMS,
   type Team,
 } from './logic';
+import { SUPERS_KEPT, type SuperMark, toMirror } from './mirror';
 import type { RosterEntry, TarikScene } from './scene';
-import { formatClock, formatRate, STR } from './strings';
-import { FULL_RATE, TEAM_COLOR, viewFor } from './views';
+import { viewFor } from './views';
 
 const HUD_MS = 100;
 /** Phone 'tap' views: at most 4 per second per player. */
 const VIEW_MS = 250;
-const FLOAT_MS = 500;
 const COMMENT_MS = 250;
 /** 'pull' sfx at most 6 per second in total. */
 const PULL_SFX_MS = 1000 / 6;
 const SUPER_SFX_MS = 150;
 const RING_SYNC_MS = 5000;
-const GO_OVERLAY_MS = 800;
-const HINT_MS = 12_000;
-const URGENT_MS = 10_000;
+/** Long-distance play: display state for a far-away screen, ~14 Hz while pulling, 4 Hz otherwise. */
+const MIRROR_LIVE_MS = 70;
+const MIRROR_IDLE_MS = 250;
 
 export class Director {
   private readonly match: TarikMatch;
@@ -53,14 +53,16 @@ export class Director {
   private ended = false;
   private lastHud = Number.NEGATIVE_INFINITY;
   private lastViews = Number.NEGATIVE_INFINITY;
-  private lastFloat = Number.NEGATIVE_INFINITY;
+  private lastMirror = Number.NEGATIVE_INFINITY;
   private lastComment = Number.NEGATIVE_INFINITY;
   private lastRingSync = Number.NEGATIVE_INFINITY;
   private lastPullSfx = Number.NEGATIVE_INFINITY;
   private lastSuperSfx = Number.NEGATIVE_INFINITY;
-  private readonly floatTaps: Record<Team, number> = { red: 0, blue: 0 };
-  private floatTurn = 0;
-  private readonly anchor = { x: 0, y: 0 };
+  private readonly fx: StageEffects;
+  /** Counted taps per team over the whole match, and the latest supers, for a far-away screen. */
+  private readonly tapTotals: Record<Team, number> = { red: 0, blue: 0 };
+  private readonly supers: SuperMark[] = [];
+  private superSeq = 0;
   /** Computer opponents added because exactly one person started the game. */
   private readonly cpus: PlayerInfo[];
   /** Brain per computer-played seat: the opponents plus any dropped phone being covered. */
@@ -78,6 +80,7 @@ export class Director {
     private readonly phaser: Phaser.Game,
   ) {
     this.match = new TarikMatch({ rounds: parseRounds(game.settings.rounds) });
+    this.fx = new StageEffects(scene, hud);
     this.cpus = soloOpponents(game.players, 1);
     const skill = cpuSkill(game.gameId);
     for (const cpu of this.cpus) this.brains.set(cpu.id, new PullBrain(skill));
@@ -87,6 +90,9 @@ export class Director {
     this.game.on('players', () => this.onPlayers());
     this.game.on('input', (input) => this.onInput(input));
     this.game.on('pause', (paused) => this.setHold('shell', paused));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publishMirror(this.clock.now(), true);
+    });
     this.phaser.events.on('hidden', () => this.setHold('hidden', true));
     this.phaser.events.on('visible', () => this.setHold('hidden', false));
     if (this.game.paused) this.setHold('shell', true);
@@ -107,6 +113,8 @@ export class Director {
       this.phaser.resume();
       if (this.match.phase === 'pull') this.syncRing();
     }
+    // No frames run while paused, so tell a far-away screen right here.
+    this.publishMirror(this.clock.now(), true);
   }
 
   private onPlayers(): void {
@@ -145,8 +153,8 @@ export class Director {
     const team = r.team;
     if (!team) return;
     if (r.counted > 0) {
-      this.floatTaps[team] += r.counted;
-      this.scene.teamTap(team, r.counted);
+      this.tapTotals[team] += r.counted;
+      this.fx.taps(team, r.counted);
       if (t - this.lastPullSfx >= PULL_SFX_MS) {
         this.lastPullSfx = t;
         this.game.sfx('pull');
@@ -215,6 +223,8 @@ export class Director {
     return m.connected && !this.takeover.has(m.id);
   }
 
+  private readonly shown = (m: Member): boolean => this.shownConnected(m);
+
   private finalResult(): GameResult {
     const result = buildResult(this.match);
     const ids = new Set(result.ranking.map((r) => r.playerId));
@@ -232,25 +242,9 @@ export class Director {
   }
 
   private onSuper(id: number, team: Team, combo: number, t: number): void {
-    this.scene.superPull(team);
-    this.hud.flashRing(TEAM_COLOR[team]);
-    const a = this.scene.headAnchor(team, this.anchor);
-    const side = team === 'red' ? -1 : 1;
-    this.hud.float(STR.superFloat, a.x + side * 16, a.y - 215, {
-      kind: 'super',
-      size: 46,
-      color: '#FFC928',
-      rotate: side * 6,
-      rise: 60,
-    });
-    if (combo >= 2) {
-      this.hud.float(STR.combo(combo), a.x + side * 30, a.y - 92, {
-        kind: 'combo',
-        rotate: side * 6,
-        rise: 26,
-        duration: 1300,
-      });
-    }
+    this.fx.superPull(team, combo);
+    this.supers.push({ n: ++this.superSeq, team, combo });
+    if (this.supers.length > SUPERS_KEPT) this.supers.shift();
     if (t - this.lastSuperSfx >= SUPER_SFX_MS) {
       this.lastSuperSfx = t;
       this.game.sfx('super');
@@ -293,10 +287,7 @@ export class Director {
         this.lastViews = t;
         this.sendViews(false);
       }
-      if (t - this.lastFloat >= FLOAT_MS) {
-        this.lastFloat = t;
-        this.emitFloats();
-      }
+      this.fx.floats(t, strongerOf(view.force));
       if (t - this.lastComment >= COMMENT_MS) {
         this.lastComment = t;
         this.sampleCommentary(t);
@@ -305,13 +296,15 @@ export class Director {
     }
     if (t - this.lastHud >= HUD_MS) {
       this.lastHud = t;
-      this.hud.setState(this.hudState(t));
+      this.hud.setState(hudFrom(factsOf(match, t, this.shown)));
     }
+    this.publishMirror(t, false);
   }
 
   private onEvent(e: MatchEvent, t: number, server: number): void {
     const match = this.match;
     this.lastHud = Number.NEGATIVE_INFINITY;
+    this.lastMirror = Number.NEGATIVE_INFINITY;
     switch (e.type) {
       case 'teams':
         this.syncRoster();
@@ -332,9 +325,7 @@ export class Director {
       case 'go':
         for (const brain of this.brains.values()) brain.startRound(server);
         this.game.sfx('go');
-        this.floatTaps.red = 0;
-        this.floatTaps.blue = 0;
-        this.lastFloat = t;
+        this.fx.resetFloats(t);
         this.hud.syncRing(e.ringStart, match.tuning.ringPeriodMs, server);
         this.lastRingSync = t;
         this.sendViews(true);
@@ -396,26 +387,6 @@ export class Director {
     this.hud.syncRing(this.match.ringStart, this.match.tuning.ringPeriodMs, this.game.now());
   }
 
-  /** '+N' floaters near each team: taps landed in the last half second, bigger for the stronger side. */
-  private emitFloats(): void {
-    const stronger: Team = this.match.teamForce('red') >= this.match.teamForce('blue') ? 'red' : 'blue';
-    for (const team of TEAMS) {
-      const n = this.floatTaps[team];
-      this.floatTaps[team] = 0;
-      if (n <= 0) continue;
-      const strong = team === stronger;
-      const a = this.scene.headAnchor(team, this.anchor);
-      this.floatTurn = (this.floatTurn + 1) % 3;
-      const side = team === 'red' ? -1 : 1;
-      this.hud.float(STR.plus(n), a.x - side * 10 + (this.floatTurn - 1) * 22, a.y - 140, {
-        kind: 'plus',
-        size: strong ? 40 : 30,
-        rotate: side * 7,
-        rise: strong ? 50 : 40,
-      });
-    }
-  }
-
   private vibrateRound(winner: Team | null): void {
     if (!winner) return;
     for (const m of this.match.allMembers()) {
@@ -449,82 +420,24 @@ export class Director {
     this.scene.setRoster(entries('red'), entries('blue'));
   }
 
-  private teamHud(team: Team): TeamHud {
-    const members: HudMember[] = this.match
-      .roster(team)
-      .map((m) => ({ id: m.id, name: m.name, look: m.look, connected: this.shownConnected(m) }));
-    const rate = this.match.teamRate(team);
-    return {
-      team,
-      members,
-      wins: this.match.wins[team],
-      rate: formatRate(rate),
-      segments: Math.min(10, Math.round((rate / FULL_RATE) * 10)),
-    };
-  }
-
-  private leadText(): string {
-    const p = this.match.p;
-    const pct = Math.round(Math.abs(p) * 50);
-    if (pct === 0) return STR.even;
-    return STR.leadPercent(p < 0 ? 'red' : 'blue', pct);
-  }
-
-  private overlay(t: number): Overlay {
-    const m = this.match;
-    switch (m.phase) {
-      case 'waiting':
-        if (m.connectedCount() >= 2) return { kind: 'none' };
-        return {
-          kind: 'waiting',
-          players: m
-            .allMembers()
-            .filter((x) => x.connected)
-            .map((x) => ({ id: x.id, name: x.name, look: x.look, connected: true })),
-        };
-      case 'countdown':
-        return { kind: 'count', value: m.countValue, round: STR.roundOf(m.round, m.totalRounds) };
-      case 'pull':
-        return t - m.pullStart < GO_OVERLAY_MS ? { kind: 'go' } : { kind: 'none' };
-      case 'roundEnd': {
-        const w = m.lastWinner;
-        const reason = !w ? STR.reasonDraw : m.lastReason === 'line' ? STR.reasonLine(w) : STR.reasonTime(w);
-        return { kind: 'roundEnd', winner: w, reason };
-      }
-      case 'scoreboard': {
-        const next = m.lastReason === 'draw' ? m.round : m.round + 1;
-        return {
-          kind: 'scoreboard',
-          round: m.round,
-          history: [...m.history],
-          next: m.isDecider() ? STR.boardFinal : STR.boardNext(next),
-        };
-      }
-      case 'matchEnd':
-      case 'done': {
-        const w = m.matchWinner ?? 'red';
-        return { kind: 'matchEnd', winner: w, score: STR.winScore(m.wins[w], m.wins[otherTeam(w)]) };
-      }
-    }
-  }
-
-  private hudState(t: number): HudState {
-    const m = this.match;
-    const pulling = m.phase === 'pull';
-    const left = m.timeLeft();
-    return {
-      live: m.phase === 'countdown' || pulling || m.phase === 'roundEnd' || m.phase === 'scoreboard',
-      roundLabel: STR.roundOf(m.round, m.totalRounds),
-      suddenDeath: pulling && m.suddenDeath,
-      timer: formatClock(left),
-      urgent: pulling && left <= URGENT_MS,
-      winsNeeded: m.winsNeeded,
-      red: this.teamHud('red'),
-      blue: this.teamHud('blue'),
-      prompt: pulling,
-      hint: pulling && m.history.length === 0 && t - m.pullStart < HINT_MS,
-      lead: this.leadText(),
-      overlay: this.overlay(t),
-    };
+  /** Long-distance play: the board for a far-away screen, throttled unless `now` is set. */
+  private publishMirror(t: number, now: boolean): void {
+    if (!this.game.mirrored) return;
+    const match = this.match;
+    if (!now && t - this.lastMirror < (match.phase === 'pull' ? MIRROR_LIVE_MS : MIRROR_IDLE_MS)) return;
+    this.lastMirror = t;
+    this.game.publish(
+      toMirror({
+        facts: factsOf(match, t, this.shown),
+        server: this.game.now(),
+        force: { red: match.teamForce('red'), blue: match.teamForce('blue') },
+        taps: this.tapTotals,
+        supers: this.supers,
+        ticker: this.commentator.current,
+        ringStart: match.ringStart,
+        ringPeriod: match.tuning.ringPeriodMs,
+        held: this.clock.paused,
+      }),
+    );
   }
 }

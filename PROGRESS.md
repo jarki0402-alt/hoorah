@@ -68,6 +68,19 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-24 · Main bareng teman jauh: Tarik Tambang + Bom Oper (game real-time pertama)
+
+**Apa yang diubah:**
+- **Tarik Tambang** (`remote: true`): A mengirim keadaan ±14 kali per detik saat menarik (4 kali per detik di fase lain, langsung saat ada kejadian), ±1 KB untuk 8 pemain. `TarikReplica` menggerakkan `TarikScene` + `Hud` yang sama, posisi tali dan tenaga diinterpolasi 100 ms di belakang paket terbaru, ketukan disebar ulang dari total supaya penarik tetap bergoyang, SUPER! bernomor (6 terakhir), cincin super mengikuti waktu server. HUD dipindah ke `board.ts` dan efek panggung ke `effects.ts` (dipakai A dan B).
+- **Bom Oper** (`remote: true`): A mengirim tiap 75 ms waktu game saat mengejar dan langsung saat kejadian, ±1,2 KB (maks ±2,2 KB). `BomReplica` mengisi `BomMatch` lokal yang tidak pernah berjalan lalu memakai `BomScene` + `Hud` yang sama; posisi diinterpolasi, efek (OPER, BUM, toast, confetti) diputar saat waktu B mencapainya. Panjang sumbu tetap rahasia (hanya bagian yang sudah terbakar). Efek dipindah ke `show.ts`.
+- `e2e/remote.spec.ts` memakai Bajaj Rush sebagai contoh game yang belum bisa jarak jauh (Tarik sekarang bisa). `e2e/remote-games.spec.ts`: kasus Tarik dan Bom (menunggu sampai permainan berjalan, Bom dimulai dari HP Host setelah "Tetap tegak").
+
+**File:** `apps/web/src/games/tarik/{mirror.ts,mirror.test.ts,replica.ts,board.ts,effects.ts,director.ts,main.tsx}`, `apps/web/src/games/bom/{mirror.ts,mirror.test.ts,replica.ts,show.ts,director.ts,main.tsx}`, `apps/web/src/shared/games.ts`, `apps/web/src/screen/mirror.test.ts`, `e2e/remote.spec.ts`, `e2e/remote-games.spec.ts`.
+
+**Verifikasi:** `npx tsc --noEmit -p apps/web` lulus, `npx biome check` lulus, `npx vitest run` tarik + bom + rollout 120/120 lulus, `npx playwright test` Tarik, Bom, dan alur dua layar dasar lulus; cuplikan A dan B identik (Tarik saat menarik, Bom saat bom dipegang Bayu). `npm run check` penuh dan Docker: lihat entri sesudah ini.
+
+**Berikutnya / sisa:** angka "+N" dan goyangan penarik di B dibangun ulang dari total ketukan (mirip, tidak persis). Pemain di tempat B merasakan telat ±0,2–0,4 detik lewat Oregon. Data ke B ±15 KB/detik per layar teman saat game real-time.
+
 ### 2026-11-24 · Main bareng teman jauh: Juragan Nusantara
 
 **Apa yang diubah:** Juragan bisa ditampilkan di layar teman jauh (`remote: true`). `mirror.ts` (pemilik petak sebagai dua larik 24 angka, pemain sebagai tuple, ±2 KB untuk 6 pemain akhir game) dan `replica.ts` mengisi `JuraganView` + `HudStore` yang sama dengan A. Dadu, jalan bidak, koin, dan kartu Kabar diputar ulang di B menurut nomor efek (8 terakhir disimpan; yang terlambat digambar langsung di tempat). Sinkron pemilik/bangunan dipindah ke `view.showTiles` supaya A dan B memakai satu jalur. Kasus Juragan ditambahkan ke `e2e/remote-games.spec.ts`.

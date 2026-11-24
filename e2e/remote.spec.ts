@@ -92,8 +92,8 @@ test('long-distance play: a far-away main screen follows the Host screen, its ph
   await expect(panel.getByText('Layar teman tersambung')).toBeVisible();
   await expect(b.locator('.home-scroll')).toBeVisible();
   // Games it cannot show yet are marked on both screens while it watches.
-  await expect(a.locator('.card', { hasText: 'Tarik Tambang' }).locator('.remote-tag')).toBeVisible();
-  await expect(b.locator('.card', { hasText: 'Tarik Tambang' }).locator('.remote-tag')).toBeVisible();
+  await expect(a.locator('.card', { hasText: 'Bajaj Rush' }).locator('.remote-tag')).toBeVisible();
+  await expect(b.locator('.card', { hasText: 'Bajaj Rush' }).locator('.remote-tag')).toBeVisible();
   await expect(a.locator('.card', { hasText: 'Kuis Nusantara' }).locator('.remote-tag')).toHaveCount(0);
 
   // The Host closes the panel from the phone; the button now says a friend's screen is connected.
@@ -117,7 +117,7 @@ test('long-distance play: a far-away main screen follows the Host screen, its ph
   // The Host's picker marks the games a far-away screen cannot show, then opens Kuis Nusantara.
   await rina.getByRole('button', { name: /Pilih game/ }).click();
   await rina.getByRole('tab', { name: 'Semua' }).click();
-  await expect(rina.locator('.pick-card', { hasText: 'Tarik Tambang' }).locator('.pick-far')).toBeVisible();
+  await expect(rina.locator('.pick-card', { hasText: 'Bajaj Rush' }).locator('.pick-far')).toBeVisible();
   await expect(rina.locator('.pick-card', { hasText: 'Kuis Nusantara' }).locator('.pick-far')).toHaveCount(0);
   await rina.locator('.pick-card', { hasText: 'Kuis Nusantara' }).click();
   await expect(a.locator('.side-panel')).toBeVisible();
