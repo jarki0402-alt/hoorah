@@ -6,6 +6,9 @@
  * Computer racers (PRD 6.4): a lone player races three opponents, and in a race of two or more
  * people the same brain hops for a lane whose phone dropped until it reconnects. Brain taps go
  * through exactly the same `KarungMatch.input` path as phone taps.
+ *
+ * Long-distance play: while a far-away main screen watches, the board is published about 14 times
+ * a second during a race (4 otherwise, at once on events and pauses), see `mirror.ts`.
  */
 import type { PlayerInfo, RelayedInput } from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
@@ -15,8 +18,10 @@ import { cpuSkill, isCpu, reportSoloResult, soloOpponents } from '../common/cpu'
 import { type BeatGrid, fieldSkills, HopBrain, TAKEOVER_SKILL } from './brain';
 import { GameClock } from './clock';
 import { Commentator } from './commentary';
-import type { BoardRow, Hud, HudState, Overlay, Plate } from './hud';
+import { StageEffects } from './effects';
+import { type BoardRow, type Hud, type HudState, type Overlay, type Plate, plateBox } from './hud';
 import { buildResult, KarungMatch, type MatchEvent, parseRounds, type Racer } from './logic';
+import { MirrorMarks, toMirror } from './mirror';
 import type { KarungScene, RosterEntry } from './scene';
 import { formatClock, formatTime, STR } from './strings';
 import { viewFor } from './views';
@@ -30,7 +35,9 @@ const STUMBLE_SFX_MS = 200;
 const RING_SYNC_MS = 5000;
 const GO_OVERLAY_MS = 900;
 const HINT_MS = 12_000;
-const PLATE_X = 12;
+/** Long-distance play: publish interval during a race, and otherwise. */
+const MIRROR_LIVE_MS = 70;
+const MIRROR_IDLE_MS = 250;
 /** Opponents for someone playing alone: four sacks in the race. */
 const SOLO_OPPONENTS = 3;
 
@@ -50,7 +57,10 @@ export class Director {
   private lastJumpSfx = Number.NEGATIVE_INFINITY;
   private lastStumbleSfx = Number.NEGATIVE_INFINITY;
   private finishers = 0;
-  private readonly anchor = { x: 0, y: 0 };
+  private readonly fx: StageEffects;
+  /** Long-distance play: running counters a far-away screen replays. */
+  private readonly marks = new MirrorMarks();
+  private lastMirror = Number.NEGATIVE_INFINITY;
   /** Computer opponents added because exactly one person started the game. */
   private readonly cpus: PlayerInfo[];
   /** Brain per computer-played lane: the opponents plus any dropped phone being covered. */
@@ -67,6 +77,7 @@ export class Director {
     private readonly hud: Hud,
     private readonly phaser: Phaser.Game,
   ) {
+    this.fx = new StageEffects(scene, hud);
     this.match = new KarungMatch({ rounds: parseRounds(game.settings.rounds) });
     scene.trackLength = this.match.tuning.trackLength;
     scene.hopMs = this.match.tuning.hopMs;
@@ -81,6 +92,9 @@ export class Director {
     this.game.on('players', () => this.onPlayers());
     this.game.on('input', (input) => this.onInput(input));
     this.game.on('pause', (paused) => this.setHold('shell', paused));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publishMirror(this.clock.now(), true);
+    });
     this.phaser.events.on('hidden', () => this.setHold('hidden', true));
     this.phaser.events.on('visible', () => this.setHold('hidden', false));
     if (this.game.paused) this.setHold('shell', true);
@@ -99,12 +113,14 @@ export class Director {
     this.hud.setPaused(paused);
     if (paused) {
       this.phaser.pause();
-      return;
+    } else {
+      this.phaser.resume();
+      // The music kept playing during the pause: a countdown starts over on the beat.
+      this.match.resync(this.clock.now(), this.game.now());
+      if (this.match.phase === 'race') this.syncRing();
     }
-    this.phaser.resume();
-    // The music kept playing during the pause: a countdown starts over on the beat.
-    this.match.resync(this.clock.now(), this.game.now());
-    if (this.match.phase === 'race') this.syncRing();
+    // No frames run while paused, so tell a far-away screen right here.
+    this.publishMirror(this.clock.now(), true);
   }
 
   private onPlayers(): void {
@@ -144,15 +160,8 @@ export class Director {
       case 'none':
         return;
       case 'stumble': {
-        this.scene.stumble(id, this.match.tuning.stumbleMs);
-        const a = this.scene.headAnchor(id, this.anchor);
-        if (a)
-          this.hud.float(STR.stumbleFloat, a.x, a.y - 26, {
-            kind: 'stumble',
-            size: 30,
-            color: '#F2453D',
-            rotate: 8,
-          });
+        this.fx.stumble(id, this.match.tuning.stumbleMs);
+        this.marks.stumble(id);
         this.buzz(id, [90, 50, 160]);
         if (t - this.lastStumbleSfx >= STUMBLE_SFX_MS) {
           this.lastStumbleSfx = t;
@@ -165,6 +174,7 @@ export class Director {
       }
       default:
         this.scene.hop(id, r.kind, r.to);
+        this.marks.hop(id, r.kind);
         if (t - this.lastJumpSfx >= JUMP_SFX_MS) {
           this.lastJumpSfx = t;
           this.game.sfx('jump');
@@ -179,16 +189,7 @@ export class Director {
 
   private onSuper(id: number, t: number): void {
     const m = this.match.racer(id);
-    const a = this.scene.headAnchor(id, this.anchor);
-    if (a)
-      this.hud.float(STR.superFloat, a.x + 20, a.y - 40, {
-        kind: 'super',
-        size: 34,
-        color: '#FFC928',
-        rotate: -6,
-        rise: 60,
-      });
-    if (m) this.hud.flashRing(m.color);
+    this.fx.superHop(id, m?.color ?? null);
     this.game.sfx('super');
     this.buzz(id, 40);
     if (m) this.comment({ type: 'super', name: m.name }, t);
@@ -315,11 +316,13 @@ export class Director {
       this.lastHud = t;
       this.hud.setState(this.hudState(t));
     }
+    this.publishMirror(t, false);
   }
 
   private onEvent(e: MatchEvent, t: number, server: number): void {
     const match = this.match;
     this.lastHud = Number.NEGATIVE_INFINITY;
+    this.lastMirror = Number.NEGATIVE_INFINITY;
     switch (e.type) {
       case 'roster':
         this.syncRoster();
@@ -335,6 +338,7 @@ export class Director {
         this.game.music(null);
         this.game.music('karung');
         this.finishers = 0;
+        this.marks.newRace();
         this.syncRoster();
         this.scene.resetRace();
         this.commentator.resetRace();
@@ -356,21 +360,14 @@ export class Director {
       case 'finish': {
         this.finishers++;
         const first = this.finishers === 1;
-        this.scene.finish(e.id, first);
+        this.fx.finish(e.id, e.place, first);
+        this.marks.finish(e.id, e.place);
         const m = match.racer(e.id);
-        const a = this.scene.headAnchor(e.id, this.anchor);
-        if (a)
-          this.hud.float(STR.finishedFloat(e.place), a.x, a.y - 30, {
-            kind: 'super',
-            size: 40,
-            color: first ? '#FFC928' : '#FFFFFF',
-            rise: 40,
-            duration: 1300,
-          });
         this.game.sfx(first ? 'win' : 'ding');
         this.buzz(e.id, first ? [60, 40, 60, 40, 160] : [60, 40, 120]);
         if (e.close) {
           this.scene.flash();
+          this.marks.flash();
           this.game.sfx('reveal');
           this.comment({ type: 'photo' }, t);
         } else if (m) {
@@ -409,6 +406,7 @@ export class Director {
         this.sendViews(true);
         return;
       case 'done':
+        this.publishMirror(t, true);
         this.ended = true;
         this.game.end(this.result ?? this.finalResult());
         return;
@@ -475,10 +473,8 @@ export class Director {
   private plates(): Plate[] {
     const list = this.shownRacers();
     const { centers, spacing } = this.scene.lanes;
-    const o = this.hud.origin;
     const order = this.match.phase === 'race' || this.match.phase === 'raceEnd' ? this.match.order() : [];
     const server = this.game.now();
-    const h = Math.round(Math.min(56, spacing - 6));
     return list.map((r, i) => {
       const idx = order.findIndex((x) => x.id === r.id);
       const moved = r.dist > 0 || r.finishAt !== null;
@@ -492,9 +488,7 @@ export class Director {
         streak: this.match.streakOf(r.id, server),
         finished: r.finishAt !== null,
         stumble: this.match.stumbling(r.id, server),
-        x: o.x + PLATE_X,
-        y: o.y + (centers[i] ?? 0),
-        h,
+        ...plateBox(i, centers, spacing, this.hud.origin),
       };
     });
   }
@@ -597,5 +591,36 @@ export class Director {
       plates: this.plates(),
       overlay: this.overlay(t),
     };
+  }
+
+  /* ------------------------------------------------------------------ long-distance play */
+
+  /** The board for a far-away screen, throttled unless `now` is set. */
+  private publishMirror(t: number, now: boolean): void {
+    if (!this.game.mirrored) return;
+    const m = this.match;
+    if (!now && t - this.lastMirror < (m.phase === 'race' ? MIRROR_LIVE_MS : MIRROR_IDLE_MS)) return;
+    this.lastMirror = t;
+    this.game.publish(
+      toMirror({
+        server: this.game.now(),
+        phase: m.phase,
+        race: m.race,
+        totalRaces: m.totalRaces,
+        elapsed: m.elapsed(),
+        grace: m.graceLeft(),
+        anchor: m.anchor,
+        beatMs: m.tuning.beatMs,
+        trackLength: m.tuning.trackLength,
+        hopMs: m.tuning.hopMs,
+        stumbleMs: m.tuning.stumbleMs,
+        hud: this.hudState(t),
+        dist: (id) => m.racer(id)?.dist ?? 0,
+        marks: this.marks,
+        lastOrder: m.lastOrder,
+        ticker: this.commentator.current,
+        held: this.clock.paused,
+      }),
+    );
   }
 }

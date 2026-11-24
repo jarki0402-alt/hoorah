@@ -5,6 +5,9 @@
  *
  * Computer contestants (PRD 6.4): exactly one person gets three opponents that look like normal
  * players; their skill adapts silently. A dropped phone keeps playing with the same brain.
+ *
+ * Long-distance play: with a `mirror` link the display state goes out about 13 times a second
+ * while a round runs and at once on every event; flourishes are logged for the far-away screen.
  */
 import {
   type ControllerToGame,
@@ -16,16 +19,17 @@ import {
   unpackStick,
 } from '@hoorah/protocol';
 import type { GameAward, GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
-import { celebrate } from '../../shared/confetti';
 import { cpuSkill, isCpu, reportSoloResult, soloOpponents } from '../common/cpu';
 import { GameClock } from '../dapur/clock';
 import { COLOR_HEX } from './arena';
 import { ContestantBrain, TAKEOVER_SKILL } from './brain';
 import type { Chip, HudStore } from './hud';
 import type { RuntuhEvent, RuntuhMatch, PlayerInfo as Seat } from './logic';
+import { EventLog, type MirrorLink, PUBLISH_MS, toMirror } from './mirror';
 import { buildResult, pickAwards } from './results';
 import type { RuntuhScene } from './scene';
-import { formatGap, STR } from './strings';
+import { type ShowEvent, showEvent } from './show';
+import { STR } from './strings';
 import { viewFor } from './views';
 
 const HUD_MS = 100;
@@ -83,6 +87,11 @@ export class Director {
   private fpsAt = 0;
   onFrame: ((now: number, running: boolean) => void) | null = null;
   onFps: ((fps: number) => void) | null = null;
+  /** Far-away main screens watching (set by main.tsx; null offline). */
+  mirror: MirrorLink | null = null;
+  private readonly log = new EventLog();
+  private mirrorDirty = true;
+  private lastPublish = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly game: GameLike,
@@ -136,6 +145,7 @@ export class Director {
     if (on) this.clock.hold(reason);
     else this.clock.release(reason);
     this.hud.paused.value = this.clock.paused;
+    this.mirrorDirty = true;
   }
 
   private onPlayers(): void {
@@ -171,6 +181,7 @@ export class Director {
     }
     this.syncLooks();
     this.lastHud = Number.NEGATIVE_INFINITY;
+    this.mirrorDirty = true;
     this.sendViews(true);
   }
 
@@ -215,10 +226,15 @@ export class Director {
       this.lastViews = t;
       this.sendViews(false);
     }
+    this.flushMirror(t);
   };
 
   private drain(): void {
-    for (const e of this.m.drainEvents()) this.onEvent(e);
+    for (const e of this.m.drainEvents()) {
+      this.onEvent(e);
+      // Ticks, cracks and drops of single tiles ride on the periodic state (tile schedules).
+      if (e.k !== 'second' && e.k !== 'crack' && e.k !== 'vanish') this.mirrorDirty = true;
+    }
   }
 
   private setIntensity(level: MusicIntensity): void {
@@ -237,9 +253,18 @@ export class Director {
     if (this.online.has(id) && !isCpu(id) && !this.takeover.has(id)) this.game.vibrate(id, pattern);
   }
 
-  private floatAbove(id: number, text: string): void {
-    const s = this.scene.players.screenOf(id);
-    if (s) this.hud.float(text, s.x, s.y);
+  /** A flourish on this screen, logged for far-away screens to replay. */
+  private show(e: ShowEvent): void {
+    showEvent(e, {
+      hud: this.hud,
+      scene: this.scene,
+      chip: (id) => this.chip(id),
+      body: (id) => {
+        const b = this.m.sim.body(id);
+        return b ? { ...b.pos } : null;
+      },
+    });
+    this.log.push(e, this.m.sim.t);
   }
 
   private onEvent(e: RuntuhEvent): void {
@@ -263,7 +288,7 @@ export class Director {
       case 'play':
         this.hud.intro.value = null;
         this.scene.players.setTags(true);
-        this.hud.shout(STR.go);
+        this.show({ k: 'go' });
         this.hud.help.value = m.round === 0;
         window.setTimeout(() => {
           this.hud.help.value = false;
@@ -282,12 +307,12 @@ export class Director {
         this.game.sfx(e.left % 2 === 0 ? 'tick' : 'tock');
         return;
       case 'drop':
-        this.hud.shout(STR.drop);
+        this.show({ k: 'drop' });
         this.game.sfx('collapse');
         this.setIntensity(m.isFinal ? 2 : 1);
         return;
       case 'reveal':
-        this.scene.flashReveal();
+        this.show({ k: 'reveal' });
         return;
       case 'restore':
         this.sendViews(true);
@@ -313,31 +338,20 @@ export class Director {
         return;
       }
       case 'fall': {
-        const p = m.player(e.id);
-        if (p) fx.fall(e.at.x, Math.max(-1, e.at.y), e.at.z, p.color);
         const next = m.round + 1 < m.rules.length ? m.round + 1 : null;
-        const by = e.by !== null ? m.player(e.by) : undefined;
-        if (p) {
-          if (by) this.hud.toast(STR.pushedOff(by.name, p.name), 'bad', this.chip(e.id) ?? undefined);
-          else this.hud.toast(STR.fallToast(p.name, next), 'bad', this.chip(e.id) ?? undefined);
-        }
+        this.show({ k: 'fall', id: e.id, at: { ...e.at }, by: e.by, next });
         this.game.sfx('stinger-fall');
         this.buzz(e.id, [160, 60, 80]);
         this.sendView(e.id, true);
         return;
       }
       case 'push':
-        this.floatAbove(e.id, e.target !== null ? STR.pushFloat : STR.whiff);
+        this.show({ k: 'push', id: e.id, target: e.target });
         this.game.sfx(e.target !== null ? 'hit' : 'throw');
-        if (e.target !== null) {
-          const b = m.sim.body(e.target);
-          if (b) fx.dust(b.pos.x, b.pos.y, b.pos.z, 0.8);
-          this.buzz(e.target, [60, 30, 60]);
-        }
+        if (e.target !== null) this.buzz(e.target, [60, 30, 60]);
         return;
       case 'nearMiss': {
-        const p = m.player(e.id);
-        if (p) this.hud.flashBanner(STR.nearMiss(p.name, formatGap(e.gap)));
+        this.show({ k: 'near', id: e.id, gap: e.gap });
         this.game.sfx('perfect');
         this.buzz(e.id, 40);
         return;
@@ -373,7 +387,7 @@ export class Director {
         };
         this.game.sfx('stinger-win');
         const top = m.standings()[0];
-        if (top && !isCpu(top.id)) celebrate();
+        if (top && !isCpu(top.id)) this.show({ k: 'win' });
         this.sendViews(true);
         return;
       }
@@ -396,6 +410,7 @@ export class Director {
     this.game.music(null);
     this.sendViews(true);
     cancelAnimationFrame(this.raf);
+    this.publishNow();
     this.game.end(result);
   }
 
@@ -412,6 +427,45 @@ export class Director {
     if (!force && this.sent.get(id) === key) return;
     this.sent.set(id, key);
     this.game.setView(id, view);
+  }
+
+  /* ------------------------------------------------------------------ far-away screens */
+
+  /** Sends the display state now (a far-away screen just connected, or the session ended). */
+  publishNow(): void {
+    this.mirrorDirty = true;
+    this.flushMirror(this.clock.now());
+  }
+
+  /** Periodic state while a round runs; a change (event, pause, players) goes at once. */
+  private flushMirror(t: number): void {
+    const link = this.mirror;
+    if (!link?.active()) return;
+    const m = this.m;
+    const live = m.phase === 'intro' || m.phase === 'play' || m.phase === 'end';
+    const due = live && !this.ended && !this.clock.paused && t - this.lastPublish >= PUBLISH_MS;
+    if (!this.mirrorDirty && !due) return;
+    this.mirrorDirty = false;
+    this.lastPublish = t;
+    const h = this.hud;
+    link.send(
+      toMirror({
+        at: link.now(),
+        paused: this.clock.paused,
+        match: m,
+        hud: {
+          round: h.round.peek(),
+          alive: h.alive.peek(),
+          rule: h.rule.peek(),
+          scores: h.scores.peek(),
+          intro: h.intro.peek(),
+          end: h.end.peek(),
+          final: h.final.peek(),
+          help: h.help.peek(),
+        },
+        events: this.log.recent(m.sim.t),
+      }),
+    );
   }
 
   /* ------------------------------------------------------------------ HUD */

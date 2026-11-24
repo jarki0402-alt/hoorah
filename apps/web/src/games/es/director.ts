@@ -5,6 +5,10 @@
  *
  * Fairness: an aim is locked on the phone and sent once; the main screen keeps taking locks for a
  * short grace after the countdown, so a slow connection never costs a shot.
+ *
+ * Long-distance play: with a `mirror` link the display state goes out about 13 times a second
+ * while skaters aim, slide or fall, and at once on every event, so a far-away main screen draws
+ * the same floe (mirror.ts, replica.ts). Flourishes go through show.ts and a numbered log.
  */
 import {
   type ControllerToGame,
@@ -17,14 +21,15 @@ import {
   unpackStick,
 } from '@hoorah/protocol';
 import type { GameAward, GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
-import { celebrate } from '../../shared/confetti';
 import { cpuSkill, isCpu, reportSoloResult, soloOpponents } from '../common/cpu';
 import { GameClock } from '../dapur/clock';
-import type { ChipStatus, Chip as HudChip, HudStore } from './hud';
-import type { EsEvent, EsMatch, PlayerInfo as Seat, Skater } from './logic';
+import { boardOf, type Chip as HudChip, type HudStore } from './hud';
+import type { EsEvent, EsMatch, PlayerInfo as Seat } from './logic';
+import { EventLog, type MirrorLink, PUBLISH_MS, toMirror } from './mirror';
 import { buildResult, pickAwards } from './results';
 import type { EsScene } from './scene';
-import { formatGap, STR } from './strings';
+import { type ShowEvent, type ShowTarget, showCrack, showEvent } from './show';
+import { STR } from './strings';
 import { viewFor } from './views';
 
 const HUD_MS = 100;
@@ -82,6 +87,12 @@ export class Director {
   private fpsAt = 0;
   onFrame: ((now: number, running: boolean) => void) | null = null;
   onFps: ((fps: number) => void) | null = null;
+  /** Far-away main screens (long-distance play), null offline. */
+  mirror: MirrorLink | null = null;
+  private readonly log = new EventLog();
+  private mirrorDirty = true;
+  private lastPublish = Number.NEGATIVE_INFINITY;
+  private readonly target: ShowTarget;
 
   constructor(
     private readonly game: GameLike,
@@ -90,7 +101,17 @@ export class Director {
     private readonly scene: EsScene,
     private readonly hud: HudStore,
     private readonly due: (now: number) => boolean = () => true,
-  ) {}
+  ) {
+    this.target = {
+      hud,
+      scene,
+      chip: (id) => this.chip(id),
+      posOf: (id) => {
+        const p = this.m.player(id);
+        return p ? { x: p.pos.x, y: p.pos.y } : null;
+      },
+    };
+  }
 
   static skill(game: Pick<GameLike, 'gameId'>): number {
     return cpuSkill(game.gameId);
@@ -142,6 +163,7 @@ export class Director {
       this.stampDeadline();
       this.sendViews(true);
     }
+    if (was !== this.clock.paused) this.publishNow();
   }
 
   private stampDeadline(): void {
@@ -183,6 +205,7 @@ export class Director {
     this.drain();
     this.lastHud = Number.NEGATIVE_INFINITY;
     this.sendViews(true);
+    this.mirrorDirty = true;
   }
 
   private onInput(input: RelayedInput & { atMs: number }): void {
@@ -227,10 +250,22 @@ export class Director {
       this.lastViews = t;
       this.sendViews(false);
     }
+    // Read the clock again: events logged during this frame must not be newer than the state.
+    if (!this.ended) this.flushMirror(this.clock.now());
   };
 
   private drain(): void {
-    for (const e of this.m.drainEvents()) this.onEvent(e);
+    for (const e of this.m.drainEvents()) {
+      // Locks and countdown seconds change nothing a far-away screen cannot wait 75 ms for.
+      if (e.k !== 'lock' && e.k !== 'second') this.mirrorDirty = true;
+      this.onEvent(e);
+    }
+  }
+
+  /** Shows a flourish here and logs it for far-away screens. */
+  private show(e: ShowEvent): void {
+    this.log.push(e, this.clock.now() / 1000);
+    showEvent(e, this.target);
   }
 
   private setIntensity(level: MusicIntensity): void {
@@ -274,6 +309,7 @@ export class Director {
         if (this.hud.help.value)
           window.setTimeout(() => {
             this.hud.help.value = false;
+            this.mirrorDirty = true;
           }, 6000);
         this.stampDeadline();
         this.setIntensity(m.isFinal || m.standing().length <= 2 ? 2 : 1);
@@ -294,15 +330,13 @@ export class Director {
       case 'launch':
         this.setHurry(false);
         this.setIntensity(m.isFinal || m.standing().length <= 3 ? 3 : 2);
-        this.hud.shout(STR.slideTitle);
+        this.show({ k: 'launch' });
         this.game.sfx('go');
         for (const p of m.standing()) this.buzz(p.id, 60);
         this.sendViews(true);
         return;
       case 'hit': {
-        const s = this.scene.screenAt(e.at);
-        if (s) this.hud.float(STR.hit, s.x, s.y, 'hit');
-        this.scene.hit(e.at, e.speed);
+        this.show({ k: 'hit', at: e.at, speed: e.speed });
         this.game.sfx('hit');
         const strong = e.speed > 4 ? [70, 30, 70] : 45;
         this.buzz(e.a, strong);
@@ -310,34 +344,23 @@ export class Director {
         return;
       }
       case 'fall': {
-        const p = m.player(e.id);
-        if (!p) return;
-        window.setTimeout(() => {
-          const s = this.scene.screenAt(e.at, 0.6);
-          if (s) this.hud.float(STR.splash, s.x, s.y, 'splash');
-          this.scene.splash({ x: p.pos.x, y: p.pos.y });
-          this.game.sfx('splash');
-        }, 450);
-        const by = e.by !== null ? m.player(e.by) : undefined;
-        const who = this.chip(e.id) ?? undefined;
-        if (by) this.hud.toast(STR.pushedOff(by.name, p.name), who);
-        else if (e.crack) this.hud.toast(STR.crackToast(p.name), who);
-        else this.hud.toast(STR.fallToast(p.name), who);
+        if (!m.player(e.id)) return;
+        this.show({ k: 'fall', id: e.id, by: e.by, crack: e.crack, at: e.at });
+        window.setTimeout(() => this.game.sfx('splash'), 450);
         this.game.sfx('stinger-fall');
         this.buzz(e.id, [160, 60, 80]);
         this.sendView(e.id, true);
         return;
       }
       case 'nearMiss': {
-        const p = m.player(e.id);
-        if (p) this.hud.flashBanner(STR.nearMiss(p.name, formatGap(e.gap)));
+        this.show({ k: 'nearMiss', id: e.id, gap: e.gap });
         this.game.sfx('perfect');
         this.buzz(e.id, 40);
         return;
       }
       case 'crack':
         this.scene.crack(e.from, e.to);
-        this.hud.shout(STR.crack);
+        showCrack(this.target);
         this.game.sfx('collapse');
         return;
       case 'roundEnd': {
@@ -346,7 +369,7 @@ export class Director {
         this.hud.center.value = null;
         const winner = e.winner !== null ? m.player(e.winner) : undefined;
         if (winner) {
-          this.scene.celebrate(winner.id);
+          this.show({ k: 'win', id: winner.id });
           this.game.sfx('cheer');
           this.buzz(winner.id, [40, 30, 40, 30, 80]);
         } else this.game.sfx('boo');
@@ -373,7 +396,7 @@ export class Director {
         };
         this.game.sfx('stinger-win');
         const top = m.standings()[0];
-        if (top && !isCpu(top.id)) celebrate();
+        if (top && !isCpu(top.id)) this.show({ k: 'party' });
         this.sendViews(true);
         return;
       }
@@ -396,6 +419,7 @@ export class Director {
     this.game.music(null);
     this.sendViews(true);
     cancelAnimationFrame(this.raf);
+    this.publishNow();
     this.game.end(result);
   }
 
@@ -420,37 +444,56 @@ export class Director {
     this.game.setView(id, view);
   }
 
+  /* ------------------------------------------------------------------ far-away screens */
+
+  /** Sends the display state now (a far-away screen just connected, a pause, the end). */
+  publishNow(): void {
+    this.mirrorDirty = true;
+    this.flushMirror(this.clock.now());
+  }
+
+  /** Periodic state while skaters aim, slide or fall; a change (event, players) goes at once. */
+  private flushMirror(t: number): void {
+    const link = this.mirror;
+    if (!link?.active()) return;
+    const ph = this.m.phase;
+    const moving = ph === 'aim' || ph === 'slide' || ph === 'settle';
+    const due = moving && !this.clock.paused && t - this.lastPublish >= PUBLISH_MS;
+    if (!this.mirrorDirty && !due) return;
+    this.mirrorDirty = false;
+    this.lastPublish = t;
+    const h = this.hud;
+    link.send(
+      toMirror({
+        at: link.now(),
+        t: t / 1000,
+        paused: this.clock.paused,
+        match: this.m,
+        offline: (id) => this.offline(id),
+        intro: h.intro.peek(),
+        end: h.end.peek(),
+        final: h.final.peek(),
+        help: h.help.peek(),
+        events: this.log.recent(t / 1000),
+      }),
+    );
+  }
+
   /* ------------------------------------------------------------------ HUD */
 
-  private status(p: Skater): ChipStatus {
-    const m = this.m;
-    if (!p.inRound) return 'wait';
-    if (p.out || p.falling !== null) return 'out';
-    if (m.phase === 'aim') return p.aim ? 'locked' : 'aiming';
-    return 'safe';
+  private offline(id: number): boolean {
+    return !isCpu(id) && !this.online.has(id);
   }
 
   private pushHud(): void {
     const m = this.m;
-    const h = this.hud;
-    h.round.value = STR.roundOf(m.round, m.roundCount);
-    h.double.value = m.isFinal;
-    const active = m.phase === 'aim' || m.phase === 'slide' || m.phase === 'settle';
-    h.shot.value = active && m.shot > 0 ? STR.shotLine(m.shot, m.nextEdge < m.edge) : '';
-    h.onIce.value = active ? `${m.standing().length}/${m.contestants().length}` : '';
-    h.locks.value = m.phase === 'aim' ? STR.locked(m.locks()) : '';
-    if (m.phase === 'aim') h.center.value = { mode: 'aim', seconds: Math.max(1, m.aimLeft) };
-    else if (m.phase === 'slide') h.center.value = { mode: 'slide', seconds: 0 };
-    else h.center.value = null;
-    h.chips.value = m.players.map((p) => ({
-      id: p.id,
-      name: p.name,
-      fruit: p.fruit,
-      look: p.look,
-      color: p.color,
-      status: this.status(p),
-      score: p.total + (active ? m.roundPoints(p) : 0),
-      offline: !isCpu(p.id) && !this.online.has(p.id),
-    }));
+    this.hud.setBoard(
+      boardOf(
+        m,
+        m.roundCount,
+        (p) => m.liveTotal(p),
+        (id) => this.offline(id),
+      ),
+    );
   }
 }

@@ -691,6 +691,12 @@ export class EsMatch {
     this.events.push({ k: 'roundEnd', points, winner });
   }
 
+  /** Total shown on the scoreboard: banked points plus what this round would give now. */
+  liveTotal(p: Skater): number {
+    const active = this.phase === 'aim' || this.phase === 'slide' || this.phase === 'settle';
+    return p.total + (active ? this.roundPoints(p) : 0);
+  }
+
   /** Points this skater would score if the round ended now (live scoreboard). */
   roundPoints(p: Skater): number {
     if (!p.inRound) return 0;

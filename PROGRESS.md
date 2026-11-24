@@ -68,6 +68,20 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 ## Log
 
+### 2026-11-24 · Main bareng teman jauh: Seluncur Es, Balap Karung, Lantai Runtuh
+
+**Apa yang diubah** (eksekusi pemilik 2026-11-24, saat sedang main bareng teman):
+- **Seluncur Es** (`remote: true`): `EsReplica` (mesin kotak, pola Bom Oper), kirim tiap 75 ms waktu game saat membidik/meluncur, ±1,3 KB. Bidikan, es mengecil (dikirim sebagai ukuran, bukan kejadian, jadi aman bila paket hilang), MELUNCUR!/DUK!/BYUR!/NYARIS! diputar ulang. Efek dipindah ke `show.ts`, papan skor `boardOf` dipakai A dan B.
+- **Balap Karung** (`remote: true`): `KarungReplica` (pola Tarik), kirim ±14 kali per detik saat balapan, maks ±2,1 KB. Lompatan diputar ulang dari penghitung (lompat panjang/pendek/super), GUBRAK!, finis, kilat foto, timer. Efek dipindah ke `effects.ts`.
+- **Lantai Runtuh** (`remote: true`): `RuntuhReplica` (mesin kotak), jadwal setiap petak yang tidak utuh dikirim di setiap paket (dikelompokkan), jadi satu paket hilang tidak menghilangkan apa pun; B memutar retak/jatuh/naik pada waktu game yang tepat. Efek dipindah ke `show.ts`.
+- Kasus e2e baru di `e2e/remote-games.spec.ts` untuk ketiganya.
+
+**File:** `apps/web/src/games/es/{mirror.ts,mirror.test.ts,replica.ts,show.ts,director.ts,hud.tsx,logic.ts,main.tsx}`, `apps/web/src/games/karung/{mirror.ts,mirror.test.ts,replica.ts,effects.ts,director.ts,hud.tsx,main.tsx}`, `apps/web/src/games/runtuh/{mirror.ts,mirror.test.ts,replica.ts,show.ts,director.ts,main.tsx}`, `apps/web/src/shared/games.ts`, `apps/web/src/screen/mirror.test.ts`, `e2e/remote-games.spec.ts`.
+
+**Verifikasi:** `npx tsc --noEmit -p apps/web` lulus (di luar folder Wilayah yang sedang dikerjakan), `npx biome check` lulus, `npx vitest run` es + karung + runtuh + rollout lulus (39 + 99 tes), `npx playwright test e2e/remote-games.spec.ts` Seluncur Es, Balap Karung, Lantai Runtuh lulus; cuplikan A dan B sama (pemain, arena, HUD, hitung mundur). `npm run check` penuh dan Docker belum dijalankan untuk commit ini (Rebut Wilayah masih dikerjakan di pohon kerja yang sama; CI GitHub menjalankan pemeriksaan penuh).
+
+**Berikutnya / sisa:** pecahan pinggir es yang hanyut acak per layar (di B bisa terlihat di posisi berbeda). Rebut Wilayah menyusul.
+
 ### 2026-11-24 · Main bareng teman jauh: Tarik Tambang + Bom Oper (game real-time pertama)
 
 **Apa yang diubah:**

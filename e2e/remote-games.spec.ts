@@ -15,6 +15,9 @@ const CASES: { id: string; title: string; players: number; settle?: number; star
   { id: 'juragan', title: 'Juragan Nusantara', players: 2 },
   { id: 'tarik', title: 'Tarik Tambang', players: 2, settle: 9000 },
   { id: 'bom', title: 'Bom Oper', players: 2, settle: 9000, start: 'Mulai' },
+  { id: 'es', title: 'Seluncur Es', players: 2, settle: 9000 },
+  { id: 'karung', title: 'Balap Karung', players: 2, settle: 6000 },
+  { id: 'runtuh', title: 'Lantai Runtuh', players: 2, settle: 7000 },
 ];
 const NAMES = ['Rina', 'Bayu', 'Sari', 'Dodi', 'Wulan', 'Tono'];
 

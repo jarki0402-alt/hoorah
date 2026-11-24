@@ -28,6 +28,23 @@ export interface Plate {
   h: number;
 }
 
+/** Plate x inside the stage's left edge, in world px. */
+const PLATE_X = 12;
+
+/** Where lane `i`'s plate sits: lane centre in stage px (world plus `origin`) and its height. */
+export function plateBox(
+  i: number,
+  centers: readonly number[],
+  spacing: number,
+  origin: { x: number; y: number },
+): { x: number; y: number; h: number } {
+  return {
+    x: origin.x + PLATE_X,
+    y: origin.y + (centers[i] ?? 0),
+    h: Math.round(Math.min(56, spacing - 6)),
+  };
+}
+
 export interface BoardRow {
   id: number;
   name: string;

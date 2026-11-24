@@ -7,6 +7,7 @@
 import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { Avatar } from '../../shared/ui';
+import type { EsMatch, Skater } from './logic';
 import { STR } from './strings';
 
 export interface Chip {
@@ -116,6 +117,70 @@ export class HudStore {
       if (this.banner.value?.key === b.key) this.banner.value = null;
     }, 2400);
   }
+
+  setBoard(b: Board): void {
+    this.round.value = b.round;
+    this.double.value = b.double;
+    this.shot.value = b.shot;
+    this.onIce.value = b.onIce;
+    this.locks.value = b.locks;
+    this.center.value = b.center;
+    this.chips.value = b.chips;
+  }
+}
+
+/** The running scoreboard rows of the HUD (refreshed a few times a second). */
+export interface Board {
+  round: string;
+  double: boolean;
+  shot: string;
+  onIce: string;
+  locks: string;
+  center: Center | null;
+  chips: PlayerChip[];
+}
+
+function statusOf(m: EsMatch, p: Skater): ChipStatus {
+  if (!p.inRound) return 'wait';
+  if (p.out || p.falling !== null) return 'out';
+  if (m.phase === 'aim') return p.aim ? 'locked' : 'aiming';
+  return 'safe';
+}
+
+/**
+ * The scoreboard of a match. `rounds` is the session's round count; `score` and `offline` come
+ * from the Host's own match, or from the published state on a far-away screen.
+ */
+export function boardOf(
+  m: EsMatch,
+  rounds: number,
+  score: (p: Skater) => number,
+  offline: (id: number) => boolean,
+): Board {
+  const active = m.phase === 'aim' || m.phase === 'slide' || m.phase === 'settle';
+  return {
+    round: STR.roundOf(m.round, rounds),
+    double: m.round === rounds - 1,
+    shot: active && m.shot > 0 ? STR.shotLine(m.shot, m.nextEdge < m.edge) : '',
+    onIce: active ? `${m.standing().length}/${m.contestants().length}` : '',
+    locks: m.phase === 'aim' ? STR.locked(m.locks()) : '',
+    center:
+      m.phase === 'aim'
+        ? { mode: 'aim', seconds: Math.max(1, m.aimLeft) }
+        : m.phase === 'slide'
+          ? { mode: 'slide', seconds: 0 }
+          : null,
+    chips: m.players.map((p) => ({
+      id: p.id,
+      name: p.name,
+      fruit: p.fruit,
+      look: p.look,
+      color: p.color,
+      status: statusOf(m, p),
+      score: score(p),
+      offline: offline(p.id),
+    })),
+  };
 }
 
 export function Hud({ store }: { store: HudStore }) {
