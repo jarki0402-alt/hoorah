@@ -77,7 +77,7 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 
 **File:** `apps/web/src/games/tarik/{mirror.ts,mirror.test.ts,replica.ts,board.ts,effects.ts,director.ts,main.tsx}`, `apps/web/src/games/bom/{mirror.ts,mirror.test.ts,replica.ts,show.ts,director.ts,main.tsx}`, `apps/web/src/shared/games.ts`, `apps/web/src/screen/mirror.test.ts`, `e2e/remote.spec.ts`, `e2e/remote-games.spec.ts`.
 
-**Verifikasi:** `npx tsc --noEmit -p apps/web` lulus, `npx biome check` lulus, `npx vitest run` tarik + bom + rollout 120/120 lulus, `npx playwright test` Tarik, Bom, dan alur dua layar dasar lulus; cuplikan A dan B identik (Tarik saat menarik, Bom saat bom dipegang Bayu). `npm run check` penuh dan Docker: lihat entri sesudah ini.
+**Verifikasi:** `npx tsc --noEmit -p apps/web` lulus, `npx biome check` lulus, `npx vitest run` tarik + bom + rollout 120/120 lulus, `npx playwright test` Tarik, Bom, dan alur dua layar dasar lulus; cuplikan A dan B identik (Tarik saat menarik, Bom saat bom dipegang Bayu). Setelah kelima game masuk: `npm run check` lulus (11 peringatan lint lama, 125 file / 2161 tes unit, build); `npm run docker:up` lulus, `curl http://192.168.0.104:1010/health` → `{"ok":true,...}`, kode replika Bom/Tarik ada di aset container.
 
 **Berikutnya / sisa:** angka "+N" dan goyangan penarik di B dibangun ulang dari total ketukan (mirip, tidak persis). Pemain di tempat B merasakan telat ±0,2–0,4 detik lewat Oregon. Data ke B ±15 KB/detik per layar teman saat game real-time.
 
