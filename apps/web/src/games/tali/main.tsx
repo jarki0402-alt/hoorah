@@ -6,9 +6,12 @@
  * Graphics: the shared device profile (common/gfx.ts, `?gfx=low|medium|high` forces a level)
  * picks MSAA, shadows and pixel ratio; the quality ladder steps down while climbing if frames run
  * slow. Debug pins: `?q=0..3` shadow tier, `?k=` pixel ratio.
+ *
+ * Long-distance play: the Host's screen publishes its display state (director.ts); a far-away
+ * mirror screen (`game.isMirror`) draws the same climb and HUD from it with `TaliReplica`.
  */
 import { FRUITS, lookOfFruit, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
-import { connect, type GameResult } from '@hoorah/sdk';
+import { connect, type GameResult, type HoorahGame } from '@hoorah/sdk';
 import { render } from 'preact';
 import { LEVELS, QualityLadder, readOverrides, startRatio } from '../bajaj/quality';
 import { ensureGfxProfile } from '../common/gfx';
@@ -16,6 +19,7 @@ import { fontsReady, mountStage } from '../common/stage';
 import { isRouteId } from './course';
 import { Director, type GameLike } from './director';
 import { Hud, HudStore } from './hud';
+import { TaliReplica } from './replica';
 import { TaliScene } from './scene';
 import { STR } from './strings';
 import './tali.css';
@@ -67,10 +71,12 @@ async function boot(): Promise<void> {
   const profileP = ensureGfxProfile();
   const demo = Math.min(4, Math.max(0, Math.floor(Number(params.get('demo') ?? 0))));
   let game: GameLike & { ready?: () => void };
+  let sdk: HoorahGame | null = null;
   if (demo > 0) game = new DemoGame(demo);
   else {
     try {
-      game = await connect();
+      sdk = await connect();
+      game = sdk;
     } catch {
       root.textContent = STR.noShell;
       return;
@@ -114,6 +120,10 @@ async function boot(): Promise<void> {
 
   const hud = new HudStore();
   render(<Hud store={hud} />, hudHost);
+  if (sdk?.isMirror) {
+    bootMirror(sdk, scene, hud, ladder);
+    return;
+  }
   const route = params.get('route');
   const director = new Director(
     game,
@@ -124,9 +134,44 @@ async function boot(): Promise<void> {
   );
   director.onFrame = (now, running) => ladder.frame(now, running);
   director.onFps = (fps) => ladder.second(performance.now(), fps);
+  if (sdk) {
+    const link = sdk;
+    director.mirror = { active: () => link.mirrored, now: () => link.now(), send: (s) => link.publish(s) };
+    link.on('mirrors', (on) => {
+      if (on) director.publishNow();
+    });
+  }
   director.start();
   scene.stage.warmUp();
   game.ready?.();
+}
+
+/** Far-away screen: the climb and HUD posed from the Host's published states (no rules, no phones). */
+function bootMirror(game: HoorahGame, scene: TaliScene, hud: HudStore, ladder: QualityLadder): void {
+  const replica = new TaliReplica(scene, hud);
+  game.on('mirror', (state) => replica.push(state, game.now()));
+  game.on('pause', (paused) => replica.setLocalPause(paused));
+  replica.setLocalPause(game.paused);
+  let last = -1;
+  let frames = 0;
+  let fpsAt = 0;
+  const loop = (now: number): void => {
+    requestAnimationFrame(loop);
+    if (!ladder.pacer.due(now)) return;
+    const dt = last < 0 ? 0 : Math.min(0.1, Math.max(0, (now - last) / 1000));
+    last = now;
+    replica.frame(game.now(), dt);
+    ladder.frame(now, replica.running);
+    frames++;
+    if (now - fpsAt >= 1000) {
+      ladder.second(performance.now(), (frames * 1000) / (now - fpsAt));
+      frames = 0;
+      fpsAt = now;
+    }
+  };
+  requestAnimationFrame(loop);
+  scene.stage.warmUp();
+  game.ready();
 }
 
 void boot();

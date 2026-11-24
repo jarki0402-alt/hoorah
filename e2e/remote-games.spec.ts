@@ -22,6 +22,7 @@ const CASES: { id: string; title: string; players: number; settle?: number; star
   { id: 'kerupuk', title: 'Makan Kerupuk', players: 2, settle: 8000 },
   { id: 'rusun', title: 'Rusun', players: 2, settle: 6000 },
   { id: 'langkah', title: 'Langkah Maut', players: 2, settle: 8000, start: 'Mulai' },
+  { id: 'tali', title: 'Satu Tali', players: 2, settle: 9000, start: 'Mulai' },
 ];
 const NAMES = ['Rina', 'Bayu', 'Sari', 'Dodi', 'Wulan', 'Tono'];
 

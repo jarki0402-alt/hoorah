@@ -6,6 +6,10 @@
  * Main sendiri (PRD 6.4, owner's decision 2026-11-22): no computer teammates; a lone climber is
  * tied to the sandbag instead. A dropped phone's climber stands still and holds the rope until it
  * reconnects.
+ *
+ * Long-distance play: with a `mirror` link the display state goes out about 15 times a second
+ * while climbing and at once on every flourish, pause or card change; a far-away main screen draws
+ * the same climb from it (replica.ts).
  */
 import {
   type ControllerToGame,
@@ -18,14 +22,15 @@ import {
   unpackStick,
 } from '@hoorah/protocol';
 import type { GameAward, GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
-import { celebrate } from '../../shared/confetti';
 import { loadJson, saveJson } from '../common/store';
 import { GameClock } from '../dapur/clock';
 import { isRouteId, ROUTES, type RouteId } from './course';
 import type { ClimberChip, HudStore, RosterRow } from './hud';
-import { type ClimberInfo, SACK_ID, type TaliEvent, TaliMatch } from './logic';
+import { type ClimberInfo, type TaliEvent, TaliMatch } from './logic';
+import { EventLog, type MirrorLink, PUBLISH_MS, toMirror } from './mirror';
 import { buildResult, pickAwards } from './results';
 import type { TaliScene } from './scene';
+import { type ShowEvent, showEvent } from './show';
 import { formatClock, STR } from './strings';
 import { flagLeft, pickView, viewFor } from './views';
 
@@ -84,6 +89,13 @@ export class Director {
   onFps: ((fps: number) => void) | null = null;
   private fpsFrames = 0;
   private fpsAt = 0;
+  /** Far-away main screens watching (set by main.tsx; null offline). */
+  mirror: MirrorLink | null = null;
+  private readonly log = new EventLog();
+  private mirrorDirty = true;
+  private lastPublish = Number.NEGATIVE_INFINITY;
+  /** Seconds the match has run over the session (flourish timestamps for far-away screens). */
+  private gameT = 0;
 
   constructor(
     private readonly game: GameLike,
@@ -153,6 +165,7 @@ export class Director {
       sub: STR.pickScreenSub(host?.name ?? ''),
       note: n <= 1 ? STR.pickSolo : STR.pickTeam(n),
     };
+    this.mirrorDirty = true;
     this.sendViews(false);
   }
 
@@ -182,6 +195,7 @@ export class Director {
     if (on) this.clock.hold(reason);
     else this.clock.release(reason);
     this.hud.paused.value = this.clock.paused;
+    this.mirrorDirty = true;
   }
 
   private syncLooks(): void {
@@ -217,6 +231,7 @@ export class Director {
       this.syncLooks();
     }
     if (this.stage === 'pick') this.pushPick();
+    this.mirrorDirty = true;
     this.lastHud = Number.NEGATIVE_INFINITY;
     this.sendViews(true);
   }
@@ -262,6 +277,7 @@ export class Director {
     this.lastFrame = t;
     const m = this.match;
     if (m && this.stage === 'play' && dt > 0) {
+      this.gameT += dt;
       m.tick(dt);
       this.drain();
     }
@@ -281,6 +297,7 @@ export class Director {
       this.lastViews = t;
       this.sendViews(false);
     }
+    this.flushMirror(t);
   };
 
   private drain(): void {
@@ -306,9 +323,13 @@ export class Director {
     return m.section.level === 0 ? 1 : 2;
   }
 
-  private floatAbove(id: number, text: string, tone: 'good' | 'bad' | 'info'): void {
-    const s = this.scene.players?.screenOf(id);
-    if (s) this.hud.float(text, s.x, s.y, tone);
+  /** A flourish on this screen, logged for far-away screens to replay. */
+  private show(e: ShowEvent): void {
+    const m = this.match;
+    if (!m) return;
+    showEvent(e, { hud: this.hud, scene: this.scene, match: m });
+    this.log.push(e, this.gameT);
+    if (e.k !== 'land') this.mirrorDirty = true;
   }
 
   private buzz(id: number, pattern: number | number[]): void {
@@ -319,7 +340,6 @@ export class Director {
   private onEvent(e: TaliEvent): void {
     const m = this.match;
     if (!m) return;
-    const fx = this.scene.fx;
     switch (e.k) {
       case 'section': {
         this.scene.load(m);
@@ -337,26 +357,21 @@ export class Director {
         this.setHurry(false);
         this.setIntensity(0);
         this.game.sfx('round');
+        this.mirrorDirty = true;
         this.sendViews(true);
         return;
       }
       case 'count':
         this.hud.intro.value = null;
         this.scene.players?.setTags(true);
-        this.hud.shout(String(e.value), 'count');
+        this.show({ k: 'count', value: e.value });
         this.game.sfx('count');
         this.sendViews(true);
         return;
       case 'go':
-        this.hud.shout(STR.go, 'go');
+        this.show({ k: 'go', help: m.sectionNo === 0 ? (m.sack ? 'solo' : 'team') : null });
         this.game.sfx('go');
         this.setIntensity(this.baseIntensity());
-        if (m.sectionNo === 0) {
-          this.hud.help.value = m.sack ? STR.helpSolo : STR.help;
-          window.setTimeout(() => {
-            this.hud.help.value = null;
-          }, 8000);
-        }
         for (const c of m.climbers) this.buzz(c.id, 60);
         this.sendViews(true);
         return;
@@ -364,25 +379,20 @@ export class Director {
         this.game.sfx('jump');
         return;
       case 'sync':
-        for (const id of e.ids) this.floatAbove(id, STR.syncFloat, 'good');
+        this.show({ k: 'sync', ids: [...e.ids] });
         this.game.sfx('perfect');
         return;
-      case 'land': {
-        const b = m.sim.body(e.id);
-        if (b) fx.dust(b.pos.x, b.pos.y, b.pos.z, Math.min(1.6, e.speed / 10));
+      case 'land':
+        this.show({ k: 'land', id: e.id, speed: e.speed });
         this.game.sfx('drop');
         return;
-      }
       case 'sweep':
-        this.floatAbove(e.id, STR.sweepFloat, 'bad');
+        this.show({ k: 'sweep', id: e.id });
         this.game.sfx('hit');
         this.buzz(e.id, [70, 30, 70]);
         return;
-      case 'catch': {
-        const c = m.climber(e.id);
-        const by = e.by.map((id) => m.climber(id)?.name ?? '').filter((n) => n);
-        if (c) this.hud.toast(STR.catchToast(c.name, by), c);
-        this.floatAbove(e.id, STR.catchFloat, 'good');
+      case 'catch':
+        this.show({ k: 'catch', id: e.id, by: [...e.by] });
         this.game.sfx('tension');
         this.buzz(e.id, [80, 40, 80]);
         // The holders feel a satisfying thump.
@@ -390,27 +400,18 @@ export class Director {
         this.setIntensity(3);
         this.sendViews(true);
         return;
-      }
-      case 'rescued': {
-        const c = m.climber(e.id);
-        const by = e.by.map((id) => m.climber(id)?.name ?? '').filter((n) => n);
-        if (c) this.hud.toast(STR.rescueToast(c.name, by), c);
-        const b = m.sim.body(e.id);
-        if (c && b) fx.sparkle(b.pos.x, b.pos.y + 0.8, b.pos.z, c.color);
+      case 'rescued':
+        this.show({ k: 'rescued', id: e.id, by: [...e.by] });
         this.game.sfx('cheer');
         for (const id of [e.id, ...e.by]) this.buzz(id, 40);
         this.setIntensity(this.baseIntensity());
         this.sendViews(true);
         return;
-      }
-      case 'climbUp': {
-        const c = m.climber(e.id);
-        if (c) this.hud.toast(STR.climbToast(c.name), c);
-        this.floatAbove(e.id, STR.climbFloat, 'good');
+      case 'climbUp':
+        this.show({ k: 'climbUp', id: e.id });
         this.game.sfx('super');
         this.buzz(e.id, 40);
         return;
-      }
       case 'ropeClimb':
         this.game.sfx('pull');
         this.buzz(e.id, 15);
@@ -420,23 +421,16 @@ export class Director {
         this.buzz(e.id, 25);
         this.sendView(e.id, true);
         return;
-      case 'save': {
-        const sp = m.trail.point(e.index);
-        const c = m.climber(e.id);
-        if (c) fx.sparkle(sp.pos.x, sp.pos.y + 0.5, sp.pos.z, c.color);
-        this.hud.toast(STR.saveToast, c ?? undefined);
-        this.floatAbove(e.id, STR.saveFloat, 'info');
+      case 'save':
+        this.show({ k: 'save', index: e.index, id: e.id });
         this.game.sfx('lap');
         for (const o of m.climbers) this.buzz(o.id, 40);
         return;
-      }
       case 'wipe': {
-        const c = m.climber(e.id);
-        fx.fall(e.at.x, Math.max(e.at.y, m.section.killY + 3), e.at.z, c?.color ?? '#B98B5A');
+        const live = m.phase === 'climb';
+        this.show({ k: 'wipe', id: e.id, at: { ...e.at }, live });
         this.wipeAt = this.clock.now();
-        this.scene.rope.reset();
-        if (m.phase === 'climb') {
-          this.hud.toast(STR.wipeToast, c ?? undefined);
+        if (live) {
           this.game.sfx('stinger-fall');
           for (const o of m.climbers) this.buzz(o.id, [120, 40, 60]);
           this.setIntensity(this.baseIntensity());
@@ -444,13 +438,10 @@ export class Director {
         this.sendViews(true);
         return;
       }
-      case 'throw': {
-        const s = m.sim.body(SACK_ID);
-        if (s) fx.dust(s.pos.x, s.pos.y, s.pos.z, 0.8, '#E9D2A6');
-        this.hud.toast(STR.throwToast);
+      case 'throw':
+        this.show({ k: 'throw' });
         this.game.sfx('throw');
         return;
-      }
       case 'second':
         this.game.sfx(e.left % 2 === 0 ? 'tick' : 'tock');
         if (e.left <= 10) this.setHurry(true);
@@ -469,20 +460,14 @@ export class Director {
     if (!m) return;
     this.setHurry(false);
     this.setIntensity(0);
+    this.show({ k: 'flag', done: r.done, no: r.no, stars: r.stars });
     if (r.done) {
-      this.hud.shout(STR.flagTitle(r.no), 'end');
       this.game.sfx(r.stars === 3 ? 'stinger-win' : 'gong');
-      const pad = m.section.solids[m.section.finish]!;
-      this.scene.fx.confetti(pad.pos.x, pad.pos.y + pad.half.y + 2, 0, r.stars === 3 ? 1.3 : 0.8);
       for (const c of m.climbers) {
         this.scene.players?.setCheer(c.id, true);
         this.buzz(c.id, [60, 40, 60, 40, 120]);
       }
-      if (r.stars === 3) celebrate();
-    } else {
-      this.hud.shout(STR.timeoutTitle, 'end');
-      this.game.sfx('weker');
-    }
+    } else this.game.sfx('weker');
     const last = m.sectionNo + 1 >= m.sections;
     if (last) {
       this.awards = pickAwards(m.climbers);
@@ -503,6 +488,7 @@ export class Director {
           : [STR.timeoutSub],
         sub: last ? STR.flagLast : STR.flagNext(flagLeft(m)),
       };
+      this.mirrorDirty = true;
     }, 1300);
     this.sendViews(true);
   }
@@ -522,6 +508,7 @@ export class Director {
     this.game.music(null);
     this.sendViews(true);
     cancelAnimationFrame(this.raf);
+    this.publishNow();
     this.game.end(result);
   }
 
@@ -557,6 +544,41 @@ export class Director {
     if (!force && this.sent.get(id) === key) return;
     this.sent.set(id, key);
     this.game.setView(id, view);
+  }
+
+  /* ------------------------------------------------------------------ far-away screens */
+
+  /** Sends the display state now (a far-away screen just connected, or the session ended). */
+  publishNow(): void {
+    this.mirrorDirty = true;
+    this.flushMirror(this.clock.now());
+  }
+
+  /** Periodic state while a section runs; a change (event, pause, players, cards) goes at once. */
+  private flushMirror(t: number): void {
+    const link = this.mirror;
+    if (!link?.active()) return;
+    const due = this.stage === 'play' && !this.clock.paused && t - this.lastPublish >= PUBLISH_MS;
+    if (!this.mirrorDirty && !due) return;
+    this.mirrorDirty = false;
+    this.lastPublish = t;
+    const h = this.hud;
+    link.send(
+      toMirror({
+        at: link.now(),
+        stage: this.stage,
+        paused: this.clock.paused,
+        route: this.route,
+        sections: Number(this.game.settings.rounds),
+        pick: h.pick.peek(),
+        match: this.match,
+        gameT: this.gameT,
+        brand: h.brand.peek(),
+        intro: h.intro.peek(),
+        flagCard: h.flagCard.peek(),
+        events: this.log.recent(this.gameT),
+      }),
+    );
   }
 
   /* ------------------------------------------------------------------ HUD */

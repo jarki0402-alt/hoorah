@@ -624,6 +624,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'aksi',
     mood: 'ramai',
     available: true,
+    remote: true,
     badge: 'BARU',
     logoColor: '#FFC928',
     howTo: [

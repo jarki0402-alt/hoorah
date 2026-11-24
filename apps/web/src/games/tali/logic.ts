@@ -437,7 +437,11 @@ export class TaliMatch {
 
   /* ------------------------------------------------------------------ sections */
 
-  private load(no: number): void {
+  /**
+   * Builds section `no` and puts the team on its start pad. The match moves on by itself; a
+   * far-away mirror screen (replica.ts) also calls it to show the Host's current section.
+   */
+  load(no: number): void {
     this.sectionNo = no;
     this.section = buildSection(this.route, no, this.sections, this.seed);
     this.sim = new KotakSim({ killY: this.section.killY, crowd: 0.6 });
@@ -920,7 +924,8 @@ export class TaliMatch {
 
   /* ------------------------------------------------------------------ camera */
 
-  private framePoints(): V3[] {
+  /** What the camera keeps in frame: every body standing in the course (feet and head). */
+  framePoints(): V3[] {
     const pts: V3[] = [];
     for (const b of this.sim.bodies) {
       if (!b.active || b.fallen) continue;
