@@ -1,6 +1,7 @@
 /**
  * Dapur Heboh entry: connect to the shell, rasterize the art, then stack the Phaser kitchen and
- * the Preact HUD on the stage and hand control to the director.
+ * the Preact HUD on the stage and hand control to the director (or, on a far-away screen in
+ * long-distance play, to the replica that draws the Host's kitchen).
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -8,6 +9,7 @@ import { fontsReady, mountStage } from '../common/stage';
 import './hud.css';
 import { Director } from './director';
 import { Hud } from './hud';
+import { DapurReplica } from './replica';
 import { DapurScene } from './scene';
 import { STR } from './strings';
 import {
@@ -123,7 +125,12 @@ async function boot(): Promise<void> {
     }
   }, 1000);
 
-  new Director(game, scene, hud, phaser).start();
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's kitchen from its published state, run nothing of our own.
+    new DapurReplica(game, scene, hud, phaser).start();
+  } else {
+    new Director(game, scene, hud, phaser).start();
+  }
   await nextFrame();
   await nextFrame();
   game.ready();

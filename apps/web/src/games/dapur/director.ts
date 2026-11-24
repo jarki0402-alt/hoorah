@@ -20,7 +20,6 @@ import {
   FRUITS,
   type GuestPlayer,
   INPUT_OP,
-  lookOfFruit,
   PAD_ACTION,
   PERSON_IDS,
   PLAYER_COLORS,
@@ -35,28 +34,20 @@ import type * as Phaser from 'phaser';
 import { celebrate } from '../../shared/confetti';
 import { cpuSkill, isCpu, makeCpuPlayers, reportSoloResult } from '../common/cpu';
 import { loadJson, saveJson } from '../common/store';
-import { kitchenThumb } from './art';
 import { CookBrain, styleFor, TAKEOVER_STYLE } from './brain';
 import { GameClock } from './clock';
 import { Guide } from './guide';
 import type { CookChip, GuideState, Hud, Overlay, PlayState, ResultState, SetupState } from './hud';
-import {
-  DIFFICULTIES,
-  type Difficulty,
-  KITCHEN_DEFS,
-  KITCHENS,
-  type KitchenId,
-  recommended,
-  type Side,
-} from './kitchens';
+import { DIFFICULTIES, type Difficulty, KITCHENS, type KitchenId, type Side } from './kitchens';
 import { type CookInfo, DapurMatch, type MatchEvent } from './logic';
-import { RECIPES } from './recipes';
-import { buildResult, helperOutcome, pickAwards, summarize, toNextStar } from './results';
-import type { DapurScene } from './scene';
+import { type GuideSource, MIRROR_MS, MirrorFeed } from './mirror';
+import { guidePanel, playPanel, type ResultInfo, resultPanel, type SetupInfo, setupPanel } from './panels';
+import { buildResult, helperOutcome, pickAwards, summarize } from './results';
+import { type DapurScene, markOf } from './scene';
 import { Setup, type SetupAction } from './setup';
-import { formatClock, formatScore, STR } from './strings';
+import { STR } from './strings';
 import { loadBackdrop } from './textures';
-import { PAD_BUTTONS, playViewFor, type RoundSummary, setupView } from './views';
+import { playViewFor, type RoundSummary, setupView } from './views';
 
 const HUD_MS = 100;
 const VIEW_MS = 250;
@@ -124,6 +115,10 @@ export class Director {
   private lastChop = Number.NEGATIVE_INFINITY;
   private lastLoop = Number.NEGATIVE_INFINITY;
   private readonly at = { x: 0, y: 0 };
+  /** Long-distance play: what far-away main screens draw. */
+  private readonly feed = new MirrorFeed();
+  private lastMirror = Number.NEGATIVE_INFINITY;
+  private mirrorPhase: string | null = null;
 
   constructor(
     private readonly game: HoorahGame,
@@ -145,6 +140,9 @@ export class Director {
     this.game.on('input', (input) => this.onInput(input));
     this.game.on('action', (from, a) => this.onAction(from, a));
     this.game.on('pause', (paused) => this.setHold('shell', paused));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publishMirror(true);
+    });
     this.phaser.events.on('hidden', () => this.setHold('hidden', true));
     this.phaser.events.on('visible', () => this.setHold('hidden', false));
     if (this.game.paused) this.setHold('shell', true);
@@ -162,6 +160,8 @@ export class Director {
     this.hud.setPaused(paused);
     if (paused) this.phaser.pause();
     else this.phaser.resume();
+    // No frames run while paused, so tell a far-away screen right here.
+    this.publishMirror(true);
   }
 
   private humans(): PlayerInfo[] {
@@ -306,6 +306,7 @@ export class Director {
   private pushSetup(): void {
     this.hud.set({ mode: 'setup', setup: this.setupState(), overlay: { kind: 'none' } });
     this.sendViews(false);
+    this.publishMirror(true);
   }
 
   private chip(id: number): CookChip | null {
@@ -314,39 +315,27 @@ export class Director {
   }
 
   private setupState(): SetupState {
+    return setupPanel(this.setupInfo());
+  }
+
+  private setupInfo(): SetupInfo {
     const s = this.setup;
-    const humans = this.humans().length;
-    const rec = recommended(Math.max(1, humans));
-    const best = loadBest();
+    const all = loadBest();
+    const best = {} as Record<KitchenId, number>;
+    for (const k of KITCHENS) {
+      const b = all[`${k}.${s.difficulty}`];
+      best[k] = typeof b === 'number' && b > 0 ? Math.min(3, Math.floor(b)) : 0;
+    }
     const chips = (ids: number[]) => ids.map((id) => this.chip(id)).filter((c): c is CookChip => c !== null);
     const host = this.game.allPlayers.find((p) => p.isHost);
     return {
       step: s.step,
-      cooks: Math.max(1, humans),
-      recommendedName: STR.kitchens[rec].name,
-      kitchens: KITCHENS.map((k) => {
-        const def = KITCHEN_DEFS[k];
-        const b = best[`${k}.${s.difficulty}`];
-        return {
-          id: k,
-          no: def.no,
-          name: STR.kitchens[k].name,
-          desc: STR.kitchens[k].desc,
-          thumb: `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="118" viewBox="0 0 252 118" preserveAspectRatio="none">${kitchenThumb(def, 252, 118)}</svg>`,
-          recommended: k === rec,
-          selected: k === s.kitchen,
-          best: typeof b === 'number' && b > 0 ? b : null,
-        };
-      }),
+      kitchen: s.kitchen,
+      difficulty: s.difficulty,
+      humans: this.humans().length,
+      best,
       sides: s.split ? [chips(s.members(0)), chips(s.members(1))] : null,
       everyone: chips(s.order),
-      levels: DIFFICULTIES.map((d, i) => ({
-        id: d,
-        name: STR.levels[d].name,
-        desc: STR.levels[d].desc,
-        chilies: i + 1,
-        selected: d === s.difficulty,
-      })),
       hostName: host?.name ?? '',
     };
   }
@@ -398,6 +387,7 @@ export class Director {
     this.match = m;
     this.scene.setup(m);
     this.stage = 'round';
+    this.feed.reset();
     this.hud.set({ mode: 'play', setup: null });
     this.lastHud = Number.NEGATIVE_INFINITY;
     this.sendViews(true);
@@ -413,6 +403,7 @@ export class Director {
   private guideFrame(m: DapurMatch, g: Guide, t: number): void {
     if (!m.practice) return;
     if (g.update(m, t)) {
+      this.lastMirror = Number.NEGATIVE_INFINITY;
       this.game.sfx('correct');
       for (const id of this.online) this.buzz(id, 30);
       this.lastHud = Number.NEGATIVE_INFINITY;
@@ -452,43 +443,36 @@ export class Director {
     this.sendViews(true);
   }
 
-  /** The step card and the arrow for the HUD. */
-  private guideState(m: DapurMatch, g: Guide): GuideState {
-    const text = STR.guide.steps[g.step];
+  /** The practice as plain facts: the step card and what the arrow points at. */
+  private guideSource(m: DapurMatch, g: Guide): GuideSource {
     const helper = g.helper(m);
     const target = g.target(m);
-    let arrow: GuideState['arrow'] = null;
-    if (target && target.kind !== 'ticket') {
-      const at = { x: 0, y: 0, up: false };
-      if (this.scene.anchorOf(target, at)) arrow = at;
-    }
     // The button shown on the screen: what a person who can act would press.
     const actors = m.chefs.filter((c) => !c.cpu && g.buttonFor(c) !== null);
     const actor = actors.find((c) => g.buttonFor(c) === 'throw') ?? actors[0];
-    const want = actor && !helper ? g.buttonFor(actor) : null;
-    const b = want ? PAD_BUTTONS.find((x) => x.id === want) : undefined;
-    const sub = helper
-      ? STR.guide.helper(helper.name)
-      : g.waiting
-        ? STR.guide.waitSub
-        : g.step === 'throw' && want === 'throw'
-          ? STR.guide.throwNow
-          : text.sub;
     return {
-      eyebrow: STR.guide.eyebrow(g.index + 1, g.total),
-      title: g.waiting ? STR.guide.waitTitle : text.title,
-      sub,
-      button: b
-        ? {
-            verb: b.press === 'hold' ? STR.guide.hold : STR.guide.press,
-            label: b.label.toUpperCase(),
-            tone: b.tone,
-          }
-        : null,
-      arrow,
-      ticket: target?.kind === 'ticket',
-      key: `${g.step}${g.waiting ? '-wait' : ''}`,
+      info: {
+        step: g.step,
+        index: g.index,
+        total: g.total,
+        waiting: g.waiting,
+        helper: helper ? helper.name : null,
+        button: actor && !helper ? g.buttonFor(actor) : null,
+        ticket: target?.kind === 'ticket',
+      },
+      target,
     };
+  }
+
+  /** The step card and the arrow for the HUD. */
+  private guideState(m: DapurMatch, g: Guide): GuideState {
+    const src = this.guideSource(m, g);
+    let arrow: GuideState['arrow'] = null;
+    if (src.target && src.target.kind !== 'ticket') {
+      const at = { x: 0, y: 0, up: false };
+      if (this.scene.anchorOf(src.target, at)) arrow = at;
+    }
+    return guidePanel(src.info, arrow);
   }
 
   /* ------------------------------------------------------------------ frame */
@@ -512,6 +496,7 @@ export class Director {
       this.lastHud = t;
       this.pushHud(t);
     }
+    this.publishMirror(false);
   }
 
   private drainEvents(t: number): void {
@@ -542,13 +527,30 @@ export class Director {
     }
   }
 
+  /** A pop-up over a kitchen spot (logic tiles), also shown on far-away screens. */
   private floatAt(text: string, x: number, y: number, color: string, size = 30, sub?: string): void {
     this.scene.toWorld(x, y, this.at);
     this.hud.float(text, this.at.x, this.at.y - 40, color, size, sub);
+    this.feed.float({ text, sub, x, y, color, size, world: false });
+  }
+
+  /** A pop-up at world px, also shown on far-away screens. */
+  private floatWorld(text: string, x: number, y: number, color: string, size: number, sub?: string): void {
+    this.hud.float(text, x, y, color, size, sub);
+    this.feed.float({ text, sub, x, y, color, size, world: true });
+  }
+
+  private cheer(): void {
+    celebrate();
+    this.feed.celebrate();
   }
 
   private onEvent(m: DapurMatch, e: MatchEvent, t: number): void {
-    this.scene.onEvent(e, t);
+    const mark = markOf(e, m);
+    if (mark) {
+      this.scene.mark(mark, t);
+      this.feed.mark(mark);
+    }
     if (this.guide && m.practice) this.guide.onEvent(e, t);
     switch (e.type) {
       case 'count':
@@ -576,7 +578,7 @@ export class Director {
         window.setTimeout(() => this.game.sfx('clap'), 160);
         if (m.practice) {
           this.floatAt(STR.guide.served, e.x, e.y, GREEN, 40);
-          celebrate();
+          this.cheer();
           this.buzz(e.by, [30, 40, 60]);
           this.lastHud = Number.NEGATIVE_INFINITY;
           return;
@@ -595,7 +597,7 @@ export class Director {
       }
       case 'missed':
         this.game.sfx('wrong');
-        this.hud.float(STR.missed, 640, 150, RED, 30, STR.penalty(e.penalty));
+        this.floatWorld(STR.missed, 640, 150, RED, 30, STR.penalty(e.penalty));
         this.lastHud = Number.NEGATIVE_INFINITY;
         return;
       case 'fail':
@@ -733,10 +735,11 @@ export class Director {
     this.upAt = t;
     this.game.sfx('whistle');
     this.scene.flash();
+    this.feed.flash();
     this.finish(m);
     const stars = this.summary?.stars ?? 0;
     window.setTimeout(() => this.game.sfx(stars >= 2 ? 'win' : 'cheer'), 420);
-    if (stars >= 2) celebrate();
+    if (stars >= 2) this.cheer();
     // Best stars on this main screen, per kitchen and difficulty.
     const best = loadBest();
     const key = `${m.def.id}.${m.difficulty}`;
@@ -752,36 +755,25 @@ export class Director {
     this.sendViews(true);
   }
 
-  private resultState(m: DapurMatch, s: RoundSummary): ResultState {
-    const th = m.thresholds;
-    const next = toNextStar(s.score, th);
-    const names = new Map(m.chefs.map((c) => [c.id, c]));
+  private resultInfo(m: DapurMatch, s: RoundSummary): ResultInfo {
     return {
-      eyebrow: STR.resultEyebrow(m.def.no, STR.kitchens[m.def.id].name),
-      title: STR.resultTitle[s.stars],
-      sub: STR.resultSub(s.missed),
+      kitchen: m.def.id,
+      thresholds: m.thresholds,
       stars: s.stars,
-      score: formatScore(s.score),
-      fill: Math.min(1, s.score / th[2]),
-      notch: next ? th[next.star - 1]! / th[2] : null,
-      next: next ? STR.toNextStar(next.left, next.star) : STR.allStars,
+      score: s.score,
       delivered: s.delivered,
       missed: s.missed,
-      tips: `+${formatScore(s.tips)}`,
-      awards: this.awards.map((a) => {
-        const c = names.get(a.playerId);
-        return {
-          name: c?.name ?? '',
-          fruit: c?.fruit ?? 'jeruk',
-          look: c?.look ?? lookOfFruit(c?.fruit ?? 'jeruk'),
-          color: c?.color ?? '#FFFFFF',
-          title: a.title,
-          desc: a.desc,
-          icon: a.icon,
-        };
-      }),
+      tips: s.tips,
+      awards: this.awards,
       newBest: this.newBest,
     };
+  }
+
+  private resultState(m: DapurMatch, s: RoundSummary): ResultState {
+    const cooks = new Map<number, CookChip>(
+      m.chefs.map((c) => [c.id, { id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color }]),
+    );
+    return resultPanel(this.resultInfo(m, s), cooks);
   }
 
   /* ------------------------------------------------------------------ phones */
@@ -849,63 +841,84 @@ export class Director {
   }
 
   private playState(m: DapurMatch, t: number): PlayState {
-    const left = m.timeLeft(t);
-    const th = m.thresholds;
-    // The practice scores nothing: the bar shows a fresh round.
-    const score = m.practice ? 0 : m.score;
-    const stars = m.practice ? 0 : m.stars();
-    const lo = stars === 0 ? 0 : th[stars - 1]!;
-    const hi = stars >= 3 ? lo : th[stars as 0 | 1 | 2];
-    const names = (side: Side) =>
-      m.chefs
-        .filter((c) => c.side === side)
-        .map((c) => c.name)
-        .join(', ');
-    return {
-      kitchen: STR.kitchens[m.def.id].name,
-      level: STR.levels[m.difficulty].name,
-      chilies: DIFFICULTIES.indexOf(m.difficulty) + 1,
-      tickets: m.orders.tickets.map((k) => {
-        const r = RECIPES[k.dish];
-        const done: string[] = [];
-        if (k.got.includes('soda')) done.push('soda');
-        if (k.got.includes('burger')) done.push('roti', 'dagingMatang', 'tomatPotong', 'seladaPotong');
-        const p = m.practice ? 1 : m.orders.patience(k, t);
-        return {
-          id: k.id,
-          title: STR.dishes[k.dish],
-          icon: r.icon,
-          parts: [...r.shows],
-          left: p,
-          urgent: p < 0.25,
-          done,
-        };
-      }),
-      timer: formatClock(left),
-      urgent: m.phase === 'play' && left <= 30_000,
-      score: formatScore(score),
-      stars,
-      progress: stars >= 3 ? 1 : Math.max(0, Math.min(1, (score - lo) / Math.max(1, hi - lo))),
-      sides: m.def.split ? [`${names(0)} · ${STR.sideShort[0]}`, `${names(1)} · ${STR.sideShort[1]}`] : null,
-      open: m.def.split ? null : `${m.chefs.map((c) => c.name).join(', ')} · ${STR.openShort}`,
-    };
+    return playPanel({
+      kitchen: m.def.id,
+      difficulty: m.difficulty,
+      phase: m.phase,
+      practice: m.practice,
+      left: m.timeLeft(t),
+      score: m.score,
+      stars: m.stars(),
+      thresholds: m.thresholds,
+      tickets: m.orders.tickets.map((k) => ({
+        id: k.id,
+        dish: k.dish,
+        got: k.got,
+        left: m.orders.patience(k, t),
+      })),
+      cooks: m.chefs,
+    });
+  }
+
+  /** The result card shows once the time-up banner is gone. */
+  private showsResult(m: DapurMatch, t: number): boolean {
+    return (m.phase === 'over' || m.phase === 'done') && t - this.upAt >= TIME_UP_MS && this.summary !== null;
+  }
+
+  private hintOn(m: DapurMatch, t: number): boolean {
+    return m.phase === 'play' && !m.practice && t - this.goAt < HINT_MS;
   }
 
   private pushHud(t: number): void {
     const m = this.match;
     if (!m) return;
-    const showResult =
-      (m.phase === 'over' || m.phase === 'done') && t - this.upAt >= TIME_UP_MS && this.summary;
+    const showResult = this.showsResult(m, t);
     this.hud.set({
       mode: showResult ? 'result' : 'play',
       play: this.playState(m, t),
       overlay: this.overlay(m, t),
       result: showResult && this.summary ? this.resultState(m, this.summary) : null,
-      hint: m.phase === 'play' && !m.practice && t - this.goAt < HINT_MS,
+      hint: this.hintOn(m, t),
       guide:
         this.guide && m.practice && m.phase === 'play' && !this.guide.finished
           ? this.guideState(m, this.guide)
           : null,
     });
+  }
+
+  /* ------------------------------------------------------------------ long-distance play */
+
+  /**
+   * The stage for far-away screens: every MIRROR_MS while cooking, at once when `now`, when
+   * effects were noted or the phase changed.
+   */
+  private publishMirror(now: boolean): void {
+    if (!this.game.mirrored) return;
+    const t = this.clock.now();
+    const m = this.stage === 'round' ? this.match : null;
+    const phase = m ? `${m.phase}${m.practice ? '-p' : ''}` : this.stage;
+    const urgent = now || this.feed.pending || phase !== this.mirrorPhase;
+    if (!urgent && t - this.lastMirror < MIRROR_MS) return;
+    this.lastMirror = t;
+    this.mirrorPhase = phase;
+    const g = this.guide;
+    this.game.publish(
+      this.feed.pack({
+        server: this.game.now(),
+        held: this.clock.paused,
+        setup: m ? null : this.setupInfo(),
+        round: m
+          ? {
+              match: m,
+              t,
+              overlay: this.overlay(m, t),
+              hint: this.hintOn(m, t),
+              showResult: this.showsResult(m, t),
+              result: this.summary ? this.resultInfo(m, this.summary) : null,
+              guide: g && m.practice && m.phase === 'play' && !g.finished ? this.guideSource(m, g) : null,
+            }
+          : null,
+      }),
+    );
   }
 }

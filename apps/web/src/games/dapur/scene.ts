@@ -29,8 +29,8 @@ import {
   TILE_W,
 } from './art';
 import { type Item, plateDish, type StainKind } from './items';
-import { CLEAN_MS, DOUSE_MS, type Side, sideOfX, WARN_MS, WASH_MS } from './kitchens';
-import type { Chef, DapurMatch, MatchEvent, Station } from './logic';
+import { CLEAN_MS, DOUSE_MS, type KitchenDef, type Side, sideOfX, WARN_MS, WASH_MS } from './kitchens';
+import type { Chef, Flight, MatchEvent, Phase, Station } from './logic';
 import { STR } from './strings';
 import {
   BACKDROP_PAD,
@@ -91,6 +91,95 @@ interface Pop {
 
 const hex = (c: string): number => Number.parseInt(c.replace('#', '').slice(0, 6), 16) || 0;
 
+/** A cook as the scene draws it (`pilot` only matters as set or not). */
+export type StageChef = Pick<
+  Chef,
+  | 'id'
+  | 'name'
+  | 'color'
+  | 'look'
+  | 'cpu'
+  | 'x'
+  | 'y'
+  | 'prevX'
+  | 'prevY'
+  | 'faceX'
+  | 'moving'
+  | 'walked'
+  | 'busy'
+  | 'held'
+  | 'stains'
+  | 'target'
+  | 'jobMs'
+  | 'hitAt'
+> & { readonly pilot: unknown };
+
+export type StageStation = Pick<
+  Station,
+  'id' | 'kind' | 'x' | 'y' | 'w' | 'source' | 'item' | 'pot' | 'fire' | 'douseMs' | 'dirty' | 'plates'
+>;
+
+export type StageFlight = Pick<
+  Flight,
+  'item' | 'from' | 'toChef' | 'toStation' | 'sx' | 'sy' | 'ex' | 'ey' | 't0' | 'dur' | 'color'
+>;
+
+/**
+ * What the scene draws: the Host's match itself, or on a far-away main screen (long-distance
+ * play) the copy rebuilt from the Host's published state (replica.ts). Times are on the clock the
+ * scene's `frameT` runs on.
+ */
+export interface StageModel {
+  readonly def: KitchenDef;
+  readonly phase: Phase;
+  readonly moved: boolean;
+  readonly tuning: { readonly burnMs: number | null };
+  readonly stations: readonly StageStation[];
+  readonly floor: readonly { readonly item: Item; readonly x: number; readonly y: number }[];
+  readonly chefs: readonly StageChef[];
+  readonly flights: readonly StageFlight[];
+  chef(id: number): StageChef | undefined;
+  /** Gap between the two carts (tiles) at time t. */
+  gap(t: number): number;
+  /** Cooker progress: 0..1 cooking, 1..2 toward burnt. */
+  heatLevel(s: StageStation): number;
+  staggered(c: StageChef): boolean;
+}
+
+/** A short scene effect a match event starts (replayed as is on far-away screens). */
+export type StageMark =
+  | { kind: 'pop'; x: number; y: number; color: string }
+  | { kind: 'throw'; id: number }
+  | { kind: 'moveWarn' };
+
+/** The scene effect of a match event, read from the stage as it is right then; null for none. */
+export function markOf(e: MatchEvent, m: StageModel): StageMark | null {
+  switch (e.type) {
+    case 'throw':
+      return { kind: 'throw', id: e.flight.from };
+    case 'catch': {
+      const c = m.chef(e.by);
+      return c ? { kind: 'pop', x: c.x, y: c.y, color: e.flight.color } : null;
+    }
+    case 'land':
+      return { kind: 'pop', x: e.x, y: e.y, color: '#FFFFFF' };
+    case 'hit': {
+      const c = m.chef(e.to);
+      return c ? { kind: 'pop', x: c.x, y: c.y, color: e.broke ? '#F2453D' : '#FFC928' } : null;
+    }
+    case 'chopped': {
+      const s = m.stations[e.station];
+      return s ? { kind: 'pop', x: s.x + 0.45, y: s.y + 0.1, color: '#8BD46E' } : null;
+    }
+    case 'served':
+      return { kind: 'pop', x: e.x, y: e.y + 0.2, color: '#22B35E' };
+    case 'moveWarn':
+      return { kind: 'moveWarn' };
+    default:
+      return null;
+  }
+}
+
 export class DapurScene extends Phaser.Scene {
   onFrame: (() => void) | null = null;
   readonly ready: Promise<void>;
@@ -101,7 +190,7 @@ export class DapurScene extends Phaser.Scene {
 
   private resolveReady!: () => void;
   private readonly sources: Map<string, HTMLCanvasElement>;
-  private match: DapurMatch | null = null;
+  private match: StageModel | null = null;
   private viewW = WORLD_W;
   private viewH = WORLD_H;
   private bg: Phaser.GameObjects.Image | null = null;
@@ -223,7 +312,7 @@ export class DapurScene extends Phaser.Scene {
 
   /* ------------------------------------------------------------------ setup */
 
-  setup(match: DapurMatch): void {
+  setup(match: StageModel): void {
     this.match = match;
     for (const img of this.stationImgs) img.destroy();
     this.stationImgs = [];
@@ -299,11 +388,11 @@ export class DapurScene extends Phaser.Scene {
     return out;
   }
 
-  private stationLeft(s: Station, t: number): number {
+  private stationLeft(s: StageStation, t: number): number {
     return KX + s.x * TILE_W + this.shift(sideOfX(s.x + s.w / 2), t);
   }
 
-  private stationTop(s: Station): number {
+  private stationTop(s: StageStation): number {
     return KY + rowTop(s.y);
   }
 
@@ -338,39 +427,17 @@ export class DapurScene extends Phaser.Scene {
 
   /* ------------------------------------------------------------------ events */
 
-  onEvent(e: MatchEvent, t: number): void {
-    const m = this.match;
-    if (!m) return;
-    switch (e.type) {
+  /** Plays a scene effect at time t (see `markOf`). */
+  mark(mk: StageMark, t: number): void {
+    switch (mk.kind) {
+      case 'pop':
+        this.pop(mk.x, mk.y, mk.color, t);
+        return;
       case 'throw':
-        this.throwAt.set(e.flight.from, t);
+        this.throwAt.set(mk.id, t);
         return;
-      case 'catch': {
-        const c = m.chef(e.by);
-        if (c) this.pop(c.x, c.y, e.flight.color, t);
-        return;
-      }
-      case 'land':
-        this.pop(e.x, e.y, '#FFFFFF', t);
-        return;
-      case 'hit': {
-        const c = m.chef(e.to);
-        if (c) this.pop(c.x, c.y, e.broke ? '#F2453D' : '#FFC928', t);
-        return;
-      }
-      case 'chopped': {
-        const s = m.stations[e.station];
-        if (s) this.pop(s.x + 0.45, s.y + 0.1, '#8BD46E', t);
-        return;
-      }
-      case 'served': {
-        this.pop(e.x, e.y + 0.2, '#22B35E', t);
-        return;
-      }
       case 'moveWarn':
         this.moveWarnAt = t;
-        return;
-      default:
         return;
     }
   }
@@ -484,7 +551,7 @@ export class DapurScene extends Phaser.Scene {
     }
   }
 
-  private drawStation(m: DapurMatch, s: Station, t: number): void {
+  private drawStation(m: StageModel, s: StageStation, t: number): void {
     const img = this.stationImgs[s.id];
     if (!img) return;
     const left = this.stationLeft(s, t);
@@ -539,8 +606,8 @@ export class DapurScene extends Phaser.Scene {
   }
 
   private drawCooker(
-    m: DapurMatch,
-    s: Station,
+    m: StageModel,
+    s: StageStation,
     g: Phaser.GameObjects.Graphics,
     left: number,
     top: number,
@@ -593,7 +660,7 @@ export class DapurScene extends Phaser.Scene {
     }
   }
 
-  private drawFire(s: Station, left: number, top: number, base: number, t: number): void {
+  private drawFire(s: StageStation, left: number, top: number, base: number, t: number): void {
     const cx = left + 40;
     for (let i = 0; i < 3; i++) {
       const k = 0.85 + 0.2 * Math.sin(t / 70 + i * 2.1);
@@ -684,7 +751,7 @@ export class DapurScene extends Phaser.Scene {
 
   /* ------------------------------------------------------------------ chefs */
 
-  private chefSprite(c: Chef): ChefSprite {
+  private chefSprite(c: StageChef): ChefSprite {
     const sp = this.chefSprites.get(c.id);
     if (sp) return sp;
     const part = (key: string) =>
@@ -731,7 +798,7 @@ export class DapurScene extends Phaser.Scene {
     sp.tag.destroy();
   }
 
-  private drawChef(m: DapurMatch, c: Chef, t: number, alpha: number): void {
+  private drawChef(m: StageModel, c: StageChef, t: number, alpha: number): void {
     const sp = this.chefSprite(c);
     const x = c.prevX + (c.x - c.prevX) * alpha;
     const y = c.prevY + (c.y - c.prevY) * alpha;
@@ -818,7 +885,7 @@ export class DapurScene extends Phaser.Scene {
    * The station a person's cook will use. The arrow sits above the station, or below it when the
    * cook stands right behind it (bottom row), so it never covers the cook.
    */
-  private drawTarget(s: Station, c: Chef, t: number): void {
+  private drawTarget(s: StageStation, c: StageChef, t: number): void {
     const left = this.stationLeft(s, t);
     const top = this.stationTop(s);
     const color = hex(c.color);
@@ -871,7 +938,7 @@ export class DapurScene extends Phaser.Scene {
 
   /* ------------------------------------------------------------------ throws */
 
-  private drawFlight(m: DapurMatch, f: DapurMatch['flights'][number], t: number): void {
+  private drawFlight(m: StageModel, f: StageFlight, t: number): void {
     const p = Math.max(0, Math.min(1, (t - f.t0) / f.dur));
     const a = this.toWorld(f.sx, f.sy, { x: 0, y: 0 });
     const b = this.toWorld(f.ex, f.ey, { x: 0, y: 0 });
@@ -962,7 +1029,7 @@ export class DapurScene extends Phaser.Scene {
     }
   }
 
-  private drawMoveWarning(m: DapurMatch, t: number): void {
+  private drawMoveWarning(m: StageModel, t: number): void {
     const move = m.def.move;
     if (!move || m.moved || t - this.moveWarnAt > 8_000 || t < this.moveWarnAt) return;
     if (Math.floor(t / 250) % 2) return;

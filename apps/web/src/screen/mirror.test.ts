@@ -242,6 +242,7 @@ describe('games a far-away screen can show (staged rollout)', () => {
           'tali',
           'hantu',
           'warna',
+          'dapur',
         ],
       ].sort(),
     );
