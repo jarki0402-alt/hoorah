@@ -7,7 +7,7 @@
  * phone's runner safe at home until the phone is back. Brains steer exactly like a phone's
  * joystick: a target angle every step, under the same turn-rate limit.
  */
-import { FRUITS, PLAYER_COLORS, type PlayerInfo, type RelayedInput } from '@hoorah/protocol';
+import { FRUITS, PERSON_IDS, PLAYER_COLORS, type PlayerInfo, type RelayedInput } from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import type * as Phaser from 'phaser';
 import { celebrate } from '../../shared/confetti';
@@ -120,27 +120,37 @@ export class Director {
   }
 
   /**
-   * Someone who joins mid-game may get the colour or fruit a computer player already wears: the
-   * computer player switches to a free one so every territory stays distinguishable.
+   * Someone who joins mid-game may get the colour, fruit or character a computer player already
+   * wears: the computer player switches to a free one so every territory stays distinguishable.
    */
   private restyleCpus(all: readonly PlayerInfo[]): void {
     if (this.cpus.length === 0) return;
     const people = all.filter((p) => p.connected);
     const colors = new Set(people.map((p) => p.color.toUpperCase()));
     const fruits = new Set<string>(people.map((p) => p.fruit));
+    const cast = new Set<string>(people.map((p) => p.look.c));
     for (const c of this.cpus) {
       colors.add(c.color.toUpperCase());
       fruits.add(c.fruit);
+      cast.add(c.look.c);
     }
     this.cpus.forEach((cpu, i) => {
       const clashColor = people.some((p) => p.color.toUpperCase() === cpu.color.toUpperCase());
       const clashFruit = people.some((p) => p.fruit === cpu.fruit);
-      if (!clashColor && !clashFruit) return;
+      const clashLook = people.some((p) => p.look.c === cpu.look.c);
+      if (!clashColor && !clashFruit && !clashLook) return;
       const color = clashColor ? PLAYER_COLORS.find((c) => !colors.has(c.toUpperCase())) : cpu.color;
       const fruit = clashFruit ? FRUITS.find((f) => !fruits.has(f)) : cpu.fruit;
+      const person = clashLook ? PERSON_IDS.find((c) => !cast.has(c)) : undefined;
       if (color) colors.add(color.toUpperCase());
       if (fruit) fruits.add(fruit);
-      this.cpus[i] = { ...cpu, color: color ?? cpu.color, fruit: fruit ?? cpu.fruit };
+      if (person) cast.add(person);
+      this.cpus[i] = {
+        ...cpu,
+        color: color ?? cpu.color,
+        fruit: fruit ?? cpu.fruit,
+        look: person ? { c: person } : cpu.look,
+      };
     });
   }
 
@@ -344,7 +354,7 @@ export class Director {
     return list.map((s, order) => ({
       id: s.runner.id,
       name: s.runner.name,
-      fruit: s.runner.fruit,
+      look: s.runner.look,
       color: s.runner.color,
       pct: formatPct((s.cells * 100) / m.field.size),
       share: s.cells / lead,
@@ -374,7 +384,7 @@ export class Director {
           .map((r) => m.runner(r.playerId))
           .filter((r): r is Runner => r !== undefined && m.cells(r) > 0)
           .slice(0, 3)
-          .map((r) => ({ id: r.id, fruit: r.fruit, color: r.color }));
+          .map((r) => ({ id: r.id, look: r.look, color: r.color }));
         const best = top[0];
         return {
           kind: 'timeUp',

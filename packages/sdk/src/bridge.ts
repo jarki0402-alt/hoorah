@@ -177,6 +177,11 @@ export interface GameInit {
   clockOffset: number;
   settings: Record<string, string | number | boolean>;
   muted: boolean;
+  /**
+   * Long-distance play (owner 2026-11-24): this game only shows, on a second main screen far
+   * away, what the game on the Host's main screen publishes. It runs no rules of its own.
+   */
+  mirror?: boolean;
 }
 
 export type ShellToGame =
@@ -186,7 +191,11 @@ export type ShellToGame =
   | { tag: typeof BRIDGE_TAG; type: 'action'; from: number; action: ControllerToGame }
   | { tag: typeof BRIDGE_TAG; type: 'input'; input: RelayedInput }
   | { tag: typeof BRIDGE_TAG; type: 'pause'; paused: boolean }
-  | { tag: typeof BRIDGE_TAG; type: 'mute'; muted: boolean };
+  | { tag: typeof BRIDGE_TAG; type: 'mute'; muted: boolean }
+  /** Mirror game: the latest state the Host's game published. */
+  | { tag: typeof BRIDGE_TAG; type: 'mirror'; state: unknown }
+  /** Host's game: whether any far-away main screen is watching (publish only then). */
+  | { tag: typeof BRIDGE_TAG; type: 'mirrors'; on: boolean };
 
 export type GameToShell =
   | { tag: typeof BRIDGE_TAG; type: 'hello' }
@@ -198,7 +207,9 @@ export type GameToShell =
   | { tag: typeof BRIDGE_TAG; type: 'music'; track: string | null }
   | { tag: typeof BRIDGE_TAG; type: 'musicIntensity'; level: MusicIntensity }
   | { tag: typeof BRIDGE_TAG; type: 'musicHurry'; on: boolean }
-  | { tag: typeof BRIDGE_TAG; type: 'quit' };
+  | { tag: typeof BRIDGE_TAG; type: 'quit' }
+  /** The game's display state for far-away main screens (JSON, kept small). */
+  | { tag: typeof BRIDGE_TAG; type: 'publish'; state: unknown };
 
 export function isBridgeMessage<T extends { tag: string }>(data: unknown): data is T {
   return typeof data === 'object' && data !== null && (data as { tag?: unknown }).tag === BRIDGE_TAG;

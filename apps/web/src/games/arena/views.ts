@@ -25,7 +25,7 @@ function guests(m: ArenaMatch): GuestPlayer[] {
   return m
     .field()
     .filter((o) => isCpu(o.id))
-    .map((o) => ({ id: o.id, name: o.name, fruit: o.fruit, color: o.color }));
+    .map((o) => ({ id: o.id, name: o.name, fruit: o.fruit, look: o.look, color: o.color }));
 }
 
 export function countdownView(m: ArenaMatch, s: Snake): ControllerView {

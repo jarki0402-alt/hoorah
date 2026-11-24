@@ -11,7 +11,7 @@ import { useEffect, useRef } from 'preact/hooks';
 import { THUMBS } from '../../controller/thumbs/eja';
 import { svgUrl } from '../../shared/art/svg';
 import { Avatar, Icon } from '../../shared/ui';
-import { type EjaMatch, LIVES, type Seat } from './logic';
+import { type EjaScene, LIVES, type SceneSeat } from './logic';
 import { LANG_NAME, LANG_TAG, NEAR_TEXT, STR, TIER_NAME } from './strings';
 
 /** Per-frame callbacks, driven by the driver's loop. */
@@ -29,13 +29,16 @@ export class FrameBus {
   }
 }
 
+/** The part of a player card the page draws (a mirror screen gets it from the Host's state). */
+export type SeatInfo = Pick<PlayerInfo, 'id' | 'name' | 'color' | 'look'>;
+
 export interface FinalRecord {
   best: number;
   isNew: boolean;
 }
 
 export interface ScreenModel {
-  match: EjaMatch;
+  match: EjaScene;
   version: ReadonlySignal<number>;
   frame: FrameBus;
   /** Show the first letter (no voice on this device, or speech was blocked). */
@@ -44,7 +47,7 @@ export interface ScreenModel {
   speaking: ReadonlySignal<boolean>;
   record: ReadonlySignal<FinalRecord | null>;
   hostId: () => number | null;
-  info(id: number): PlayerInfo | undefined;
+  info(id: number): SeatInfo | undefined;
   replay(): void;
 }
 
@@ -208,7 +211,7 @@ function Word({ model }: { model: ScreenModel }) {
 
 /* ------------------------------------------------------------------ players */
 
-function PlayerChip({ model, s }: { model: ScreenModel; s: Seat }) {
+function PlayerChip({ model, s }: { model: ScreenModel; s: SceneSeat }) {
   const m = model.match;
   const info = model.info(s.id);
   if (!info) return null;
@@ -221,7 +224,7 @@ function PlayerChip({ model, s }: { model: ScreenModel; s: Seat }) {
   return (
     <div class={`ej-player is-${state} ${s.present ? '' : 'is-away'}`}>
       <div class="ej-player-av">
-        <Avatar fruit={info.fruit} ring={info.color} size={58} face={face} />
+        <Avatar look={info.look} ring={info.color} size={58} face={face} />
         {state === 'locked' && <span class="ej-tick">✓</span>}
         {reveal && s.verdict === 'correct' && <span class="ej-tick is-good">✓</span>}
         {reveal && s.verdict !== 'correct' && <span class="ej-tick is-bad">✕</span>}
@@ -294,7 +297,7 @@ function Final({ model }: { model: ScreenModel }) {
           return (
             <div key={r.seat.id} class={`ej-final-row ${r.rank === 1 ? 'is-top' : ''}`}>
               <span class="ej-final-rank">{r.rank}</span>
-              <Avatar fruit={info.fruit} ring={info.color} size={48} />
+              <Avatar look={info.look} ring={info.color} size={48} />
               <span class="ej-final-name">{info.name}</span>
               <span class="ej-final-kamus">{STR.finalKamus(r.seat.spelled.length)}</span>
               <span class="ej-final-score">{r.seat.score}</span>

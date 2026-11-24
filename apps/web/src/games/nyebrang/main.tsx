@@ -1,6 +1,6 @@
 /**
- * Nyebrang entry: connect to the shell, rasterize the pixel fruits, start Phaser (pixel art, canvas
- * 1.5x the stage) under the DOM HUD, then hand control to the driver.
+ * Nyebrang entry: connect to the shell, start Phaser (pixel art, canvas 1.5x the stage) under the
+ * DOM HUD, then hand control to the driver. The scene rasterizes pixel avatars as looks show up.
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -10,7 +10,6 @@ import { Hud } from './hud';
 import { parseRounds } from './logic';
 import { NyebrangScene, RENDER_SCALE } from './scene';
 import { STR } from './strings';
-import { loadFruits } from './textures';
 import './nyebrang.css';
 
 function layer(stage: HTMLElement, className: string): HTMLDivElement {
@@ -39,7 +38,6 @@ async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) return;
   const { stage, width: stageWidth, height: stageHeight, onResize } = mountStage(root);
-  const fruitsJob = loadFruits();
   const fonts = fontsReady();
   let game: HoorahGame;
   try {
@@ -48,18 +46,11 @@ async function boot(): Promise<void> {
     showError(stage);
     return;
   }
-  let fruits: Map<string, HTMLImageElement>;
-  try {
-    fruits = await fruitsJob;
-  } catch {
-    showError(stage);
-    return;
-  }
   await fonts;
 
   const world = layer(stage, 'nb-world');
   const hudHost = layer(stage, 'nb-hud');
-  const scene = new NyebrangScene(fruits);
+  const scene = new NyebrangScene();
   const width = stageWidth() * RENDER_SCALE;
   const height = stageHeight() * RENDER_SCALE;
   const phaser = new Phaser.Game({

@@ -1,3 +1,4 @@
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { THUMBS } from '../../controller/thumbs/tali';
 import { ROUTES } from './course';
@@ -7,7 +8,7 @@ import { pickView, viewFor } from './views';
 const climbers = (n: number) =>
   (['jeruk', 'semangka'] as const)
     .slice(0, n)
-    .map((fruit, i) => ({ id: i + 1, name: `P${i + 1}`, fruit, color: '#2F8CFF' }));
+    .map((fruit, i) => ({ id: i + 1, name: `P${i + 1}`, fruit, look: lookOfFruit(fruit), color: '#2F8CFF' }));
 
 function climbing(n: number): TaliMatch {
   const m = new TaliMatch({ climbers: climbers(n), route: 'senja', sections: 3, seed: 1 });

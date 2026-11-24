@@ -26,7 +26,7 @@ export function formatClock(ms: number): string {
 }
 
 export const STR = {
-  noShell: 'Bajaj Rush harus dibuka dari aplikasi Hoorah.',
+  noShell: 'Bajaj Rush harus dibuka dari aplikasi Kacawbalaw.',
   unknownPlayer: 'Pemain',
   cpuTag: 'CPU',
 

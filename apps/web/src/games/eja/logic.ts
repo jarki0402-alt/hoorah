@@ -151,7 +151,74 @@ export function tierForLevel(level: number): Tier {
   return 3;
 }
 
-export class EjaMatch {
+/* ------------------------------------------------------------------ scene */
+
+/** A seat as the main screen draws it (a mirror screen never learns typed answers early). */
+export interface SceneSeat {
+  readonly id: number;
+  readonly present: boolean;
+  readonly inWord: boolean;
+  /** Non-null once locked in (a mirror gets '' until the reveal). */
+  readonly answer: string | null;
+  readonly verdict: Verdict;
+  readonly near: NearKind | null;
+  readonly gained: number;
+  readonly lives: number;
+  readonly streak: number;
+  readonly score: number;
+  readonly spelled: { readonly length: number };
+  readonly stats: Pick<Stats, 'bestStreak' | 'correct'>;
+}
+
+/**
+ * Everything the main-screen page reads of a match. `EjaMatch` is one; a far-away mirror screen
+ * builds another from the published state (see mirror.ts), so both draw through the same page.
+ */
+export interface EjaScene {
+  readonly phase: Phase;
+  readonly lang: Lang;
+  readonly solo: boolean;
+  readonly index: number;
+  readonly words: number;
+  readonly total: number;
+  readonly tier: Tier;
+  readonly multiplier: number;
+  readonly word: { readonly word: string; readonly def: string } | null;
+  readonly roster: readonly SceneSeat[];
+  msLeft(): number;
+  phaseLength(): number;
+  standings(): { seat: SceneSeat; rank: number }[];
+}
+
+/** Full length of a phase's clock (0 for phases without one). */
+export function phaseLengthOf(phase: Phase, tier: Tier): number {
+  if (phase === 'spell') return TIMING.spellMs[tier];
+  if (phase === 'intro') return TIMING.introMs;
+  if (phase === 'reveal') return TIMING.revealMs;
+  return 0;
+}
+
+/**
+ * Ranked standings (ties share a rank). Solo ranks by best streak. `roster` is in join order,
+ * which breaks ties (the sort is stable).
+ */
+export function rankSeats<T extends SceneSeat>(
+  roster: readonly T[],
+  solo: boolean,
+): { seat: T; rank: number }[] {
+  const key = (s: T) => (solo ? s.stats.bestStreak * 1000 + s.stats.correct : s.score);
+  const rows = roster.slice().sort((a, b) => key(b) - key(a));
+  let rank = 0;
+  let prev = Number.NaN;
+  return rows.map((seat, i) => {
+    const k = key(seat);
+    if (k !== prev) rank = i + 1;
+    prev = k;
+    return { seat, rank };
+  });
+}
+
+export class EjaMatch implements EjaScene {
   readonly words: number;
   phase: Phase = 'setup';
   lang: Lang = 'id';
@@ -222,10 +289,7 @@ export class EjaMatch {
   }
 
   phaseLength(): number {
-    if (this.phase === 'spell') return TIMING.spellMs[this.tier];
-    if (this.phase === 'intro') return TIMING.introMs;
-    if (this.phase === 'reveal') return TIMING.revealMs;
-    return 0;
+    return phaseLengthOf(this.phase, this.tier);
   }
 
   /** ms since the current phase began (match clock). */
@@ -241,16 +305,7 @@ export class EjaMatch {
 
   /** Ranked standings (ties share a rank). Solo ranks by best streak. */
   standings(): { seat: Seat; rank: number }[] {
-    const key = (s: Seat) => (this.solo ? s.stats.bestStreak * 1000 + s.stats.correct : s.score);
-    const rows = this.roster.slice().sort((a, b) => key(b) - key(a) || a.joinIndex - b.joinIndex);
-    let rank = 0;
-    let prev = Number.NaN;
-    return rows.map((seat, i) => {
-      const k = key(seat);
-      if (k !== prev) rank = i + 1;
-      prev = k;
-      return { seat, rank };
-    });
+    return rankSeats(this.roster, this.solo);
   }
 
   /* ------------------------------------------------------------------ roster */

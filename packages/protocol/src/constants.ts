@@ -15,6 +15,8 @@ export const LIMITS = {
   freePlayers: 2,
   /** Hard technical ceiling per room. */
   maxPlayers: 16,
+  /** Seats of a room on the free trial or in "semua terbuka" mode (a Pass brings its own count). */
+  premiumPlayers: 16,
   /** How long a dropped controller keeps its slot. */
   slotHoldMs: 120_000,
   /** How long a room survives without its screen. */
@@ -29,7 +31,18 @@ export const LIMITS = {
   heartbeatMs: 2_000,
   /** Messages per second a single socket may send before being throttled. */
   messagesPerSecond: 60,
+  /** Far-away main screens (long-distance play) one room may have watching at once. */
+  maxMirrors: 3,
 } as const;
+
+/**
+ * The secret in a far-away main screen's link (`/J/482917-K7M2Q9XA`). Capitals and digits only,
+ * without look-alikes (0/O, 1/I/L), so the link survives being uppercased for a compact QR and
+ * can be read out loud. 8 of 31 symbols: about 40 bits, on top of the room code and the
+ * wrong-code limit.
+ */
+export const MIRROR_KEY_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+export const MIRROR_KEY_LENGTH = 8;
 
 export const FRUITS = [
   'semangka',

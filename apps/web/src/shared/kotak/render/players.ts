@@ -1,9 +1,9 @@
 /**
- * Draws the bodies of a `KotakSim` as blocky fruit avatars, interpolated between simulation
+ * Draws the bodies of a `KotakSim` as blocky player avatars, interpolated between simulation
  * steps, with a DOM name tag above each head (moved by direct style writes every frame, so the
  * HUD framework never re-renders at 60 fps).
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Fruit, type Look, sameLook } from '@hoorah/protocol';
 import * as THREE from 'three';
 import { lerp } from '../math';
 import { type Body, type KotakSim, planarSpeed } from '../sim';
@@ -14,8 +14,13 @@ export interface PlayerLook {
   id: number;
   name: string;
   fruit: Fruit;
+  /** The player's avatar; the character matching `fruit` when left out. */
+  look?: Look;
   color: string;
 }
+
+const sameAvatar = (a: PlayerLook, b: PlayerLook): boolean =>
+  a.look && b.look ? sameLook(a.look, b.look) : !a.look && !b.look && a.fruit === b.fruit;
 
 interface Entry {
   look: PlayerLook;
@@ -49,7 +54,7 @@ export class AvatarLayer {
     for (const look of looks) {
       const e = this.entries.get(look.id);
       if (e) {
-        if (e.look.fruit === look.fruit) {
+        if (sameAvatar(e.look, look)) {
           if (e.look.color !== look.color) e.avatar.setColor(look.color);
           if (e.tag && e.look.name !== look.name) e.tag.textContent = look.name;
           if (e.tag) e.tag.style.setProperty('--tag', look.color);
@@ -61,7 +66,7 @@ export class AvatarLayer {
         e.tag?.remove();
         this.entries.delete(look.id);
       }
-      const avatar = new BlockAvatar(this.stage, look.fruit, look.color);
+      const avatar = new BlockAvatar(this.stage, look.look ?? look.fruit, look.color);
       for (const o of avatar.objects) this.group.add(o);
       let tag: HTMLDivElement | null = null;
       if (this.tagHost) {

@@ -23,6 +23,22 @@ export const focused = signal<string>('');
 let map: FocusMap | null = null;
 let pos = { row: 0, col: 0 };
 let pointerFocus = false;
+/**
+ * A far-away main screen (long-distance play) follows the Host's main screen: its focus only
+ * moves with `followFocus`, and keys, the mouse and pages asking for a start item change nothing.
+ */
+let following = false;
+
+/** Turns this main screen into a follower for good (see `following`). */
+export function followOnly(): void {
+  following = true;
+}
+
+/** Follower only: the focus the Host's main screen shows. */
+export function followFocus(id: string): void {
+  pos = locate(id) ?? pos;
+  focused.value = id;
+}
 
 /** True when the last focus change came from the mouse: the page then stays put (no glide). */
 export function focusFromPointer(): boolean {
@@ -35,6 +51,12 @@ export function focusFromPointer(): boolean {
  */
 export function setFocusMap(next: FocusMap, initial?: string): () => void {
   map = next;
+  if (following) {
+    pos = locate(focused.value) ?? { row: 0, col: 0 };
+    return () => {
+      if (map === next) map = null;
+    };
+  }
   const target = initial ?? focused.value;
   const found = locate(target);
   pos = found ?? { row: 0, col: 0 };
@@ -55,6 +77,7 @@ function locate(id: string): { row: number; col: number } | null {
 
 /** Focus a specific item: a mouse hover/click (`byPointer`) or a page jumping to it. */
 export function focus(id: string, byPointer = false): void {
+  if (following) return;
   const found = locate(id);
   if (!found) return;
   pos = found;
@@ -66,7 +89,7 @@ export function focus(id: string, byPointer = false): void {
 }
 
 export function press(key: NavKey): void {
-  if (!map) return;
+  if (!map || following) return;
   pointerFocus = false;
   const rows = map.rows;
   const move = (row: number, col: number) => {

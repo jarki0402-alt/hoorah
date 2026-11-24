@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type ServerMsg } from '@hoorah/protocol';
+import { FREE_ACCESS, PROTOCOL_VERSION, type ServerMsg } from '@hoorah/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from './db';
 import type { Logger } from './log';
@@ -95,6 +95,7 @@ describe('Hoorah Pass in rooms', () => {
       t: 'room',
       maxPlayers: 16,
       pass: { expiresAt: clock + 24 * HOUR },
+      access: { kind: 'pass', until: clock + 24 * HOUR, trialUsed: false },
     });
     expect(a.last('room')?.maxPlayers).toBe(16);
     expect(repo.row(id)).toMatchObject({ roomsUsed: 1, peakPlayers: 3 });
@@ -160,7 +161,7 @@ describe('Hoorah Pass in rooms', () => {
     for (const n of ['A', 'B', 'C']) join(m, code, n, 'SEJAM');
     clock += HOUR / 4;
     m.tick();
-    expect(screen.last('room')).toEqual({ t: 'room', maxPlayers: 3, pass: null });
+    expect(screen.last('room')).toEqual({ t: 'room', maxPlayers: 3, pass: null, access: FREE_ACCESS });
     expect(join(m, code, 'D').last('error')?.code).toBe('room_full');
   });
 
@@ -175,7 +176,7 @@ describe('Hoorah Pass in rooms', () => {
     expect(m.passLiveCounts().get(id)).toBe(1);
     repo.update(id, { revokedAt: clock });
     m.refreshPass(id);
-    expect(screen.last('room')).toEqual({ t: 'room', maxPlayers: 2, pass: null });
+    expect(screen.last('room')).toEqual({ t: 'room', maxPlayers: 2, pass: null, access: FREE_ACCESS });
     expect(m.passLiveCounts().get(id)).toBeUndefined();
   });
 

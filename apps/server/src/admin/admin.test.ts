@@ -1,9 +1,17 @@
-import { isPassCode, PASS_CODE_GENERATED_LENGTH } from '@hoorah/protocol';
+import {
+  DEFAULT_CONFIG,
+  isPassCode,
+  PASS_CODE_GENERATED_LENGTH,
+  PROTOCOL_VERSION,
+  type ServerMsg,
+} from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { openDb } from '../db';
 import type { Logger } from '../log';
 import { PassRepository } from '../passes';
-import { RoomManager } from '../rooms';
+import { ErrorRepository, ReportRepository } from '../reports';
+import { type Conn, RoomManager } from '../rooms';
+import { SettingsRepository } from '../settings';
 import { AdminAuth, hashPassword, SESSION_MS, verifyPassword } from './auth';
 import { AdminService } from './service';
 
@@ -85,6 +93,9 @@ describe('admin pass service', () => {
       `INSERT INTO admins (id, username, password_hash, created_at, updated_at) VALUES (1, 'admin', 'x', 0, 0)`,
     );
     const passes = new PassRepository(db);
+    const settings = new SettingsRepository(db);
+    const reports = new ReportRepository(db);
+    const errors = new ErrorRepository(db);
     const rooms = new RoomManager({
       now: () => NOW,
       random: Math.random,
@@ -93,6 +104,7 @@ describe('admin pass service', () => {
       roomsPerIpPerMinute: 10,
       log: quiet,
       passes,
+      config: settings.config(),
     });
     const service = new AdminService({
       passes,
@@ -101,19 +113,30 @@ describe('admin pass service', () => {
       random: Math.random,
       dbFile: ':memory:',
       startedAt: NOW - 5000,
+      settings,
+      reports,
+      errors,
     });
-    return { service };
+    return { service, settings, reports, errors, rooms };
   }
   const base = { label: 'Main bareng', expiresAt: NOW + 24 * HOUR, maxPlayers: 16, maxRooms: null };
 
   it('creates passes with a generated or chosen code, never twice the same', () => {
     const { service } = setup();
-    const a = service.createPass(base, 1);
-    if (typeof a === 'string') throw new Error(a);
+    const created = service.createPass(base, 1);
+    if (typeof created === 'string') throw new Error(created);
+    const [a] = created;
+    if (!a) throw new Error('nothing created');
     expect(a.code).toHaveLength(PASS_CODE_GENERATED_LENGTH);
     expect(isPassCode(a.code)).toBe(true);
-    expect(a).toMatchObject({ status: 'active', liveRooms: 0, roomsUsed: 0, label: 'Main bareng' });
-    expect(service.createPass({ ...base, code: 'SABTU16' }, 1)).toMatchObject({ code: 'SABTU16' });
+    expect(a).toMatchObject({
+      status: 'active',
+      liveRooms: 0,
+      roomsUsed: 0,
+      label: 'Main bareng',
+      kind: 'shared',
+    });
+    expect(service.createPass({ ...base, code: 'SABTU16' }, 1)).toMatchObject([{ code: 'SABTU16' }]);
     expect(service.createPass({ ...base, code: 'SABTU16' }, 1)).toBe('code_taken');
   });
 
@@ -125,8 +148,9 @@ describe('admin pass service', () => {
 
   it('extends, revokes, restores and deletes', () => {
     const { service } = setup();
-    const p = service.createPass({ ...base, code: 'UBAH' }, 1);
-    if (typeof p === 'string') throw new Error(p);
+    const created = service.createPass({ ...base, code: 'UBAH' }, 1);
+    if (typeof created === 'string' || !created[0]) throw new Error('not created');
+    const p = created[0];
     expect(service.updatePass(p.id, { expiresAt: NOW + 72 * HOUR })).toMatchObject({
       expiresAt: NOW + 72 * HOUR,
     });
@@ -137,8 +161,108 @@ describe('admin pass service', () => {
     expect(service.listPasses()).toEqual([]);
   });
 
+  it('makes a batch of single codes, all different, with the same settings', () => {
+    const { service } = setup();
+    const r = service.createPass({ ...base, kind: 'single', durationDays: 30, count: 25 }, 1);
+    if (typeof r === 'string') throw new Error(r);
+    expect(r).toHaveLength(25);
+    expect(new Set(r.map((p) => p.code)).size).toBe(25);
+    expect(r[0]).toMatchObject({ kind: 'single', durationMs: 30 * 24 * HOUR, maxUses: null, uses: 0 });
+    expect(service.listPasses()).toHaveLength(25);
+  });
+
+  it('makes promo codes with a use limit', () => {
+    const { service } = setup();
+    const r = service.createPass(
+      { ...base, code: 'MERDEKA', kind: 'promo', durationDays: 3, maxUses: 100 },
+      1,
+    );
+    expect(r).toMatchObject([
+      { code: 'MERDEKA', kind: 'promo', durationMs: 3 * 24 * HOUR, maxUses: 100, uses: 0 },
+    ]);
+  });
+
   it('reports server numbers', () => {
     const { service } = setup();
     expect(service.stats()).toMatchObject({ uptimeSec: 5, rooms: 0, players: 0, sockets: 0, dbKb: 0 });
+  });
+});
+
+describe('admin settings, reports and errors', () => {
+  class FakeConn implements Conn {
+    sent: ServerMsg[] = [];
+    readonly ip = '1.1.1.1';
+    send(msg: ServerMsg) {
+      this.sent.push(msg);
+    }
+    sendBinary() {}
+    close() {}
+  }
+
+  function setup() {
+    const db = openDb(':memory:');
+    const passes = new PassRepository(db);
+    const settings = new SettingsRepository(db);
+    const reports = new ReportRepository(db);
+    const errors = new ErrorRepository(db);
+    const rooms = new RoomManager({
+      now: () => NOW,
+      random: Math.random,
+      token: () => 'token-room-000001',
+      maxPlayers: 2,
+      roomsPerIpPerMinute: 10,
+      log: quiet,
+      passes,
+      config: settings.config(),
+    });
+    const service = new AdminService({
+      passes,
+      rooms,
+      now: () => NOW,
+      random: Math.random,
+      dbFile: ':memory:',
+      startedAt: NOW,
+      settings,
+      reports,
+      errors,
+    });
+    return { service, settings, reports, errors, rooms };
+  }
+
+  it('saves the settings, keeps them over a restart and tells every screen', () => {
+    const { service, settings, rooms } = setup();
+    expect(service.config()).toEqual(DEFAULT_CONFIG);
+    const screen = new FakeConn();
+    rooms.handleMessage(screen, { t: 'hello', role: 'screen', v: PROTOCOL_VERSION });
+    const next = service.setConfig({ openAll: true, adSeconds: 1000, weeklyGame: 'ludo' });
+    expect(next).toEqual({ ...DEFAULT_CONFIG, openAll: true, adSeconds: 30, weeklyGame: 'ludo' });
+    expect(settings.config()).toEqual(next);
+    expect(screen.sent).toContainEqual({ t: 'config', config: next });
+    expect(screen.sent.at(-1)).toMatchObject({ t: 'room', access: { kind: 'open' } });
+    // A partial body changes only what it names.
+    expect(service.setConfig({ trialMinutes: 45 })).toMatchObject({ openAll: true, trialMinutes: 45 });
+  });
+
+  it('lists reports by status and changes their status', () => {
+    const { service, reports } = setup();
+    const ctx = { role: 'screen' as const, version: 'v1', userAgent: 'TV' };
+    const id = reports.add({ kind: 'teknis', text: 'Suara hilang', contact: null, context: ctx }, NOW);
+    expect(service.reports().reports).toHaveLength(1);
+    expect(service.setReportStatus(id, 'diproses')).toBe(true);
+    expect(service.reports('baru').reports).toEqual([]);
+    expect(service.reports('diproses').counts).toEqual({ baru: 0, diproses: 1, selesai: 0 });
+    expect(service.setReportStatus(id + 1, 'selesai')).toBe(false);
+  });
+
+  it('lists, deletes and clears error groups', () => {
+    const { service, errors } = setup();
+    const ctx = { role: 'controller' as const, version: 'v1', userAgent: 'HP' };
+    errors.add({ message: 'a', stack: null, context: ctx }, NOW);
+    errors.add({ message: 'b', stack: null, context: ctx }, NOW + 1);
+    const groups = service.errors();
+    expect(groups.map((g) => g.message)).toEqual(['b', 'a']);
+    expect(service.deleteError(groups[0]?.id ?? 0)).toBe(true);
+    expect(service.clearErrors()).toBe(1);
+    expect(service.errors()).toEqual([]);
   });
 });

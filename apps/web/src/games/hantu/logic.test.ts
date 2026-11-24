@@ -4,7 +4,7 @@ import { castRay, inCone, lineOfSight, opaqueFor } from './light';
 import { ghostFor, HauntMatch, REVEAL_S } from './logic';
 import { COLS, MAP_IDS, MAPS, pickKeys, ROWS, Tile, tileAt } from './maps';
 import { buildResult, pickAwards } from './results';
-import { HauntWorld, TUNE } from './world';
+import { HauntWorld, PING_S, TUNE } from './world';
 
 function seq(seed = 1): () => number {
   let s = seed;
@@ -245,5 +245,60 @@ describe('session', () => {
     );
     expect(a.map((x) => x.playerId).sort()).toEqual([1, 2, 3]);
     expect(a.find((x) => x.playerId === 1)?.title).toBe('Hantu Sunyi');
+  });
+});
+
+describe('ghost ping (red blink on the main screen)', () => {
+  function frightWorld(fright: 'ringan' | 'beneran') {
+    return new HauntWorld({
+      map: MAPS.rumah,
+      fright,
+      residents: [1, 2],
+      ghostId: 9,
+      skin: 'bayangan',
+      rnd: seq(3),
+    });
+  }
+  const pings = (w: HauntWorld) => w.drainEvents().filter((e) => e.type === 'ping').length;
+
+  it('Seram Ringan blinks the ghost every 8 seconds, three blinks long', () => {
+    const w = frightWorld('ringan');
+    run(w, 7.8);
+    expect(pings(w)).toBe(0);
+    run(w, 0.4);
+    expect(pings(w)).toBe(1);
+    expect(w.ping).not.toBeNull();
+    run(w, PING_S + 0.1);
+    expect(w.ping).toBeNull();
+    run(w, 8);
+    expect(pings(w)).toBe(1);
+  });
+
+  it('Seram Ringan blinks on every catch', () => {
+    const w = frightWorld('ringan');
+    const r = w.residents[0]!;
+    w.ghost.x = r.x;
+    w.ghost.y = r.y;
+    w.update(1 / 60);
+    const ev = w.drainEvents();
+    expect(ev.some((e) => e.type === 'catch')).toBe(true);
+    expect(ev.some((e) => e.type === 'ping')).toBe(true);
+  });
+
+  it('Seram Beneran waits 15 seconds, or blinks when the ghost comes close', () => {
+    const w = frightWorld('beneran');
+    run(w, 14.8);
+    expect(pings(w)).toBe(0);
+    run(w, 0.4);
+    expect(pings(w)).toBe(1);
+    const near = frightWorld('beneran');
+    const r = near.residents[0]!;
+    near.ghost.x = r.x + 2.4;
+    near.ghost.y = r.y;
+    near.update(1 / 60);
+    expect(pings(near)).toBe(1);
+    // Staying close does not blink again before the gap is over.
+    near.update(1 / 60);
+    expect(pings(near)).toBe(0);
   });
 });

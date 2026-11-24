@@ -30,7 +30,7 @@ export const STR = {
   retest: 'Uji ulang',
   auto: 'Otomatis',
   reset: 'Atur ulang',
-  back: 'Kembali ke Hoorah',
+  back: 'Kembali ke Kacawbalaw',
   choose: 'Pilih level grafis',
   saved: 'Tersimpan di perangkat ini.',
 } as const;

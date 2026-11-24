@@ -8,8 +8,27 @@ export type Session =
 
 export const session = signal<Session>({ state: 'checking' });
 
-export type TabId = 'pass' | 'room' | 'server' | 'usage' | 'security' | 'account';
-export const TAB_IDS: readonly TabId[] = ['pass', 'room', 'server', 'usage', 'security', 'account'];
+export type TabId =
+  | 'pass'
+  | 'settings'
+  | 'reports'
+  | 'errors'
+  | 'room'
+  | 'server'
+  | 'usage'
+  | 'security'
+  | 'account';
+export const TAB_IDS: readonly TabId[] = [
+  'pass',
+  'reports',
+  'settings',
+  'room',
+  'server',
+  'errors',
+  'usage',
+  'security',
+  'account',
+];
 
 const TAB_KEY = 'hoorah.admin.tab';
 const isTab = (v: unknown): v is TabId => typeof v === 'string' && (TAB_IDS as readonly string[]).includes(v);
@@ -34,6 +53,9 @@ export function openTab(id: TabId): void {
     // Remembering the tab is a convenience only.
   }
 }
+
+/** Reports still marked "Baru", for the badge on the "Pengaduan" tab; null until first read. */
+export const newReports = signal<number | null>(null);
 
 export interface Toast {
   id: number;

@@ -10,7 +10,7 @@ export function TutorialPhone({ ready, gameTitle }: { ready: readonly number[]; 
   return (
     <div class="ctrl tu-phone-view">
       <div class="tu-phone-card">
-        {p && <Avatar fruit={p.fruit} ring={p.color} size={72} />}
+        {p && <Avatar look={p.look} ring={p.color} size={72} />}
         <div class="tu-phone-eyebrow">{STR.title}</div>
         <h1 class="title">{gameTitle ?? ''}</h1>
         <p class="muted">{done ? STR.done : STR.lead}</p>

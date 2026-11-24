@@ -1,4 +1,5 @@
 import type { PlayerInfo } from '@hoorah/protocol';
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { answerDelay, decide, kataOpponents, rankWords, SOLO_OPPONENTS, slipChance } from './brain';
 import { Lexicon } from './lexicon';
@@ -12,6 +13,7 @@ const human = (id: number, name: string): PlayerInfo => ({
   id,
   name,
   fruit: 'jeruk',
+  look: lookOfFruit('jeruk'),
   color: '#FF8A3D',
   connected: true,
   isHost: id === 1,
@@ -24,6 +26,8 @@ describe('opponents', () => {
     for (const c of solo) {
       expect(c.id).toBeLessThan(0);
       expect(c.name).not.toMatch(/bot|cpu/i);
+      // Drawn as a cast character of its own, never the player's.
+      expect(c.look.c).not.toBe(lookOfFruit('jeruk').c);
     }
     expect(kataOpponents([human(1, 'Rina'), human(2, 'Budi')])).toEqual([]);
   });

@@ -314,7 +314,55 @@ export function rankScores(entries: readonly { playerId: number; score: number }
   });
 }
 
-export class KompakMatch {
+/* ------------------------------------------------------------------ Scene */
+
+export type SceneRecord = Pick<
+  PlayerRecord,
+  'id' | 'connected' | 'joinedRound' | 'score' | 'prevScore' | 'hits' | 'played'
+>;
+export type SceneOutcome = Pick<RoundOutcome, 'playerId' | 'option' | 'kind' | 'points'>;
+
+export interface ScenePrompt {
+  readonly id: string;
+  readonly category: string;
+  readonly q: string;
+  readonly options: readonly string[];
+}
+
+export interface SceneResult {
+  readonly mode: RoundMode;
+  readonly counts: readonly number[];
+  readonly winners: readonly number[];
+  readonly unanimous: boolean;
+  readonly outcomes: readonly SceneOutcome[];
+}
+
+/**
+ * Everything the main-screen stage reads. `KompakMatch` is one; a far-away mirror screen builds
+ * another from the published state (see mirror.ts), so both draw through the same components.
+ */
+export interface KompakScene {
+  readonly phase: Phase;
+  readonly round: number;
+  readonly total: number;
+  readonly coop: boolean;
+  readonly coopPercent: number;
+  readonly coopHits: number;
+  readonly coopRounds: number;
+  readonly prompts: readonly { readonly id: string }[];
+  readonly prompt: ScenePrompt;
+  readonly roster: readonly SceneRecord[];
+  readonly participants: readonly number[];
+  readonly answers: { has(id: number): boolean };
+  readonly result: SceneResult | null;
+  readonly allAnsweredAt: number | null;
+  timeLeft(now: number): number;
+  isParticipant(id: number): boolean;
+  outcomeOf(id: number): SceneOutcome | undefined;
+  ranking(): RankEntry[];
+}
+
+export class KompakMatch implements KompakScene {
   readonly prompts: Prompt[];
   readonly clock: PauseClock;
   phase: Phase = 'start';

@@ -143,7 +143,7 @@ const DIR: Record<SwipeDir, string> = {
 };
 
 export const STR = {
-  noShell: 'Buka Jago Masak dari layar utama Hoorah.',
+  noShell: 'Buka Jago Masak dari layar utama Kacawbalaw.',
   unknownPlayer: 'Pemain',
   offline: 'Terputus',
 

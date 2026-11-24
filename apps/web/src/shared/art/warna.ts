@@ -5,7 +5,7 @@
  * left stays dark cave for the logo.
  */
 import type { Fruit } from '@hoorah/protocol';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { f1, seeded, svgDoc } from './svg';
 
 const RED = '#F2453D';
@@ -17,7 +17,7 @@ function friend(fruit: Fruit, color: string, x: number, y: number, s: number, fl
   const t = `translate(${f1(x)} ${f1(y)}) scale(${flip ? -s : s} ${s}) translate(-32 -32)`;
   return [
     `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(40 * s)}" fill="url(#aura-${color.slice(1)})"/>`,
-    `<g transform="${t}">${fruitMarkup(fruit, 'happy')}</g>`,
+    `<g transform="${t}">${castHead(fruit, 'happy')}</g>`,
   ].join('');
 }
 

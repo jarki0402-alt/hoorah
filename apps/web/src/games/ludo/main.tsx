@@ -5,6 +5,7 @@ import { render } from 'preact';
 import { fontsReady, mountStage } from '../common/stage';
 import { tableUrl } from './backdrop';
 import { LudoDriver } from './driver';
+import { LudoReplica } from './replica';
 import { LudoScreen, type StageSize } from './screen';
 import { LudoStore } from './store';
 import { STR } from './strings';
@@ -30,6 +31,14 @@ async function boot(): Promise<void> {
   });
   await fontsReady();
   const store = new LudoStore();
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's game from its published state, run nothing of our own.
+    const replica = new LudoReplica(game, store);
+    render(<LudoScreen store={store} size={size} />, stage);
+    replica.start();
+    game.ready();
+    return;
+  }
   const driver = new LudoDriver(game, store);
   driver.start();
   render(<LudoScreen store={store} size={size} />, stage);

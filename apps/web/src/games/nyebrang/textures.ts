@@ -3,12 +3,13 @@
  * per cell, shown with nearest-neighbour scaling so every pixel stays crisp. The look is a warm
  * 3/4 view: lanes sit at different heights (grass above road above water) and show a front face
  * where they drop; vehicles, logs and props have a lit top and a darker front side, plus a soft
- * drop shadow. Fruit avatars are the shared SVG fruits rasterized to 20 px, so they turn into
- * chunky pixel fruits that match the world.
+ * drop shadow. Player avatars are the shared SVG characters rasterized to 20 px, so they turn
+ * into chunky pixel people that match the world.
  */
-import { FRUITS, type Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import type * as Phaser from 'phaser';
-import { type Face, fruitMarkup } from '../../shared/art/fruits';
+import type { Face } from '../../shared/art/fruits';
+import { avatarMarkup } from '../../shared/art/people';
 import { svgDoc, svgUrl } from '../../shared/art/svg';
 import { loadImage } from '../common/stage';
 import type { ItemKind, MapId, PropKind } from './lanes';
@@ -470,32 +471,73 @@ function paintLight(size: number, soft: boolean): Paint {
 export const laneKey = (map: MapId, name: string) => `ny-${map}-${name}`;
 export const itemKey = (kind: ItemKind, tint: number, len: number) => `ny-${kind}-${tint}-${len}`;
 export const propKey = (kind: PropKind) => `ny-prop-${kind}`;
-export const fruitKey = (fruit: Fruit, face: Face) => `ny-fruit-${fruit}-${face}`;
+/** Stable text id of a look, for texture keys. */
+const lookId = (look: Look): string => [look.c, look.s, look.h, look.hc, look.oc].join('.');
+export const avatarKey = (look: Look, face: Face) => `ny-avatar-${lookId(look)}-${face}`;
+/** Transparent built-in texture shown until an avatar has been rasterized. */
+export const BLANK_KEY = '__DEFAULT';
 
-/** Fruit faces rasterized to tiny bitmaps (pixel fruits). */
-export async function loadFruits(): Promise<Map<string, HTMLImageElement>> {
-  const out = new Map<string, HTMLImageElement>();
-  const jobs: Promise<void>[] = [];
-  for (const fruit of FRUITS) {
-    for (const face of FACES) {
-      const key = fruitKey(fruit, face);
-      const url = svgUrl(`ny-${key}`, () => svgDoc(64, 64, fruitMarkup(fruit, face), '0 0 64 64'));
-      jobs.push(
-        loadImage(url, 64, 64).then((img) => {
-          out.set(key, img);
-        }),
-      );
-    }
+/** Shrinks a rasterized avatar to a tiny bitmap with hard alpha edges (a pixel person). */
+const pixelAvatar =
+  (img: HTMLImageElement): Paint =>
+  (g) => {
+    g.imageSmoothingEnabled = true;
+    g.drawImage(img, 0, 0, FRUIT_PX, FRUIT_PX);
+    // Snap alpha so edges stay crisp pixels instead of a soft halo.
+    const data = g.getImageData(0, 0, FRUIT_PX, FRUIT_PX);
+    for (let i = 3; i < data.data.length; i += 4) data.data[i] = data.data[i]! > 110 ? 255 : 0;
+    g.putImageData(data, 0, 0);
+  };
+
+/** Pixel avatars as Phaser textures, rasterized the first time a look shows up. */
+export class AvatarBank {
+  private readonly textures: Phaser.Textures.TextureManager;
+  private readonly onReady: (look: Look) => void;
+  private readonly pending = new Set<string>();
+
+  constructor(textures: Phaser.Textures.TextureManager, onReady: (look: Look) => void) {
+    this.textures = textures;
+    this.onReady = onReady;
   }
-  await Promise.all(jobs);
-  return out;
+
+  /** Texture key of an avatar face, or BLANK_KEY while it is still rasterizing (onReady follows). */
+  key(look: Look, face: Face): string {
+    const key = avatarKey(look, face);
+    if (this.textures.exists(key)) return key;
+    this.request(look);
+    return BLANK_KEY;
+  }
+
+  private request(look: Look): void {
+    const id = lookId(look);
+    if (this.pending.has(id)) return;
+    this.pending.add(id);
+    const jobs = FACES.map((face) =>
+      loadImage(
+        svgUrl(`ny-avatar-${id}-${face}`, () => svgDoc(64, 64, avatarMarkup(look, face), '0 0 64 64')),
+        64,
+        64,
+      ),
+    );
+    Promise.all(jobs).then(
+      (images) => {
+        FACES.forEach((face, i) => {
+          const key = avatarKey(look, face);
+          if (!this.textures.exists(key)) {
+            this.textures.addCanvas(key, canvas(FRUIT_PX, FRUIT_PX, pixelAvatar(images[i]!)));
+          }
+        });
+        this.pending.delete(id);
+        this.onReady(look);
+      },
+      // A failed avatar stays pending so it is not retried every frame; the blank stand-in remains.
+      () => undefined,
+    );
+  }
 }
 
 /** Register every texture with Phaser. Called once from the scene's create(). */
-export function buildTextures(
-  textures: Phaser.Textures.TextureManager,
-  fruits: Map<string, HTMLImageElement>,
-): void {
+export function buildTextures(textures: Phaser.Textures.TextureManager): void {
   const add = (key: string, w: number, h: number, paint: Paint) => {
     if (!textures.exists(key)) textures.addCanvas(key, canvas(w, h, paint));
   };
@@ -547,16 +589,6 @@ export function buildTextures(
   add('ny-dot', 2, 2, paintDot);
   add('ny-light', 96, 96, paintLight(96, true));
   add('ny-beam', 64, 64, paintLight(64, false));
-  for (const [key, img] of fruits) {
-    add(key, FRUIT_PX, FRUIT_PX, (g) => {
-      g.imageSmoothingEnabled = true;
-      g.drawImage(img, 0, 0, FRUIT_PX, FRUIT_PX);
-      // Snap alpha so edges stay crisp pixels instead of a soft halo.
-      const data = g.getImageData(0, 0, FRUIT_PX, FRUIT_PX);
-      for (let i = 3; i < data.data.length; i += 4) data.data[i] = data.data[i]! > 110 ? 255 : 0;
-      g.putImageData(data, 0, 0);
-    });
-  }
 }
 
 /** Texture of an item at its length (logs come in 2–4). */

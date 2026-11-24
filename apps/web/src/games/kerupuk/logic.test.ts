@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { submitRecord } from '../common/records';
+import { headCenterY, kerupukRestY, mouthY } from './layout';
 import {
   BASE_PERIOD,
   BITES,
@@ -611,5 +612,14 @@ describe('a phone dropping mid-game', () => {
     expect(g.participants).toEqual([1]);
     g.setRoster(roster(1, 2), 10);
     expect(g.participants).toEqual([1, 2]);
+  });
+});
+
+describe('layout', () => {
+  it('hangs the kerupuk just above the mouth, below the head centre', () => {
+    for (const u of [1.15, 1.5, 1.8]) {
+      expect(mouthY(u)).toBeGreaterThan(headCenterY(u));
+      expect(kerupukRestY(u)).toBeLessThan(mouthY(u));
+    }
   });
 });

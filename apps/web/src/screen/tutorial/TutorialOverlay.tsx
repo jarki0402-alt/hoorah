@@ -127,7 +127,7 @@ export function TutorialOverlay({ run }: { run: TutorialRun }) {
             <div class="tu-ready">
               {connected.value.map((p) => (
                 <span key={p.id} class={`tu-player ${run.ready.includes(p.id) ? 'ok' : ''}`}>
-                  <Avatar fruit={p.fruit} ring={p.color} size={36} />
+                  <Avatar look={p.look} ring={p.color} size={36} />
                   {run.ready.includes(p.id) && (
                     <span class="tu-tick">
                       <Icon name="check" size={12} stroke={3.4} />

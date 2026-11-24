@@ -11,9 +11,10 @@ import type { ReadonlySignal } from '@preact/signals';
 import type { JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import type { Face } from '../../shared/art/fruits';
+import { confetti } from '../../shared/confetti';
 import { Avatar, Icon } from '../../shared/ui';
 import { paperUrl, RULE_GAP } from './backdrop';
-import type { Attempt, ChainLink, KataMatch, SeatState, StartKind } from './logic';
+import type { KataScene, SceneAttempt, SceneLink, SceneSeat, StartKind } from './logic';
 import { TIMING } from './logic';
 import { formatSeconds, STR } from './strings';
 
@@ -36,6 +37,20 @@ export class FrameBus {
   }
 }
 
+/** Confetti from a player's card in the players strip (the winner, on the final card). */
+export function burstOver(id: number): void {
+  const el = document.querySelector<HTMLElement>(`[data-pid="${id}"]`);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  confetti({
+    x: (r.left + r.width / 2) / window.innerWidth,
+    y: r.top / window.innerHeight,
+    count: 70,
+    spread: 0.7,
+    power: 0.75,
+  });
+}
+
 /** One line of the notebook. */
 /** The fresh start dealt right after a line (a mistake or a dead end), shown at its end. */
 export interface ThenStart {
@@ -45,8 +60,8 @@ export interface ThenStart {
 
 export type LogEntry =
   | { kind: 'start'; key: string; prefix: string; start: StartKind; stuckFrom: string | null }
-  | { kind: 'word'; key: string; link: ChainLink; after?: ThenStart }
-  | { kind: 'miss'; key: string; attempt: Attempt; after?: ThenStart };
+  | { kind: 'word'; key: string; link: SceneLink; after?: ThenStart }
+  | { kind: 'miss'; key: string; attempt: SceneAttempt; after?: ThenStart };
 
 export interface Banner {
   key: number;
@@ -54,14 +69,17 @@ export interface Banner {
 }
 
 export interface ScreenModel {
-  match: KataMatch;
+  match: KataScene;
   version: ReadonlySignal<number>;
   waiting: ReadonlySignal<boolean>;
   frame: FrameBus;
   log: () => readonly LogEntry[];
   banner: () => Banner | null;
-  info: (id: number) => PlayerInfo | undefined;
+  info: (id: number) => SeatInfo | undefined;
 }
+
+/** The part of a player card the page draws (a mirror screen gets it from the Host's state). */
+export type SeatInfo = Pick<PlayerInfo, 'id' | 'name' | 'color' | 'look'>;
 
 export interface StageSize {
   w: number;
@@ -118,7 +136,7 @@ export function KataScreen({ model, size }: { model: ScreenModel; size: Readonly
 
 /* ------------------------------------------------------------------ header */
 
-function Header({ m }: { m: KataMatch }) {
+function Header({ m }: { m: KataScene }) {
   const live = m.phase !== 'intro';
   return (
     <div class="sk-head">
@@ -129,7 +147,7 @@ function Header({ m }: { m: KataMatch }) {
         {STR.livesChip(m.lives)}
       </div>
       {live && m.round > 0 && <div class="sk-chip">{STR.timeChip(Math.round(m.turnMs / 1000))}</div>}
-      {m.chain.length > 0 && <div class="sk-chip is-marker">{STR.chainChip(m.chain.length)}</div>}
+      {m.chainLength > 0 && <div class="sk-chip is-marker">{STR.chainChip(m.chainLength)}</div>}
     </div>
   );
 }
@@ -154,7 +172,7 @@ function ChainLog({
   lines,
 }: {
   entries: readonly LogEntry[];
-  info: (id: number) => PlayerInfo | undefined;
+  info: (id: number) => SeatInfo | undefined;
   lines: number;
 }) {
   // Newest at the bottom; it takes two rules, everything else one.
@@ -183,7 +201,7 @@ function ChainLog({
           const p = info(e.attempt.by);
           return (
             <div key={e.key} class={`${cls} is-miss`} style={style}>
-              {p && <Avatar fruit={p.fruit} ring={p.color} size={age === 0 ? 44 : 32} face="sad" />}
+              {p && <Avatar look={p.look} ring={p.color} size={age === 0 ? 44 : 32} face="sad" />}
               <s class="sk-word">{e.attempt.word ? e.attempt.word.toUpperCase() : STR.timeoutWord}</s>
               <span class="sk-reason">{STR.reason(e.attempt.reason ?? 'unknown', e.attempt.prefix)}</span>
               {e.after && <Then then={e.after} />}
@@ -193,7 +211,7 @@ function ChainLog({
         const p = info(e.link.by);
         return (
           <div key={e.key} class={cls} style={style}>
-            {p && <Avatar fruit={p.fruit} ring={p.color} size={age === 0 ? 44 : 32} />}
+            {p && <Avatar look={p.look} ring={p.color} size={age === 0 ? 44 : 32} />}
             <span class="sk-word">
               {segments(e.link.word.toUpperCase(), e.link.join, e.link.tail).map((s, k) => (
                 <span key={k} class={`sk-seg${s.cls}`}>
@@ -223,7 +241,7 @@ function Then({ then }: { then: ThenStart }) {
 const RING_R = 70;
 const RING_C = 2 * Math.PI * RING_R;
 
-function TimerRing({ m, frame }: { m: KataMatch; frame: FrameBus }) {
+function TimerRing({ m, frame }: { m: KataScene; frame: FrameBus }) {
   const arc = useRef<SVGCircleElement>(null);
   const num = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -297,7 +315,7 @@ function Tiles({
   );
 }
 
-function startNote(m: KataMatch): string {
+function startNote(m: KataScene): string {
   switch (m.startKind) {
     case 'first':
       return STR.startFirst;
@@ -324,7 +342,7 @@ function TurnCard({ model }: { model: ScreenModel }) {
   let tiles: JSX.Element;
   if (!a) tiles = <Tiles word={m.prefix} join={m.prefix.length} blanks={3} tone="turn" />;
   else if (a.ok) {
-    const link = m.chain[m.chain.length - 1];
+    const link = m.lastLink;
     tiles = <Tiles word={a.word} join={a.prefix.length} tail={link?.tail ?? 0} blanks={0} tone="ok" />;
   } else if (a.word) tiles = <Tiles word={a.word} join={0} blanks={0} tone="bad" />;
   else tiles = <Tiles word={a.prefix} join={a.prefix.length} blanks={3} tone="timeout" />;
@@ -335,7 +353,7 @@ function TurnCard({ model }: { model: ScreenModel }) {
         <div class="sk-who">
           <div class="sk-avatar">
             <TimerRing m={m} frame={model.frame} />
-            {p && <Avatar fruit={p.fruit} ring={p.color} size={112} face={face} class="sk-avatar-img" />}
+            {p && <Avatar look={p.look} ring={p.color} size={112} face={face} class="sk-avatar-img" />}
           </div>
           <div class="sk-who-text">
             <div class="sk-eyebrow">{STR.turnEyebrow}</div>
@@ -392,7 +410,7 @@ function Players({ model }: { model: ScreenModel }) {
   const many = m.seats.length > 6;
   return (
     <div class={`sk-players${many ? ' is-many' : ''}`}>
-      {m.seats.map((s: SeatState) => {
+      {m.seats.map((s: SceneSeat) => {
         const p = model.info(s.id);
         const current = live && m.current === s.index;
         const out = s.lives <= 0;
@@ -407,7 +425,7 @@ function Players({ model }: { model: ScreenModel }) {
             {current && <div class="sk-tab">{STR.turnEyebrow}</div>}
             {p && (
               <Avatar
-                fruit={p.fruit}
+                look={p.look}
                 ring={p.color}
                 size={many ? 40 : 50}
                 dim={out}
@@ -432,7 +450,7 @@ function Players({ model }: { model: ScreenModel }) {
 
 /* ------------------------------------------------------------------ intro + final */
 
-function IntroCard({ m }: { m: KataMatch }) {
+function IntroCard({ m }: { m: KataScene }) {
   const ex = STR.introExample;
   return (
     <div class="sk-card sk-intro">
@@ -492,7 +510,7 @@ function FinalCard({ model }: { model: ScreenModel }) {
       <div class="sk-final-crown">
         <Icon name="crown" size={56} color="#FFC928" />
       </div>
-      {p && <Avatar fruit={p.fruit} ring={p.color} size={150} face="wow" />}
+      {p && <Avatar look={p.look} ring={p.color} size={150} face="wow" />}
       <div class="sk-eyebrow">{STR.finalEyebrow}</div>
       <div class="sk-final-title display">{p ? STR.finalTitle(p.name) : STR.finalNone}</div>
       {seat && <div class="sk-final-stats">{STR.finalStats(seat.words, seat.lives)}</div>}

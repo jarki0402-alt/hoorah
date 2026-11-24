@@ -1,46 +1,18 @@
 /**
- * Blocky fruit avatar for the box world: a cube head that is the player's fruit (colours, crown,
- * leaves or spikes made of little boxes, a face drawn on the front), a torso and arms in the
- * player's colour, dark legs, a coloured ring under the feet and, without shadow maps, a soft blob
+ * Blocky player avatar for the box world (owner 2026-11-24: players are cast characters, not
+ * fruits): a cube head in the player's skin tone with a face drawn on the front, hair, a veil or a
+ * hat built from little boxes in the player's hair colour, a torso and arms in the outfit colour,
+ * dark legs, a ring in the player colour under the feet and, without shadow maps, a soft blob
  * shadow. `pose()` animates idle bob, running, jumping, tumbling, celebrating and the respawn blink.
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Fruit, type Look, lookOfFruit } from '@hoorah/protocol';
 import * as THREE from 'three';
+import { type Person, resolveLook, SKIN_PALETTE } from '../../art/people';
 import type { KotakStage } from './stage';
 
-interface FruitLook {
-  skin: string;
-  /** Dots painted on the skin (seeds, dimples). */
-  dots?: string;
-  /** Darker shade for shells, bands and spikes. */
-  accent: string;
-  top: 'leaf' | 'crown' | 'spikes' | 'stem' | 'hair' | 'star';
-  /** Watermelon rind band or avocado shell. */
-  shell?: 'band' | 'back';
-  /** Cheek and mouth tint. */
-  blush: string;
-}
-
-const LOOKS: Record<Fruit, FruitLook> = {
-  semangka: {
-    skin: '#F2453D',
-    dots: '#2A1D1A',
-    accent: '#1E9E50',
-    top: 'stem',
-    shell: 'band',
-    blush: '#FFB3A8',
-  },
-  alpukat: { skin: '#D4E88A', accent: '#3E7D27', top: 'stem', shell: 'back', blush: '#F4A08E' },
-  durian: { skin: '#B5D152', accent: '#7FA82E', top: 'spikes', blush: '#F4A08E' },
-  nanas: { skin: '#F5B700', dots: '#C98A00', accent: '#2E9E4F', top: 'crown', blush: '#FF8A5C' },
-  jeruk: { skin: '#FF9A1F', dots: '#E07F0C', accent: '#2E9E4F', top: 'leaf', blush: '#FF6B4A' },
-  stroberi: { skin: '#F2453D', dots: '#FFE066', accent: '#2E9E4F', top: 'star', blush: '#FFB3A8' },
-  mangga: { skin: '#FFB21E', accent: '#2E9E4F', top: 'leaf', blush: '#FF7A1A' },
-  rambutan: { skin: '#D7263D', accent: '#FF6B4A', top: 'hair', blush: '#FFB3A8' },
-};
-
 const LEGS = '#2B2F38';
-const INK = '#111214';
+const INK = '#1B1B22';
+const BLUSH = '#FF8A8A';
 
 function shade(hex: string, k: number): string {
   const c = new THREE.Color(hex);
@@ -50,74 +22,90 @@ function shade(hex: string, k: number): string {
 
 type FaceKind = 'none' | 'happy' | 'wow';
 
-/** Skin texture with dots; the front also gets the face. */
-function skinCanvas(look: FruitLook, face: FaceKind): HTMLCanvasElement {
+/** Skin texture; the front also gets the face and the face accessories (glasses, beard, freckles). */
+function skinCanvas(p: Person, face: FaceKind): HTMLCanvasElement {
   const s = 128;
   const cv = document.createElement('canvas');
   cv.width = s;
   cv.height = s;
   const g = cv.getContext('2d');
   if (!g) return cv;
-  g.fillStyle = look.skin;
+  g.fillStyle = SKIN_PALETTE[p.skin - 1] ?? SKIN_PALETTE[1];
   g.fillRect(0, 0, s, s);
-  if (look.dots) {
-    g.fillStyle = look.dots;
-    const spots: [number, number][] =
-      face === 'none'
-        ? [
-            [24, 24],
-            [70, 18],
-            [108, 40],
-            [20, 80],
-            [64, 64],
-            [104, 100],
-            [40, 112],
-          ]
-        : [
-            [20, 18],
-            [64, 12],
-            [104, 22],
-            [14, 112],
-            [112, 112],
-            [62, 120],
-          ];
-    for (const [x, y] of spots) {
+  if (face === 'none') return cv;
+  const has = (a: string) => (p.acc as readonly string[]).includes(a);
+  if (has('beard')) {
+    g.fillStyle = p.hairColor;
+    g.beginPath();
+    g.moveTo(8, 70);
+    g.quadraticCurveTo(64, 150, 120, 70);
+    g.lineTo(120, 128);
+    g.lineTo(8, 128);
+    g.closePath();
+    g.fill();
+  }
+  g.fillStyle = BLUSH;
+  g.globalAlpha = 0.55;
+  g.beginPath();
+  g.arc(26, 80, 10, 0, Math.PI * 2);
+  g.arc(102, 80, 10, 0, Math.PI * 2);
+  g.fill();
+  g.globalAlpha = 1;
+  if (has('freckles')) {
+    g.fillStyle = shade(SKIN_PALETTE[p.skin - 1] ?? SKIN_PALETTE[1], 0.7);
+    for (const [x, y] of [
+      [20, 72],
+      [30, 76],
+      [98, 76],
+      [108, 72],
+    ] as const) {
       g.beginPath();
-      g.ellipse(x, y, 3.2, 4.4, 0, 0, Math.PI * 2);
+      g.arc(x, y, 2.4, 0, Math.PI * 2);
       g.fill();
     }
   }
-  if (face === 'none') return cv;
-  // Rosy cheeks, eyes with a highlight, a smile or an "o".
-  g.fillStyle = look.blush;
-  g.globalAlpha = 0.75;
-  g.beginPath();
-  g.arc(26, 78, 11, 0, Math.PI * 2);
-  g.arc(102, 78, 11, 0, Math.PI * 2);
-  g.fill();
-  g.globalAlpha = 1;
   g.fillStyle = INK;
   for (const x of [42, 86]) {
     g.beginPath();
-    g.ellipse(x, 60, 8, 10, 0, 0, Math.PI * 2);
+    g.ellipse(x, 60, 7, 9, 0, 0, Math.PI * 2);
     g.fill();
   }
   g.fillStyle = '#FFFFFF';
   for (const x of [45, 89]) {
     g.beginPath();
-    g.arc(x, 56, 3.2, 0, Math.PI * 2);
+    g.arc(x, 56, 2.8, 0, Math.PI * 2);
     g.fill();
   }
-  g.strokeStyle = INK;
-  g.fillStyle = INK;
+  if (has('glasses')) {
+    g.strokeStyle = INK;
+    g.lineWidth = 4;
+    for (const x of [42, 86]) {
+      g.beginPath();
+      g.arc(x, 60, 15, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.beginPath();
+    g.moveTo(57, 60);
+    g.lineTo(71, 60);
+    g.stroke();
+  }
+  if (has('mustache')) {
+    g.fillStyle = p.hairColor;
+    g.beginPath();
+    g.ellipse(52, 80, 12, 5, 0.2, 0, Math.PI * 2);
+    g.ellipse(76, 80, 12, 5, -0.2, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = '#3A1A1E';
+  g.fillStyle = '#3A1A1E';
   g.lineWidth = 6;
   g.lineCap = 'round';
   g.beginPath();
   if (face === 'happy') {
-    g.arc(64, 78, 13, 0.15 * Math.PI, 0.85 * Math.PI);
+    g.arc(64, 82, 13, 0.15 * Math.PI, 0.85 * Math.PI);
     g.stroke();
   } else {
-    g.ellipse(64, 88, 7, 9, 0, 0, Math.PI * 2);
+    g.ellipse(64, 94, 7, 9, 0, 0, Math.PI * 2);
     g.fill();
   }
   return cv;
@@ -125,11 +113,11 @@ function skinCanvas(look: FruitLook, face: FaceKind): HTMLCanvasElement {
 
 const textureCache = new Map<string, THREE.CanvasTexture>();
 
-function texture(look: FruitLook, face: FaceKind): THREE.CanvasTexture {
-  const key = `${look.skin}|${look.dots ?? ''}|${look.blush}|${face}`;
+function texture(p: Person, face: FaceKind): THREE.CanvasTexture {
+  const key = `${p.skin}|${p.hairColor}|${p.acc.join(',')}|${face}`;
   let t = textureCache.get(key);
   if (!t) {
-    t = new THREE.CanvasTexture(skinCanvas(look, face));
+    t = new THREE.CanvasTexture(skinCanvas(p, face));
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 4;
     textureCache.set(key, t);
@@ -196,18 +184,19 @@ export class BlockAvatar {
   private readonly torsoMat: THREE.Material & { color: THREE.Color };
   private readonly armMat: THREE.Material & { color: THREE.Color };
   private readonly ringMat: THREE.MeshBasicMaterial;
+  private readonly badgeMat: THREE.Material & { color: THREE.Color };
   private phase = Math.random() * 10;
   private stride = 0;
 
-  constructor(stage: KotakStage, fruit: Fruit, color: string) {
-    const look = LOOKS[fruit];
-    const skin = stage.material('#ffffff', { map: texture(look, 'none'), rough: 0.6 });
-    this.happy = texture(look, 'happy');
-    this.wow = texture(look, 'wow');
+  /** `who`: the player's look (a fruit only for old callers: the matching character). */
+  constructor(stage: KotakStage, who: Look | Fruit, color: string) {
+    const p = resolveLook(typeof who === 'string' ? lookOfFruit(who) : who);
+    const skin = stage.material('#ffffff', { map: texture(p, 'none'), rough: 0.6 });
+    this.happy = texture(p, 'happy');
+    this.wow = texture(p, 'wow');
     this.faceMat = stage.material('#ffffff', { map: this.happy, rough: 0.6 });
-    const accent = stage.material(look.accent, { rough: 0.6 });
-    this.torsoMat = stage.material(color, { rough: 0.55 }) as THREE.Material & { color: THREE.Color };
-    this.armMat = stage.material(shade(color, 0.82), { rough: 0.55 }) as THREE.Material & {
+    this.torsoMat = stage.material(p.outfitColor, { rough: 0.55 }) as THREE.Material & { color: THREE.Color };
+    this.armMat = stage.material(shade(p.outfitColor, 0.84), { rough: 0.55 }) as THREE.Material & {
       color: THREE.Color;
     };
     const legMat = stage.material(LEGS, { rough: 0.8 });
@@ -221,9 +210,10 @@ export class BlockAvatar {
       leg.add(box(legMat, 0.2, 0.48, 0.24, 0, -0.24, 0));
       this.body.add(leg);
     }
-    // Torso with a lighter belly patch.
+    // Torso in the outfit colour with a small badge in the player colour (who is who, up close).
     this.body.add(box(this.torsoMat, 0.56, 0.5, 0.36, 0, 0.73, 0));
-    this.body.add(box(stage.material('#FFF7F0', { rough: 0.7 }), 0.3, 0.2, 0.02, 0, 0.7, 0.185));
+    this.badgeMat = stage.material(color, { rough: 0.6 }) as THREE.Material & { color: THREE.Color };
+    this.body.add(box(this.badgeMat, 0.14, 0.14, 0.02, 0.14, 0.82, 0.185));
     // Arms pivot at the shoulders.
     for (const [arm, x] of [
       [this.armL, -0.36],
@@ -235,12 +225,12 @@ export class BlockAvatar {
       this.body.add(arm);
     }
     // Head: front face (+z) carries the face texture.
-    const s = 0.64;
+    const s = 0.62;
     const headMesh = new THREE.Mesh(BOX, [skin, skin, skin, skin, this.faceMat, skin]);
     headMesh.scale.set(s, s, s);
     this.head.add(headMesh);
     this.head.position.set(0, 0.98 + s / 2, 0);
-    this.addTop(look, accent, stage, s);
+    this.addHair(p, stage, s);
     this.body.add(this.head);
     this.root.add(this.body);
 
@@ -274,71 +264,154 @@ export class BlockAvatar {
     } else this.shadow = null;
   }
 
-  private addTop(look: FruitLook, accent: THREE.Material, stage: KotakStage, s: number): void {
-    const top = s / 2;
-    const stem = stage.material('#6B4423', { rough: 0.8 });
+  /** Hair, veil or hat from boxes, in the character's hair colour (hats in their own colour). */
+  private addHair(p: Person, stage: KotakStage, s: number): void {
     const h = this.head;
-    switch (look.top) {
-      case 'stem':
-        h.add(box(stem, 0.07, 0.16, 0.07, 0, top + 0.08, 0));
-        if (look.shell === 'band') {
-          // Watermelon rind: a green band around the lower head.
-          h.add(box(accent, s + 0.04, 0.12, s + 0.04, 0, -top + 0.06, 0));
-        } else if (look.shell === 'back') {
-          // Avocado shell on the back of the head.
-          h.add(box(accent, s + 0.04, s + 0.04, 0.1, 0, 0, -top - 0.03));
+    const t = s / 2;
+    const hair = stage.material(p.hairColor, { rough: 0.75 });
+    const dark = stage.material(shade(p.hairColor, 0.82), { rough: 0.75 });
+    const cap = (depthBack = 0.1) => {
+      // A slab over the top and a panel down the back: most short styles start here.
+      h.add(box(hair, s + 0.05, 0.12, s + 0.05, 0, t + 0.02, 0));
+      h.add(box(hair, s + 0.05, s * 0.62, depthBack, 0, t - s * 0.27, -t - depthBack / 2 + 0.03));
+    };
+    const fringe = (height = 0.1) =>
+      h.add(box(hair, s + 0.04, height, 0.06, 0, t - height / 2 + 0.01, t + 0.01));
+    const sides = (down = 0.32) => {
+      for (const x of [-1, 1]) h.add(box(hair, 0.06, down, s * 0.72, x * (t + 0.02), t - down / 2, -0.06));
+    };
+    switch (p.hair) {
+      case 'bald':
+        for (const x of [-1, 1]) h.add(box(hair, 0.05, 0.12, s * 0.5, x * (t + 0.02), 0.02, -0.08));
+        break;
+      case 'buzz':
+        h.add(box(hair, s + 0.02, 0.05, s + 0.02, 0, t + 0.005, 0));
+        break;
+      case 'opa':
+        for (const x of [-1, 1]) h.add(box(hair, 0.06, 0.18, s * 0.6, x * (t + 0.02), 0.04, -0.06));
+        h.add(box(hair, s + 0.04, 0.18, 0.06, 0, 0.04, -t - 0.02));
+        break;
+      case 'spiky':
+        cap();
+        for (const [x, z] of [
+          [-0.16, 0.12],
+          [0.02, 0.16],
+          [0.18, 0.08],
+          [-0.06, -0.08],
+        ] as const) {
+          const spike = box(hair, 0.14, 0.18, 0.14, x, t + 0.12, z);
+          spike.rotation.set(0.3, 0, x * 2);
+          h.add(spike);
         }
         break;
-      case 'leaf':
-        h.add(box(stem, 0.07, 0.12, 0.07, 0, top + 0.06, 0));
-        h.add(box(accent, 0.26, 0.05, 0.14, 0.13, top + 0.12, 0).rotateZ(0.35));
+      case 'mohawk':
+        h.add(box(hair, 0.14, 0.24, s * 0.9, 0, t + 0.12, 0));
         break;
-      case 'crown':
-        for (let i = -1; i <= 1; i++) {
-          const leaf = box(
-            accent,
-            0.1,
-            0.34 - Math.abs(i) * 0.08,
-            0.1,
-            i * 0.1,
-            top + 0.15 - Math.abs(i) * 0.04,
+      case 'tuft':
+        cap();
+        h.add(box(hair, 0.16, 0.14, 0.16, 0.05, t + 0.1, 0.16).rotateZ(0.4));
+        break;
+      case 'afro':
+        h.add(box(hair, s + 0.26, s * 0.62, s + 0.22, 0, t + 0.08, -0.06));
+        sides(0.4);
+        break;
+      case 'curlyshort':
+        cap();
+        for (const x of [-0.2, 0, 0.2]) h.add(box(hair, 0.16, 0.12, 0.16, x, t + 0.08, 0.12));
+        break;
+      case 'bowl':
+        cap();
+        fringe(0.16);
+        sides(0.34);
+        break;
+      case 'curtain':
+        cap();
+        for (const x of [-1, 1])
+          h.add(box(hair, s * 0.42, 0.12, 0.06, x * 0.17, t - 0.08, t + 0.01).rotateZ(x * 0.25));
+        sides(0.3);
+        break;
+      case 'bob':
+        cap(0.12);
+        fringe();
+        sides(0.5);
+        break;
+      case 'wavy':
+        cap(0.14);
+        fringe(0.08);
+        sides(0.62);
+        h.add(box(dark, s + 0.08, 0.36, 0.14, 0, -t - 0.12, -t + 0.02));
+        break;
+      case 'braids':
+        cap();
+        fringe(0.08);
+        for (const x of [-1, 1]) h.add(box(dark, 0.12, 0.62, 0.12, x * (t + 0.02), -t + 0.02, -0.04));
+        break;
+      case 'pony':
+        cap();
+        fringe(0.08);
+        h.add(box(dark, 0.16, 0.44, 0.16, 0, t - 0.2, -t - 0.14).rotateX(0.35));
+        break;
+      case 'pigtails':
+        cap();
+        fringe(0.08);
+        for (const x of [-1, 1]) h.add(box(dark, 0.16, 0.34, 0.16, x * (t + 0.12), -0.02, -0.04));
+        break;
+      case 'twinbuns':
+        cap();
+        fringe(0.08);
+        for (const x of [-1, 1]) h.add(box(hair, 0.2, 0.2, 0.2, x * 0.2, t + 0.12, -0.04));
+        break;
+      case 'grandbun':
+      case 'messybun':
+      case 'manbun':
+      case 'puff':
+        cap();
+        if (p.hair !== 'manbun') fringe(0.08);
+        h.add(
+          box(
+            hair,
+            p.hair === 'puff' ? 0.36 : 0.24,
+            p.hair === 'puff' ? 0.3 : 0.22,
+            0.24,
             0,
-          );
-          leaf.rotation.z = -i * 0.35;
-          h.add(leaf);
-        }
-        break;
-      case 'star':
-        for (let i = 0; i < 5; i++) {
-          const a = (i / 5) * Math.PI * 2;
-          const leaf = box(accent, 0.1, 0.04, 0.26, Math.sin(a) * 0.12, top + 0.02, Math.cos(a) * 0.12);
-          leaf.rotation.y = a;
-          h.add(leaf);
-        }
-        h.add(box(stem, 0.06, 0.12, 0.06, 0, top + 0.08, 0));
-        break;
-      case 'spikes':
-      case 'hair': {
-        const cone = new THREE.ConeGeometry(
-          look.top === 'spikes' ? 0.07 : 0.04,
-          look.top === 'spikes' ? 0.14 : 0.16,
-          4,
+            t + 0.14,
+            -0.08,
+          ),
         );
-        const spots: [number, number, number, number, number][] = [];
-        for (const x of [-0.18, 0, 0.18])
-          for (const z of [-0.18, 0, 0.18]) spots.push([x, top + 0.06, z, 0, 0]);
-        for (const y of [-0.12, 0.12]) {
-          spots.push([top + 0.06, y, 0, 0, -Math.PI / 2]);
-          spots.push([-top - 0.06, y, 0, 0, Math.PI / 2]);
-          spots.push([0, y, -top - 0.06, -Math.PI / 2, 0]);
-        }
-        for (const [x, y, z, rx, rz] of spots) {
-          const m = new THREE.Mesh(cone, accent);
-          m.position.set(x, y, z);
-          m.rotation.set(rx, 0, rz);
-          h.add(m);
-        }
-        if (look.top === 'spikes') h.add(box(stem, 0.06, 0.14, 0.06, 0, top + 0.13, 0));
+        break;
+      case 'hijab': {
+        // A veil around the head and down to the shoulders, the face open at the front.
+        h.add(box(hair, s + 0.1, 0.1, s + 0.1, 0, t + 0.04, 0));
+        h.add(box(hair, s + 0.1, s + 0.3, 0.1, 0, -0.1, -t - 0.04));
+        for (const x of [-1, 1]) h.add(box(hair, 0.08, s + 0.3, s + 0.1, x * (t + 0.04), -0.1, 0));
+        h.add(box(dark, s + 0.12, 0.12, s * 0.5, 0, -t - 0.16, 0.06));
+        break;
+      }
+      case 'turban':
+        h.add(box(hair, s + 0.1, 0.26, s + 0.1, 0, t + 0.08, 0));
+        h.add(box(dark, 0.16, 0.16, 0.06, 0, t + 0.06, t + 0.06));
+        break;
+      case 'beanie': {
+        const hat = stage.material(p.hat ?? p.hairColor, { rough: 0.8 });
+        h.add(box(hat, s + 0.08, 0.24, s + 0.08, 0, t + 0.04, 0));
+        h.add(
+          box(
+            stage.material(shade(p.hat ?? p.hairColor, 0.8), { rough: 0.8 }),
+            s + 0.1,
+            0.08,
+            s + 0.1,
+            0,
+            t - 0.08,
+            0,
+          ),
+        );
+        break;
+      }
+      case 'cap': {
+        const hat = stage.material(p.hat ?? p.hairColor, { rough: 0.7 });
+        h.add(box(hat, s + 0.06, 0.14, s + 0.06, 0, t + 0.04, 0));
+        h.add(box(hat, s * 0.8, 0.04, 0.24, 0, t - 0.01, t + 0.12));
+        sides(0.16);
         break;
       }
     }
@@ -349,9 +422,9 @@ export class BlockAvatar {
     return this.shadow ? [this.root, this.shadow] : [this.root];
   }
 
+  /** The player colour: the ring under the feet and the badge on the chest. */
   setColor(color: string): void {
-    this.torsoMat.color.set(color);
-    this.armMat.color.set(shade(color, 0.82));
+    this.badgeMat.color.set(color);
     this.ringMat.color.set(color);
   }
 

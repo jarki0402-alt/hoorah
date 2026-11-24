@@ -1,17 +1,23 @@
-import type { AdminPass } from '@hoorah/protocol';
+import { type AdminPass, DEFAULT_CONFIG } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { DAY, HOUR, MINUTE } from './format';
 import {
+  configChanged,
   countByStatus,
+  durationDays,
   effectiveStatus,
   endOfDay,
   extendEnd,
+  filterByKind,
   filterPasses,
   isValidEnd,
   memoryFill,
   memoryLevel,
   presetEnd,
+  USE_BY_PRESET_IDS,
   upsertPass,
+  upsertPasses,
+  useByEnd,
 } from './logic';
 
 /** Monday 16 November 2026, 14.23.17 local time. */
@@ -21,6 +27,12 @@ const pass = (over: Partial<AdminPass>): AdminPass => ({
   id: 1,
   code: 'SABTU16',
   label: 'Main bareng',
+  kind: 'shared',
+  durationMs: null,
+  maxUses: null,
+  uses: 0,
+  firstStartedAt: null,
+  lastRunsUntil: null,
   maxPlayers: 16,
   maxRooms: null,
   expiresAt: NOW + DAY,
@@ -101,6 +113,51 @@ describe('statuses and filters', () => {
     expect(changed.map((p) => p.id)).toEqual([3, 2, 1, 4]);
     expect(changed[2]?.status).toBe('active');
     expect(upsertPass(list, pass({ id: 9 })).map((p) => p.id)).toEqual([9, 3, 2, 1, 4]);
+  });
+});
+
+describe('pass kinds', () => {
+  const list = [
+    pass({ id: 1 }),
+    pass({ id: 2, kind: 'single', durationMs: 30 * DAY }),
+    pass({ id: 3, kind: 'promo', durationMs: 7 * DAY, maxUses: 50 }),
+    pass({ id: 4, kind: 'single', durationMs: 30 * DAY }),
+  ];
+
+  it('filters by kind, or keeps every pass', () => {
+    expect(filterByKind(list, 'single').map((p) => p.id)).toEqual([2, 4]);
+    expect(filterByKind(list, 'promo').map((p) => p.id)).toEqual([3]);
+    expect(filterByKind(list, 'all')).toHaveLength(4);
+  });
+
+  it('puts a new batch first in its own order and replaces repeats', () => {
+    const added = [pass({ id: 9 }), pass({ id: 8 }), pass({ id: 2, label: 'Baru' })];
+    const next = upsertPasses(list, added);
+    expect(next.map((p) => p.id)).toEqual([9, 8, 2, 1, 3, 4]);
+    expect(next[2]?.label).toBe('Baru');
+  });
+
+  it('turns a duration into whole days', () => {
+    expect(durationDays(null)).toBeNull();
+    expect(durationDays(30 * DAY)).toBe(30);
+    expect(durationDays(DAY + HOUR)).toBe(1);
+    expect(durationDays(MINUTE)).toBe(1);
+    expect(durationDays(0)).toBeNull();
+    expect(durationDays(undefined)).toBeNull();
+  });
+
+  it('keeps every use-by chip inside the window the server accepts', () => {
+    expect(useByEnd('30d', NOW)).toBe(new Date(2026, 11, 16, 23, 59).getTime());
+    for (const p of USE_BY_PRESET_IDS) expect(isValidEnd(useByEnd(p, NOW), NOW)).toBe(true);
+  });
+});
+
+describe('configChanged', () => {
+  it('sees a change in any field and nothing when equal', () => {
+    expect(configChanged(DEFAULT_CONFIG, { ...DEFAULT_CONFIG })).toBe(false);
+    expect(configChanged(DEFAULT_CONFIG, { ...DEFAULT_CONFIG, openAll: true })).toBe(true);
+    expect(configChanged(DEFAULT_CONFIG, { ...DEFAULT_CONFIG, weeklyGame: 'kuis' })).toBe(true);
+    expect(configChanged(DEFAULT_CONFIG, { ...DEFAULT_CONFIG, adSeconds: 20 })).toBe(true);
   });
 });
 

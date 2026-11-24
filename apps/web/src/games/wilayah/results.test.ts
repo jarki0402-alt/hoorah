@@ -1,4 +1,4 @@
-import { FRUITS, type PlayerInfo } from '@hoorah/protocol';
+import { FRUITS, lookOfFruit, type PlayerInfo } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { type Arena, type RunnerStats, type Standing, WilayahMatch } from './logic';
 import { buildResult, pickAwards, soloOutcome } from './results';
@@ -22,6 +22,7 @@ function standing(id: number, cells: number, rank: number, s: Partial<RunnerStat
       v: id,
       name: `P${id}`,
       fruit: FRUITS[id % FRUITS.length]!,
+      look: lookOfFruit(FRUITS[id % FRUITS.length]!),
       color: '#F2453D',
       connected: true,
       alive: true,
@@ -118,6 +119,7 @@ describe('phone views', () => {
     id,
     name: `P${id}`,
     fruit: FRUITS[id]!,
+    look: lookOfFruit(FRUITS[id]!),
     color: id === 1 ? '#F2453D' : '#2F8CFF',
     connected: true,
     isHost: id === 1,

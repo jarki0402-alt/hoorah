@@ -22,6 +22,8 @@ export default defineConfig({
       env: {
         PORT: String(E2E_SERVER_PORT),
         MAX_PLAYERS: '2',
+        // Every game playable in the flows; the free tier and its limits are switched on per test.
+        OPEN_ALL: '1',
         SNAPSHOT_FILE: 'test-results/rooms.json',
         DB_FILE: ':memory:',
         ADMIN_USERNAME: 'admin',

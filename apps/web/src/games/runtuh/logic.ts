@@ -5,7 +5,7 @@
  * the fallen come back next round. The last round (Gelap) scores double. DORONG shoves the
  * nearest player in front, then rests 3 seconds (owner's decision 2026-11-22).
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { rng, shuffle, type V3 } from '../../shared/kotak/math';
 import { KotakSim } from '../../shared/kotak/sim';
 import {
@@ -38,6 +38,7 @@ export interface PlayerInfo {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   cpu: boolean;
 }
@@ -249,7 +250,7 @@ export class RuntuhMatch {
     this.sim.removeBody(id);
   }
 
-  restyle(id: number, look: Partial<Pick<PlayerInfo, 'name' | 'fruit' | 'color'>>): void {
+  restyle(id: number, look: Partial<Pick<PlayerInfo, 'name' | 'fruit' | 'look' | 'color'>>): void {
     const p = this.player(id);
     if (p) Object.assign(p, look);
   }

@@ -1,6 +1,6 @@
 /**
- * Ular Arena entry: connect to the shell, rasterize the fruit heads, start Phaser (canvas 1.5x
- * the stage) under a Preact HUD, then hand control to the driver.
+ * Ular Arena entry: connect to the shell, start Phaser (canvas 1.5x the stage) under a Preact HUD,
+ * then hand control to the driver. Player heads are rasterized by the scene as looks show up.
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -12,7 +12,7 @@ import { boxAspect } from './layout';
 import { parseRounds } from './logic';
 import { ArenaScene } from './scene';
 import { STR } from './strings';
-import { loadHeads, RENDER_SCALE } from './textures';
+import { RENDER_SCALE } from './textures';
 
 function layer(stage: HTMLElement, className: string): HTMLDivElement {
   const el = document.createElement('div');
@@ -35,7 +35,6 @@ async function boot(): Promise<void> {
   if (!root) return;
   const { stage, width: stageWidth, height: stageHeight, onResize } = mountStage(root);
   // Start the slow work while the shell handshake runs.
-  const heads = loadHeads();
   const fonts = fontsReady();
   let game: HoorahGame;
   try {
@@ -44,13 +43,12 @@ async function boot(): Promise<void> {
     showError(stage);
     return;
   }
-  const images = await heads;
   await fonts;
 
   const world = layer(stage, 'ua-world');
   const hudHost = layer(stage, 'ua-hud-host');
 
-  const scene = new ArenaScene(images);
+  const scene = new ArenaScene();
   const width = stageWidth() * RENDER_SCALE;
   const height = stageHeight() * RENDER_SCALE;
   const phaser = new Phaser.Game({

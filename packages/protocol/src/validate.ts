@@ -1,4 +1,14 @@
-import { FRUITS, type Fruit, LIMITS, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './constants';
+import { isScreenId } from './access';
+import {
+  FRUITS,
+  type Fruit,
+  LIMITS,
+  MIRROR_KEY_ALPHABET,
+  MIRROR_KEY_LENGTH,
+  ROOM_CODE_ALPHABET,
+  ROOM_CODE_LENGTH,
+} from './constants';
+import { parseLook } from './look';
 import {
   type Channel,
   type ClientMsg,
@@ -46,6 +56,41 @@ export function generateRoomCode(random: () => number = Math.random): string {
   return code;
 }
 
+export function isMirrorKey(v: unknown): v is string {
+  if (typeof v !== 'string' || v.length !== MIRROR_KEY_LENGTH) return false;
+  for (const ch of v) if (!MIRROR_KEY_ALPHABET.includes(ch)) return false;
+  return true;
+}
+
+export function generateMirrorKey(random: () => number = Math.random): string {
+  let key = '';
+  for (let i = 0; i < MIRROR_KEY_LENGTH; i++) {
+    key += MIRROR_KEY_ALPHABET[Math.floor(random() * MIRROR_KEY_ALPHABET.length)];
+  }
+  return key;
+}
+
+/** Room code and secret of a far-away main screen link: `482917-K7M2Q9XA`, any letter case. */
+export interface MirrorLink {
+  code: string;
+  key: string;
+}
+
+/** The `<code>-<key>` part of a far-away main screen link, or null when it is not one. */
+export function parseMirrorLink(raw: unknown): MirrorLink | null {
+  if (typeof raw !== 'string' || raw.length > 32) return null;
+  const m = /^(\d{6})-([0-9a-z]{8})$/i.exec(raw.trim());
+  if (!m) return null;
+  const code = m[1]!;
+  const key = m[2]!.toUpperCase();
+  return isRoomCode(code) && isMirrorKey(key) ? { code, key } : null;
+}
+
+/** The `<code>-<key>` part of the link a far-away main screen opens. */
+export function formatMirrorLink(link: MirrorLink): string {
+  return `${link.code}-${link.key}`;
+}
+
 /** Collapses whitespace, drops control chars, trims to the limit. */
 export function sanitizeName(raw: string): string {
   const cleaned = raw
@@ -58,7 +103,7 @@ export function sanitizeName(raw: string): string {
 }
 
 function isTarget(v: unknown): v is RelayTarget {
-  return v === 'all' || v === 'screen' || (isInt(v) && v >= 1 && v <= 255);
+  return v === 'all' || v === 'screen' || v === 'mirror' || (isInt(v) && v >= 1 && v <= 255);
 }
 
 function isChannel(v: unknown): v is Channel {
@@ -80,23 +125,43 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case 'hello': {
       if (!isInt(m.v)) return null;
       if (m.role === 'screen') {
-        if (m.resume === undefined) return { t: 'hello', role: 'screen', v: m.v };
-        const r = m.resume;
-        if (!isObj(r) || !isRoomCode(r.code) || !isToken(r.token)) return null;
-        return { t: 'hello', role: 'screen', v: m.v, resume: { code: r.code, token: r.token } };
+        const msg: Extract<ClientMsg, { t: 'hello'; role: 'screen' }> = {
+          t: 'hello',
+          role: 'screen',
+          v: m.v,
+        };
+        if (m.resume !== undefined) {
+          const r = m.resume;
+          if (!isObj(r) || !isRoomCode(r.code) || !isToken(r.token)) return null;
+          msg.resume = { code: r.code, token: r.token };
+        }
+        // A malformed screen id is dropped (the room then works without one), never a reason to refuse.
+        if (isScreenId(m.screen)) msg.screen = m.screen;
+        return msg;
       }
       if (m.role === 'controller') {
-        if (!isRoomCode(m.code) || !isStr(m.name, 64) || !isFruit(m.fruit)) return null;
+        if (!isRoomCode(m.code) || !isStr(m.name, 64)) return null;
+        if (m.fruit !== undefined && !isFruit(m.fruit)) return null;
         const name = sanitizeName(m.name);
         if (!name) return null;
         if (m.token !== undefined && !isToken(m.token)) return null;
-        const msg: ClientMsg = { t: 'hello', role: 'controller', v: m.v, code: m.code, name, fruit: m.fruit };
+        const msg: ClientMsg = { t: 'hello', role: 'controller', v: m.v, code: m.code, name };
+        if (isFruit(m.fruit)) msg.fruit = m.fruit;
+        if (m.look !== undefined) {
+          const look = parseLook(m.look);
+          if (!look) return null;
+          msg.look = look;
+        }
         if (typeof m.token === 'string') msg.token = m.token;
         // A malformed remembered pass is dropped, never a reason to refuse the player.
         const pass =
           typeof m.pass === 'string' && m.pass.length <= PASS_CODE_MAX * 2 ? normalizePassCode(m.pass) : '';
         if (isPassCode(pass)) msg.pass = pass;
         return msg;
+      }
+      if (m.role === 'mirror') {
+        if (!isRoomCode(m.code) || !isMirrorKey(m.key)) return null;
+        return { t: 'hello', role: 'mirror', v: m.v, code: m.code, key: m.key };
       }
       return null;
     }
@@ -106,6 +171,14 @@ export function parseClientMsg(raw: string): ClientMsg | null {
     case 'ping':
       if (!isInt(m.id) || typeof m.ct !== 'number' || !Number.isFinite(m.ct)) return null;
       return { t: 'ping', id: m.id, ct: m.ct };
+    case 'profile': {
+      if (!isStr(m.name, 64)) return null;
+      const name = sanitizeName(m.name);
+      const look = parseLook(m.look);
+      if (m.picking !== undefined && typeof m.picking !== 'boolean') return null;
+      if (!name || !look) return null;
+      return m.picking ? { t: 'profile', name, look, picking: true } : { t: 'profile', name, look };
+    }
     case 'host':
     case 'kick':
       if (!isInt(m.id) || m.id < 1 || m.id > 255) return null;
@@ -120,6 +193,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       return { t: 'hostReply', accept: m.accept };
     case 'leave':
       return { t: 'leave' };
+    case 'mirrorsOff':
+      return { t: 'mirrorsOff' };
     case 'status': {
       if (!(PLATFORM_PAGES as readonly string[]).includes(m.page as string)) return null;
       if (m.gameId !== null && (typeof m.gameId !== 'string' || !/^[a-z0-9-]{1,24}$/.test(m.gameId)))
@@ -135,6 +210,8 @@ export function parseClientMsg(raw: string): ClientMsg | null {
       }
       return status;
     }
+    case 'trial':
+      return { t: 'trial' };
     case 'pass': {
       if (typeof m.code !== 'string' || m.code.length > PASS_CODE_MAX * 2) return null;
       const code = normalizePassCode(m.code);

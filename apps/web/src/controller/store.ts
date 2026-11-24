@@ -1,29 +1,37 @@
 import {
+  type AppConfig,
   type ControllerView,
+  DEFAULT_CONFIG,
   type ErrorCode,
   encodeInput,
-  FRUITS,
-  type Fruit,
+  FREE_ACCESS,
+  HAIR_COLORS,
   type HostCommand,
-  isFruit,
   isPassCode,
   isRoomCode,
   LIMITS,
+  type Look,
   type NavKey,
   normalizePassCode,
   normalizeRoomCode,
+  OUTFIT_COLORS,
   type PassReject,
+  PERSON_IDS,
   type PlatformPage,
   type PlayerInfo,
   PROTOCOL_VERSION,
   packStick,
+  parseLook,
   type Reaction,
+  type RoomAccess,
   type RoomPass,
   type ServerMsg,
+  SKIN_TONES,
   STICK_OP,
   sanitizeName,
+  type TrialReject,
 } from '@hoorah/protocol';
-import { batch, computed, signal } from '@preact/signals';
+import { batch, computed, effect, signal } from '@preact/signals';
 import { prefs, session, vibrate } from '../shared/device';
 import { primeHaptics } from '../shared/haptics';
 import { Net, type NetStatus } from '../shared/net';
@@ -34,11 +42,11 @@ export type Stage = 'code' | 'profile' | 'joining' | 'room' | 'error';
 export const stage = signal<Stage>('code');
 export const code = signal('');
 export const name = signal(prefs.get('name', ''));
-// New players start on a random fruit (not always semangka), so a room of quick joiners doesn't
-// look like eight identical avatars.
-export const fruit = signal<Fruit>(
-  isFruit(prefs.get('fruit', '')) ? prefs.get<Fruit>('fruit', 'semangka') : randomFruitOf(),
-);
+// New players start on a random character, so a room of quick joiners doesn't look like
+// identical avatars. The look is remembered on this phone.
+export const look = signal<Look>(parseLook(prefs.get<unknown>('look', null)) ?? randomLook());
+/** Right after joining: the full-screen avatar maker shows until "Siap" (owner 2026-11-24). */
+export const picking = signal(false);
 export const meId = signal(0);
 export const players = signal<PlayerInfo[]>([]);
 export interface PlatformState {
@@ -57,6 +65,8 @@ export interface PlatformState {
   tab?: string;
   /** The main screen shows the game's tutorial: who already pressed "Paham!". */
   tutorial?: { ready: number[] };
+  /** A far-away main screen watches (long-distance play): only games marked for it start. */
+  remote?: boolean;
 }
 export const platform = signal<PlatformState>({
   page: 'join',
@@ -83,6 +93,13 @@ export type PassState =
   | { s: 'ok'; pass: RoomPass }
   | { s: 'error'; reason: PassReject };
 export const passState = signal<PassState>({ s: 'idle' });
+/** What the room has (free, trial, Pass, open), straight from the server. */
+export const roomAccess = signal<RoomAccess>(FREE_ACCESS);
+/** The owner's settings (trial length, "Game Minggu Ini"), straight from the server. */
+export const appConfig = signal<AppConfig>(DEFAULT_CONFIG);
+/** The free trial asked for from this phone: waiting for the server, or why it did not start. */
+export type TrialState = { s: 'idle' } | { s: 'sending' } | { s: 'error'; reason: TrialReject | 'offline' };
+export const trialState = signal<TrialState>({ s: 'idle' });
 /** The pending Host offer this phone is part of (it made it, or it was asked), from the server. */
 export const hostOffer = signal<{ from: number; to: number } | null>(null);
 /** A short notice about the Host role on this phone: a new Host, or how this phone's offer ended. */
@@ -159,6 +176,27 @@ export function submitPass(raw: string): void {
   connect(passCode);
 }
 
+/** "Coba gratis" from this phone: starts the main screen's free trial (a `room` message answers). */
+export function requestTrial(): void {
+  if (trialState.value.s === 'sending') return;
+  if (!net?.send({ t: 'trial' })) {
+    trialState.value = { s: 'error', reason: 'offline' };
+    return;
+  }
+  trialState.value = { s: 'sending' };
+  haptic(12);
+}
+
+function onTrialReject(reason: TrialReject): void {
+  if (reason === 'used') roomAccess.value = { ...roomAccess.value, trialUsed: true };
+  // `not_free`: the room already has everything, nothing to show.
+  trialState.value = reason === 'not_free' ? { s: 'idle' } : { s: 'error', reason };
+}
+
+export function resetTrialState(): void {
+  trialState.value = { s: 'idle' };
+}
+
 export function resetPassState(): void {
   passState.value = { s: 'idle' };
 }
@@ -171,17 +209,56 @@ export function setCode(raw: string): boolean {
   return isRoomCode(c);
 }
 
-export function pickFruit(f: Fruit): void {
-  fruit.value = f;
-  prefs.set('fruit', f);
+export function setLook(l: Look): void {
+  look.value = l;
+  prefs.set('look', l);
 }
 
-export function randomFruit(): Fruit {
-  return randomFruitOf();
+/** A random whole number below n (a function declaration: `look` above calls it at load). */
+function pick(n: number): number {
+  return Math.floor(Math.random() * n);
 }
 
-function randomFruitOf(): Fruit {
-  return FRUITS[Math.floor(Math.random() * FRUITS.length)]!;
+/** "Acak": a random character, half the time with random colours and hair too. */
+export function randomLook(): Look {
+  const c = PERSON_IDS[pick(PERSON_IDS.length)]!;
+  if (Math.random() < 0.5) return { c };
+  return {
+    c,
+    s: 1 + pick(SKIN_TONES),
+    h: PERSON_IDS[pick(PERSON_IDS.length)]!,
+    hc: pick(HAIR_COLORS),
+    oc: pick(OUTFIT_COLORS),
+  };
+}
+
+/** Name and look to the room; `choosing` keeps "memilih tokoh..." on the main screen. */
+function sendProfile(choosing: boolean): void {
+  net?.send({ t: 'profile', name: name.value, look: look.value, ...(choosing ? { picking: true } : {}) });
+}
+
+/** A pick in the avatar maker after joining: shown on the main screen at once. */
+export function pickLook(l: Look): void {
+  setLook(l);
+  if (picking.value) sendProfile(true);
+}
+
+/** "Siap": done choosing, on to the lobby. */
+export function finishPicking(): void {
+  if (!picking.value) return;
+  picking.value = false;
+  sendProfile(false);
+}
+
+/** Lobby "Ubah": a new name and look for this player, shown on every screen at once. */
+export function saveProfile(newName: string, l: Look): boolean {
+  const cleaned = sanitizeName(newName);
+  if (!cleaned) return false;
+  name.value = cleaned;
+  prefs.set('name', cleaned);
+  setLook(l);
+  net?.send({ t: 'profile', name: cleaned, look: l });
+  return true;
 }
 
 export function join(): void {
@@ -189,31 +266,67 @@ export function join(): void {
   if (!cleaned || !isRoomCode(code.value)) return;
   name.value = cleaned;
   prefs.set('name', cleaned);
-  prefs.set('fruit', fruit.value);
+  prefs.set('look', look.value);
   session.set('last', { code: code.value });
   connect();
 }
 
+/** The connection opened early on the name page, waiting to say hello (see `warmUp`). */
+let warm: { net: Net; code: string } | null = null;
+
+/**
+ * On the name page the connection to the server opens already: the handshakes (the slow part
+ * from Indonesia to the server) happen while the player types, so "Masuk" only sends the hello.
+ */
+function warmUp(): void {
+  if (net || !isRoomCode(code.value)) return;
+  const n = makeNet(code.value, undefined, true);
+  warm = { net: n, code: code.value };
+  net = n;
+  n.start();
+}
+
+effect(() => {
+  if (stage.value === 'profile') warmUp();
+});
+
 function connect(typedPass?: string): void {
-  net?.stop();
   error.value = null;
+  // The warm connection to this room takes the hello now; anything else starts afresh.
+  if (warm && net === warm.net && warm.code === code.value && typedPass === undefined) {
+    const n = warm.net;
+    warm = null;
+    stage.value = 'joining';
+    n.release();
+    return;
+  }
+  warm = null;
+  net?.stop();
   stage.value = 'joining';
-  const roomCode = code.value;
-  const n = new Net(() => {
-    const token = session.get<string>(`token.${roomCode}`);
-    // Reconnects of the same tab resend the typed code until it has been accepted or refused.
-    helloPass = typedPass ?? rememberedPass();
-    return {
-      t: 'hello',
-      role: 'controller',
-      v: PROTOCOL_VERSION,
-      code: roomCode,
-      name: name.value,
-      fruit: fruit.value,
-      ...(token ? { token } : {}),
-      ...(helloPass ? { pass: helloPass } : {}),
-    };
-  });
+  const n = makeNet(code.value, typedPass, false);
+  net = n;
+  n.start();
+}
+
+function makeNet(roomCode: string, typedPass: string | undefined, hold: boolean): Net {
+  const n = new Net(
+    () => {
+      const token = session.get<string>(`token.${roomCode}`);
+      // Reconnects of the same tab resend the typed code until it has been accepted or refused.
+      helloPass = typedPass ?? rememberedPass();
+      return {
+        t: 'hello',
+        role: 'controller',
+        v: PROTOCOL_VERSION,
+        code: roomCode,
+        name: name.value,
+        look: look.value,
+        ...(token ? { token } : {}),
+        ...(helloPass ? { pass: helloPass } : {}),
+      };
+    },
+    { hold },
+  );
   n.on('status', (s) => {
     netStatus.value = s;
   });
@@ -238,8 +351,7 @@ function connect(typedPass?: string): void {
   const rtc = new ControllerRtc(n);
   // Development builds only: lets tests break the direct link on purpose.
   if (import.meta.env.DEV) (window as unknown as { __hoorahRtc?: ControllerRtc }).__hoorahRtc = rtc;
-  net = n;
-  n.start();
+  return n;
 }
 
 export function retry(): void {
@@ -247,6 +359,7 @@ export function retry(): void {
 }
 
 export function leave(): void {
+  picking.value = false;
   net?.send({ t: 'leave' });
   net?.stop();
   net = null;
@@ -299,11 +412,18 @@ function onServer(m: ServerMsg): void {
         screenOnline.value = m.screenOnline;
         roomSeats.value = m.maxPlayers;
         roomPass.value = m.pass;
+        roomAccess.value = m.access;
+        appConfig.value = m.config;
         if (passState.value.s === 'sending')
           passState.value = m.pass ? { s: 'ok', pass: m.pass } : { s: 'idle' };
         stage.value = 'room';
       });
-      if (!m.resumed) haptic([30, 40, 30]);
+      if (!m.resumed) {
+        haptic([30, 40, 30]);
+        // A fresh join opens the avatar maker; the main screen marks the seat until "Siap".
+        picking.value = true;
+        sendProfile(true);
+      }
       return;
     case 'players':
       players.value = m.players;
@@ -315,7 +435,15 @@ function onServer(m: ServerMsg): void {
       batch(() => {
         roomSeats.value = m.maxPlayers;
         roomPass.value = m.pass;
+        roomAccess.value = m.access;
+        if (m.access.kind === 'trial' && trialState.value.s === 'sending') trialState.value = { s: 'idle' };
       });
+      return;
+    case 'config':
+      appConfig.value = m.config;
+      return;
+    case 'trial':
+      if (!m.ok) onTrialReject(m.reason);
       return;
     case 'pass':
       onPassAnswer(m);
@@ -393,7 +521,7 @@ function onPassAnswer(m: Extract<ServerMsg, { t: 'pass' }>): void {
     haptic([20, 30, 20]);
     return;
   }
-  if (sent && (m.reason === 'invalid' || m.reason === 'expired')) forgetPass(sent);
+  if (sent && (m.reason === 'invalid' || m.reason === 'expired' || m.reason === 'used')) forgetPass(sent);
   // A remembered code failing quietly in the background is not this phone's business to show.
   if (passState.value.s === 'sending') passState.value = { s: 'error', reason: m.reason };
   helloPass = null;
@@ -423,6 +551,7 @@ function onPlatform(data: unknown): void {
         ...(p.tutorial && Array.isArray(p.tutorial.ready)
           ? { tutorial: { ready: p.tutorial.ready.filter((x): x is number => typeof x === 'number') } }
           : {}),
+        ...(p.remote === true ? { remote: true } : {}),
       };
       if (leavingGame || enteringGame) view.value = null;
     });
@@ -561,3 +690,9 @@ export function setVibration(on: boolean): void {
   prefs.set('vibrate', on);
   if (on) vibrate(30);
 }
+
+// The Host started a game while this phone was still choosing: it joins with the look it has.
+effect(() => {
+  const pg = platform.value.page;
+  if (picking.value && (pg === 'game' || pg === 'loading')) finishPicking();
+});

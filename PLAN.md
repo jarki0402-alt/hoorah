@@ -57,6 +57,18 @@ Pemilik minta harga "di-keep dulu". Belum keputusan final; tulis ke PRD 3.4 hany
 - **Update tanpa ganggu pemain:** server terima protokol N dan N-1 (sekarang versi beda = ditolak, `rooms.ts` cek `PROTOCOL_VERSION`), file web per versi, reload hanya di lobi/beranda, deploy jam sepi, migrasi DB hanya menambah, saklar per game di admin.
 - **Lainnya:** Litestream SQLite → R2, Cloudflare Pages untuk file web (perlu izin, membalik keputusan nginx), pemantauan `/health` + Sentry, legal (NIB, PSE Komdigi, kebijakan privasi/refund, merek DJKI, cek IGRS).
 
+## 3b. Rencana berikutnya (dibahas 2026-11-23)
+
+1. **Update tanpa memutus pemain** (server terima protokol N dan N-1, muat ulang hanya di beranda). Wajib sebelum pengguna sungguhan.
+2. **Main Jarak Jauh** (khusus Pass): satu room bisa berisi beberapa layar utama; tiap layar menjalankan game untuk pemain di rumahnya, server menggabungkan dan menjadi juri.
+   - Kelompok A, giliran/jawaban (mudah): Ular Tangga, Ludo, Catur, Congklak, Juragan, Kuis, Kompak Gak?, Sambung Kata, Juara Eja, Penyusup, Kampung Siluman, Rusun, Seluncur Es.
+   - Kelompok B, main masing-masing + bayangan (sedang): Obby (tabrakan beda rumah ditiadakan), Lari Terus, Balap Karung, Nyebrang, Makan Kerupuk, Langkah Maut, Jago Masak.
+   - Kelompok C, server jadi juri (sedang–sulit): Tarik Tambang, Bom Oper, Lantai Runtuh, Ular Arena, Rebut Wilayah, Hantu Tak Terlihat, Dapur Heboh.
+   - Kelompok D, fisika bersama (sulit, tebak-koreksi): Bajaj Rush, Satu Tali (atau tali per rumah), Petualangan Warna. Jauh lebih enak dengan server Jakarta (berbayar, tanya dulu).
+   - Room publik dengan orang asing dan chat bebas: ditunda (moderasi, lobi kosong, server).
+3. **Pembayaran:** QRIS statis toko pemilik (nominal unik disisipkan, konfirmasi di admin, aktif sementara 2 jam), lalu Midtrans. Hasil akhirnya selalu kode Pass.
+4. Nama dan logo baru (calon: Ruang Mabar), Cloudflare Pages + TURN, login Google opsional, Ajak Teman, chat cepat.
+
 ## 4. Belum terealisasi
 
 ### Dari Antrean di `PROGRESS.md`

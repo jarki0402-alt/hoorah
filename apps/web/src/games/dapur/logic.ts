@@ -6,7 +6,7 @@
  * Pure and deterministic: no DOM, no timers. The director feeds phone input and the game clock;
  * the renderer and HUD only read the state and the drained events.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { seeded } from '../../shared/art/svg';
 import {
   addToPlate,
@@ -57,7 +57,7 @@ import {
   WASH_MS,
 } from './kitchens';
 import { OrderBook, type Served, type Ticket } from './orders';
-import { partOf } from './recipes';
+import { type DishId, partOf } from './recipes';
 import { pickLandingCounter, pickReceiver } from './throw';
 
 export const STEP_MS = 1000 / 60;
@@ -82,6 +82,8 @@ export interface CookInfo {
   id: number;
   name: string;
   fruit: Fruit;
+  /** The player's avatar, drawn as the cook's head. */
+  look: Look;
   color: string;
 }
 
@@ -249,7 +251,16 @@ export interface MatchOptions {
   cooks: readonly (CookInfo & { side: Side; cpu?: boolean })[];
   now: number;
   seed?: number;
+  /**
+   * Start with the guided practice (first game on this main screen): after the countdown the
+   * kitchen runs without a round clock, with one ticket that never leaves, nothing burns and the
+   * score does not count. `endPractice` then resets the kitchen and starts the real countdown.
+   */
+  practice?: boolean;
 }
+
+/** The one dish the practice teaches: basket, board, fryer, plate, pass. Every kitchen has them. */
+export const PRACTICE_DISH: DishId = 'kentang';
 
 const isCooker = (k: StationKind): k is 'stove' | 'fryer' | 'wok' =>
   k === 'stove' || k === 'fryer' || k === 'wok';
@@ -274,15 +285,16 @@ export class DapurMatch {
   readonly stations: Station[] = [];
   readonly floor: FloorItem[] = [];
   readonly flights: Flight[] = [];
-  readonly orders: OrderBook;
+  private book: OrderBook;
   /** Station index per tile, -1 floor, -2 wall. */
   readonly cells = new Int16Array(COLS * ROWS);
   phase: Phase = 'countdown';
   countValue = 3;
-  readonly startAt: number;
-  readonly goAt: number;
-  readonly endAt: number;
-  readonly moveAt: number | null;
+  private startMs: number;
+  private goMs: number;
+  private endMs: number;
+  private moveMs: number | null;
+  private practicing: boolean;
   moved = false;
   /** Stars thresholds for this crew (fixed at the start). */
   readonly thresholds: [number, number, number];
@@ -302,30 +314,115 @@ export class DapurMatch {
     this.difficulty = o.difficulty;
     this.tuning = TUNING[o.difficulty];
     this.rnd = seeded(o.seed ?? 0x5eed);
-    this.startAt = o.now;
-    this.goAt = o.now + COUNTDOWN_MS;
-    this.endAt = this.goAt + this.tuning.roundMs;
-    this.moveAt = this.def.move ? this.goAt + this.tuning.roundMs * this.def.move.atFrac : null;
+    this.practicing = o.practice ?? false;
+    this.startMs = o.now;
+    this.goMs = o.now + COUNTDOWN_MS;
+    this.endMs = this.goMs + this.tuning.roundMs;
+    this.moveMs = this.def.move ? this.goMs + this.tuning.roundMs * this.def.move.atFrac : null;
     this.lastT = o.now;
     this.simT = o.now;
-    this.buildStations();
+    for (const s of this.freshStations()) this.stations.push(s);
     const crew = Math.max(1, o.cooks.length);
     this.thresholds = starThresholds(this.def, o.difficulty, crew);
-    this.orders = new OrderBook({
-      menu: this.def.menu,
-      first: this.def.first,
+    this.book = this.makeOrders(crew);
+    for (const c of o.cooks) this.addChef(c, c.side, c.cpu ?? false);
+  }
+
+  /** The order book: the real menu, or only the practice dish (whose ticket never leaves). */
+  private makeOrders(crew: number): OrderBook {
+    return new OrderBook({
+      menu: this.practicing ? [PRACTICE_DISH] : this.def.menu,
+      first: this.practicing ? PRACTICE_DISH : this.def.first,
       gapMs: (this.def.orderGapMs * this.tuning.gapMul) / crewFactor(crew),
       waitMul: this.tuning.waitMul,
       missPenalty: this.tuning.missPenalty,
       roundMs: this.tuning.roundMs,
       rnd: this.rnd,
     });
-    for (const c of o.cooks) this.addChef(c, c.side, c.cpu ?? false);
+  }
+
+  get orders(): OrderBook {
+    return this.book;
+  }
+
+  get startAt(): number {
+    return this.startMs;
+  }
+
+  /** Game time the cooking starts (the practice's start while practising). */
+  get goAt(): number {
+    return this.goMs;
+  }
+
+  get endAt(): number {
+    return this.endMs;
+  }
+
+  get moveAt(): number | null {
+    return this.moveMs;
+  }
+
+  /** True during the guided practice (no clock, no score, nothing burns). */
+  get practice(): boolean {
+    return this.practicing;
+  }
+
+  /**
+   * Ends the practice at game time t: the kitchen goes back to how it started (stations, plates,
+   * floor, cooks at their spots with empty hands and clean aprons, stats and score at zero) and
+   * the real round begins with its usual countdown.
+   */
+  endPractice(t: number): void {
+    if (!this.practicing) return;
+    this.practicing = false;
+    const fresh = this.freshStations();
+    for (let i = 0; i < this.stations.length; i++) {
+      const f = fresh[i];
+      if (f) Object.assign(this.stations[i]!, f);
+    }
+    this.floor.length = 0;
+    this.flights.length = 0;
+    this.returns.length = 0;
+    const placed: [number, number] = [0, 0];
+    for (const c of this.chefs) {
+      const p = spawnPoint(this.def, c.side, placed[c.side]++);
+      c.x = c.prevX = p.x;
+      c.y = c.prevY = p.y;
+      c.faceX = c.side === 0 ? 1 : -1;
+      c.faceY = 0;
+      c.held = null;
+      c.stains = [];
+      c.stats = emptyStats();
+      c.staggerUntil = 0;
+      c.hitAt = Number.NEGATIVE_INFINITY;
+      c.target = null;
+      c.busy = null;
+      c.jobMs = 0;
+      c.moving = false;
+    }
+    this.book = this.makeOrders(Math.max(1, this.chefs.length));
+    this.phase = 'countdown';
+    this.countValue = 3;
+    this.startMs = t;
+    this.goMs = t + COUNTDOWN_MS;
+    this.endMs = this.goMs + this.tuning.roundMs;
+    this.moveMs = this.def.move ? this.goMs + this.tuning.roundMs * this.def.move.atFrac : null;
+    this.moved = false;
+    this.lastSecond = -1;
+    this.warned = false;
+    this.moveWarned = false;
+  }
+
+  /** Gap between the two carts (tiles) at game time t; they stand still while practising. */
+  gap(t: number): number {
+    return this.practicing ? 0 : cartGap(this.def, this.difficulty, t - this.goMs);
   }
 
   /* ------------------------------------------------------------------ setup */
 
-  private buildStations(): void {
+  /** Every station as the kitchen starts (also fills the tile index). */
+  private freshStations(): Station[] {
+    const out: Station[] = [];
     this.cells.fill(-1);
     for (let r = 0; r < ROWS; r++) {
       const row = this.def.grid[r] ?? '';
@@ -344,7 +441,7 @@ export class DapurMatch {
           continue;
         }
         const s: Station = {
-          id: this.stations.length,
+          id: out.length,
           kind: cell.kind,
           x: c,
           y: r,
@@ -361,9 +458,10 @@ export class DapurMatch {
           plates: cell.kind === 'rack' ? this.def.plates : 0,
         };
         this.cells[r * COLS + c] = s.id;
-        this.stations.push(s);
+        out.push(s);
       }
     }
+    return out;
   }
 
   addChef(info: CookInfo, side: Side, cpu = false): Chef {
@@ -513,7 +611,7 @@ export class DapurMatch {
       ey = s.y + 0.5;
     }
     const dist = Math.hypot(ex - c.x, ey - c.y);
-    const gap = cartGap(this.def, this.difficulty, this.simT - this.goAt);
+    const gap = this.gap(this.simT);
     const dur = Math.min(1000, THROW_MS + Math.max(0, dist - 3) * 35 + gap * 120);
     const flight: Flight = {
       id: this.nextId++,
@@ -802,7 +900,7 @@ export class DapurMatch {
 
   /** Remaining round time (ms) at game time t. */
   timeLeft(t: number): number {
-    if (this.phase === 'countdown') return this.tuning.roundMs;
+    if (this.phase === 'countdown' || this.practicing) return this.tuning.roundMs;
     return Math.max(0, this.endAt - t);
   }
 
@@ -874,6 +972,8 @@ export class DapurMatch {
     for (const s of this.stations) this.heat(s, STEP_MS);
     this.updateFlights(t);
     this.updateReturns(t);
+    // Practice: the one ticket stays and no new ones come.
+    if (this.practicing) return;
     const { added, missed } = this.orders.update(t, this.endAt);
     for (const k of added) this.emit({ type: 'order', ticket: k });
     for (const k of missed) this.emit({ type: 'missed', ticket: k, penalty: this.tuning.missPenalty });
@@ -894,6 +994,7 @@ export class DapurMatch {
       return;
     }
     if (this.phase === 'play') {
+      if (this.practicing) return;
       const left = this.endAt - t;
       if (!this.warned && left <= WARNING_LEFT_MS) {
         this.warned = true;
@@ -1131,7 +1232,7 @@ export class DapurMatch {
     }
     if (s.item?.k !== 'food' || s.item.food !== COOKED[kind]) return;
     const burn = this.tuning.burnMs;
-    if (burn === null) return;
+    if (burn === null || this.practicing) return;
     s.cookMs += dt;
     if (!s.warned && s.cookMs >= cookMs + burn - WARN_MS) {
       s.warned = true;

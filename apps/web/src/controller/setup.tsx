@@ -1,17 +1,10 @@
-import {
-  FRUIT_LABELS,
-  FRUITS,
-  formatRoomCode,
-  LIMITS,
-  type NearbyRoom,
-  ROOM_CODE_LENGTH,
-} from '@hoorah/protocol';
+import { formatRoomCode, LIMITS, type NearbyRoom, ROOM_CODE_LENGTH } from '@hoorah/protocol';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { switchRole } from '../shared/device';
 import { Avatar, Icon, Logo } from '../shared/ui';
 import { PassForm } from './pass';
 import { enterFullscreen } from './screenmode';
-import { changeCode, code, error, fruit, join, name, pickFruit, retry, setCode, stage } from './store';
+import { changeCode, code, error, join, name, retry, setCode, stage } from './store';
 import { STR } from './strings';
 
 export function CodePage() {
@@ -120,7 +113,7 @@ function NearbyScreens() {
         >
           <span class="avatar-stack">
             {r.players.slice(0, 4).map((p) => (
-              <Avatar key={p.name} fruit={p.fruit} ring={p.color} size={30} />
+              <Avatar key={p.name} look={p.look} fruit={p.fruit} ring={p.color} size={30} />
             ))}
           </span>
           <span class="nearby-text">
@@ -187,29 +180,6 @@ export function ProfilePage() {
             Masuk
           </button>
         </div>
-        <div class="pane profile-fruits">
-          <div class="muted profile-label">Pilih buahmu</div>
-          <fieldset class="fruit-grid">
-            <legend class="sr-only">Pilih avatar buah</legend>
-            {FRUITS.map((f) => (
-              <button
-                type="button"
-                key={f}
-                aria-pressed={fruit.value === f}
-                class={`fruit-btn ${fruit.value === f ? 'on' : ''}`}
-                onClick={() => pickFruit(f)}
-              >
-                <Avatar
-                  fruit={f}
-                  ring={fruit.value === f ? '#FF5A1F' : '#3C3E44'}
-                  size={54}
-                  face={fruit.value === f ? 'wow' : 'happy'}
-                />
-                {FRUIT_LABELS[f]}
-              </button>
-            ))}
-          </fieldset>
-        </div>
       </div>
     </form>
   );
@@ -236,6 +206,8 @@ const ERRORS: Record<string, { title: string; body: string; retry: boolean }> = 
   pass_invalid: { title: STR.passInvalidTitle, body: STR.passErr.invalid, retry: true },
   pass_expired: { title: STR.passExpiredTitle, body: STR.passErr.expired, retry: true },
   pass_busy: { title: STR.passBusyTitle, body: STR.passErr.busy, retry: true },
+  // A single-use code already spent on another main screen (if the server refuses the join with it).
+  pass_used: { title: STR.passUsedTitle, body: STR.passErr.used, retry: true },
   room_closed: {
     title: 'Room sudah ditutup',
     body: 'Layar utama sudah lama tidak aktif. Scan QR yang baru di layar utama.',

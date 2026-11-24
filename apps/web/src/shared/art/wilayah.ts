@@ -1,4 +1,5 @@
-import { type Face, fruitMarkup } from './fruits';
+import type { Face } from './fruits';
+import { castHead } from './people';
 import { f1, svgDoc } from './svg';
 
 /**
@@ -77,7 +78,7 @@ function head(
   y: number,
   r: number,
   ring: string,
-  fruit: Parameters<typeof fruitMarkup>[0],
+  fruit: Parameters<typeof castHead>[0],
   face: Face,
   dir: number,
 ): string {
@@ -88,7 +89,7 @@ function head(
     `<circle cx="${x}" cy="${y}" r="${r + 3}" fill="#111214"/>`,
     `<circle cx="${x}" cy="${y}" r="${r}" fill="${ring}"/>`,
     `<circle cx="${x}" cy="${y}" r="${r - 6}" fill="#FFFAF0"/>`,
-    `<g transform="translate(${f1(x - r + 4)} ${f1(y - r + 4)}) scale(${f1(s * 100) / 100})">${fruitMarkup(fruit, face)}</g>`,
+    `<g transform="translate(${f1(x - r + 4)} ${f1(y - r + 4)}) scale(${f1(s * 100) / 100})">${castHead(fruit, face)}</g>`,
   ].join('');
 }
 

@@ -3,7 +3,7 @@
  * middle, the clock and how many residents are still safe, a short centre callout, a feed, and
  * the centre cards (setup mirrored from the Host's phone, the secret role deal, the round end).
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
 import { THUMBS } from '../../controller/thumbs/hantu';
@@ -16,7 +16,7 @@ import type { Fright } from './world';
 export interface Who {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -118,7 +118,7 @@ function OverlayView({ o }: { o: Overlay }) {
         <div class="ht-faces">
           {o.people.map((p) => (
             <div key={p.id} class="ht-face">
-              <Avatar fruit={p.fruit} ring={p.color} size={72} face="wow" />
+              <Avatar look={p.look} ring={p.color} size={72} face="wow" />
               <span class="ht-q">?</span>
               <span class="ht-face-name">{p.name}</span>
             </div>
@@ -139,7 +139,7 @@ function OverlayView({ o }: { o: Overlay }) {
           <div class="ht-rows">
             {o.rows.map((r) => (
               <div key={r.id} class="ht-row">
-                <Avatar fruit={r.fruit} ring={r.color} size={36} />
+                <Avatar look={r.look} ring={r.color} size={36} />
                 <span class="ht-row-name">{r.name}</span>
                 <span class="ht-row-note">{r.note}</span>
                 <span class="ht-row-pts">+{r.points}</span>

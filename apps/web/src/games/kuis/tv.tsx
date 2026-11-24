@@ -11,7 +11,7 @@ import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import type { Face } from '../../shared/art/fruits';
 import { Avatar, Icon } from '../../shared/ui';
 import { backdropUrl } from './backdrop';
-import { type KuisMatch, type PlayerRecord, type RoundOutcome, type SoloRecord, TIMING } from './logic';
+import { type KuisScene, type SceneOutcome, type SceneRecord, type SoloRecord, TIMING } from './logic';
 import { formatNumber, formatSeconds, LETTERS, STR } from './strings';
 import { OPTION_COLORS } from './views';
 
@@ -35,16 +35,19 @@ export class FrameBus {
 }
 
 export interface TvModel {
-  match: KuisMatch;
+  match: KuisScene;
   version: ReadonlySignal<number>;
   waiting: ReadonlySignal<boolean>;
   frame: FrameBus;
-  info(id: number): PlayerInfo | undefined;
+  info(id: number): SeatInfo | undefined;
   /** Solo: the record when the match started (null before the first solo match on this screen). */
   recordBefore: number | null;
   /** Solo: how the final score compares with the record, once the final card is up. */
   record: SoloRecord | null;
 }
+
+/** The part of a player card the stage draws (a mirror screen gets it from the Host's state). */
+export type SeatInfo = Pick<PlayerInfo, 'id' | 'name' | 'color' | 'look'>;
 
 /** Live stage size in stage px (see `mountStage`). */
 export interface StageSize {
@@ -80,7 +83,7 @@ export function KuisTv({ model, size }: { model: TvModel; size: ReadonlySignal<S
   const { match } = model;
   const players = match.roster
     .map((rec) => ({ rec, info: model.info(rec.id) }))
-    .filter((p): p is { rec: PlayerRecord; info: PlayerInfo } => p.info !== undefined);
+    .filter((p): p is { rec: SceneRecord; info: SeatInfo } => p.info !== undefined);
   const showTiles = match.phase === 'question' || match.phase === 'reveal';
   const showFinal = match.phase === 'final' || match.phase === 'ended';
 
@@ -113,7 +116,7 @@ export function KuisTv({ model, size }: { model: TvModel; size: ReadonlySignal<S
 
 /* ------------------------------------------------------------------ header */
 
-function Header({ match, recordBefore }: { match: KuisMatch; recordBefore: number | null }) {
+function Header({ match, recordBefore }: { match: KuisScene; recordBefore: number | null }) {
   const total = match.total;
   const doneUpTo =
     match.phase === 'reveal' || match.phase === 'final' || match.phase === 'ended'
@@ -140,7 +143,7 @@ function Header({ match, recordBefore }: { match: KuisMatch; recordBefore: numbe
 const RING_R = 24;
 const RING_C = 2 * Math.PI * RING_R;
 
-function TimerRing({ match, frame }: { match: KuisMatch; frame: FrameBus }) {
+function TimerRing({ match, frame }: { match: KuisScene; frame: FrameBus }) {
   const wrap = useRef<HTMLDivElement>(null);
   const arc = useRef<SVGCircleElement>(null);
   const num = useRef<HTMLDivElement>(null);
@@ -245,7 +248,7 @@ function TimerRing({ match, frame }: { match: KuisMatch; frame: FrameBus }) {
 
 /* ------------------------------------------------------------------ board */
 
-function Board({ match, recordBefore }: { match: KuisMatch; recordBefore: number | null }) {
+function Board({ match, recordBefore }: { match: KuisScene; recordBefore: number | null }) {
   const q = match.question;
   const chip = [q.category, q.topic].filter(Boolean).join(' · ').toUpperCase();
   let content: JSX.Element;
@@ -287,10 +290,10 @@ function Board({ match, recordBefore }: { match: KuisMatch; recordBefore: number
 
 /* ------------------------------------------------------------------ tiles */
 
-function Tiles({ match, info }: { match: KuisMatch; info: (id: number) => PlayerInfo | undefined }) {
+function Tiles({ match, info }: { match: KuisScene; info: (id: number) => SeatInfo | undefined }) {
   const q = match.question;
   const revealed = match.phase === 'reveal';
-  const pickers: PlayerInfo[][] = q.options.map(() => []);
+  const pickers: SeatInfo[][] = q.options.map(() => []);
   if (revealed) {
     for (const o of match.outcomes) {
       if (o.option === null) continue;
@@ -341,7 +344,7 @@ function Tiles({ match, info }: { match: KuisMatch; info: (id: number) => Player
               <div class="kz-pickers">
                 {picked.slice(0, 5).map((p, j) => (
                   <span key={p.id} class="kz-picker" style={vars({ '--j': String(j) })}>
-                    <Avatar fruit={p.fruit} ring={p.color} size={36} face={correct ? 'happy' : 'sad'} />
+                    <Avatar look={p.look} ring={p.color} size={36} face={correct ? 'happy' : 'sad'} />
                   </span>
                 ))}
                 {picked.length > 5 && <span class="kz-picker-more">+{picked.length - 5}</span>}
@@ -356,7 +359,7 @@ function Tiles({ match, info }: { match: KuisMatch; info: (id: number) => Player
 
 /* ------------------------------------------------------------------ info box */
 
-function InfoBox({ match }: { match: KuisMatch }) {
+function InfoBox({ match }: { match: KuisScene }) {
   if (match.phase === 'final' || match.phase === 'ended') return null;
   if (match.phase === 'reveal') {
     return (
@@ -383,10 +386,10 @@ interface Status {
   lamp: string;
   face: Face;
   answered: boolean;
-  outcome: RoundOutcome | null;
+  outcome: SceneOutcome | null;
 }
 
-function statusOf(match: KuisMatch, rec: PlayerRecord): Status {
+function statusOf(match: KuisScene, rec: SceneRecord): Status {
   const base = { answered: false, outcome: null, face: 'happy' as Face };
   if (match.phase === 'reveal') {
     const o = match.outcomes.find((x) => x.playerId === rec.id) ?? null;
@@ -467,7 +470,7 @@ function ScoreLed({ from, to, delay }: { from: number; to: number; delay: number
   return <div ref={ref} class="kz-led" />;
 }
 
-function Burst({ outcome, fastest }: { outcome: RoundOutcome; fastest: boolean }) {
+function Burst({ outcome, fastest }: { outcome: SceneOutcome; fastest: boolean }) {
   return (
     <div class="kz-burst">
       <div class="display outline-text kz-burst-num">+{formatNumber(outcome.score.total)}</div>
@@ -511,11 +514,11 @@ const POD_MIN_X = 380;
 const POD_MAX_X = 1122;
 
 interface Seat {
-  rec: PlayerRecord;
-  info: PlayerInfo;
+  rec: SceneRecord;
+  info: SeatInfo;
 }
 
-function Podiums({ match, players }: { match: KuisMatch; players: Seat[] }) {
+function Podiums({ match, players }: { match: KuisScene; players: Seat[] }) {
   if (!players.length) return null;
   const size = POD_SIZES[Math.min(players.length, POD_SIZES.length) - 1]!;
   const total = players.length * size.w + (players.length - 1) * size.gap;
@@ -552,13 +555,7 @@ function Podiums({ match, players }: { match: KuisMatch; players: Seat[] }) {
               <Burst outcome={st.outcome} fastest={!match.solo && match.fastestCorrect === rec.id} />
             )}
             <span key={st.answered ? 'in' : 'wait'} class={`kz-pod-av${st.answered ? ' kz-hop' : ''}`}>
-              <Avatar
-                fruit={info.fruit}
-                ring={info.color}
-                size={size.av}
-                face={st.face}
-                dim={!rec.connected}
-              />
+              <Avatar look={info.look} ring={info.color} size={size.av} face={st.face} dim={!rec.connected} />
             </span>
             <div class="kz-pod-body">
               <div class="kz-pod-name">{info.name}</div>
@@ -581,7 +578,7 @@ function Podiums({ match, players }: { match: KuisMatch; players: Seat[] }) {
 
 /* ------------------------------------------------------------------ compact chips (7-16) */
 
-function Chips({ match, players }: { match: KuisMatch; players: Seat[] }) {
+function Chips({ match, players }: { match: KuisScene; players: Seat[] }) {
   const cols = Math.min(8, Math.ceil(players.length / 2));
   const revealing = match.phase === 'reveal';
   return (
@@ -598,7 +595,7 @@ function Chips({ match, players }: { match: KuisMatch; players: Seat[] }) {
             title={st.label}
           >
             <span key={st.answered ? 'in' : 'wait'} class={`kz-pchip-av${st.answered ? ' kz-hop' : ''}`}>
-              <Avatar fruit={info.fruit} ring={info.color} size={40} face={st.face} dim={!rec.connected} />
+              <Avatar look={info.look} ring={info.color} size={40} face={st.face} dim={!rec.connected} />
             </span>
             <div
               key={st.lamp}
@@ -630,7 +627,7 @@ function FinalCard({
   players,
   record,
 }: {
-  match: KuisMatch;
+  match: KuisScene;
   players: Seat[];
   record: SoloRecord | null;
 }) {
@@ -695,7 +692,7 @@ function FinalCard({
                   </svg>
                 )}
                 <Avatar
-                  fruit={info.fruit}
+                  look={info.look}
                   ring={info.color}
                   size={Math.round(s.av * (k < 1 ? 0.9 : 1))}
                   face={entry.r.rank === 1 ? 'wow' : 'happy'}
@@ -714,7 +711,7 @@ function FinalCard({
             {rest.map(({ r, seat }, i) => (
               <div key={r.playerId} class="kz-rest-row" style={vars({ '--i': String(i) })}>
                 <div class="kz-rest-rank">{r.rank}</div>
-                <Avatar fruit={seat.info.fruit} ring={seat.info.color} size={24} />
+                <Avatar look={seat.info.look} ring={seat.info.color} size={24} />
                 <div class="kz-rest-name">{seat.info.name}</div>
                 <div class="kz-rest-meta">{STR.finalRow(seat.rec.correct, seat.rec.asked)}</div>
                 <div class="kz-rest-score">{formatNumber(r.score)}</div>

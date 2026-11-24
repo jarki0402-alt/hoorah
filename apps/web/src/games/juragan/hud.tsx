@@ -6,7 +6,7 @@
  * on top. Structure changes go through one signal; the countdown ring is written straight to the
  * DOM every frame so nothing re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { Avatar, Icon } from '../../shared/ui';
 import { rp, STR } from './strings';
@@ -14,7 +14,7 @@ import { rp, STR } from './strings';
 export interface HudPlayer {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   cash: number;
   worth: number;
@@ -53,7 +53,7 @@ export interface TileCardModel {
   double: boolean;
   /** Upgrade cost, takeover price or the Hotel's immunity. */
   lines: CardLine[];
-  owner: { name: string; fruit: Fruit; color: string } | null;
+  owner: { name: string; look: Look; color: string } | null;
   note: string | null;
   forSale: boolean;
   /** Building level for the badge (cities only). */
@@ -73,7 +73,7 @@ export interface Banner {
   title: string;
   sub: string;
   line: string | null;
-  winner: { name: string; fruit: Fruit; color: string } | null;
+  winner: { name: string; look: Look; color: string } | null;
 }
 
 export interface Toast {
@@ -88,7 +88,7 @@ export interface HudModel {
   turn: {
     id: number;
     name: string;
-    fruit: Fruit;
+    look: Look;
     color: string;
     hint: string;
     bonus: boolean;
@@ -141,7 +141,7 @@ function PlayerCard({ p }: { p: HudPlayer }) {
   return (
     <div class={cls} style={{ ['--pc' as string]: p.color }}>
       <div class="jg-player-rank">{p.bankrupt ? '' : p.rank}</div>
-      <Avatar fruit={p.fruit} ring={p.color} size={44} face={p.bankrupt ? 'sad' : 'happy'} dim={p.bankrupt} />
+      <Avatar look={p.look} ring={p.color} size={44} face={p.bankrupt ? 'sad' : 'happy'} dim={p.bankrupt} />
       <div class="jg-player-text">
         <div class="jg-player-name">
           <span class="jg-pname">{p.name}</span>
@@ -216,7 +216,7 @@ function TurnPanel({ store, m }: { store: HudStore; m: HudModel }) {
       {t ? (
         <>
           <div class="jg-turn-head">
-            <Avatar fruit={t.fruit} ring={t.color} size={48} />
+            <Avatar look={t.look} ring={t.color} size={48} />
             <div class="jg-turn-text">
               <div class="jg-eyebrow">{t.bonus ? `${STR.doubles} ${STR.doublesSub}` : STR.turnEyebrow}</div>
               <div class="jg-turn-name">{t.name}</div>
@@ -324,7 +324,7 @@ function TileCard({ c }: { c: TileCardModel }) {
             <span>{STR.cardOwner}</span>
             {c.owner ? (
               <div class="jg-owner-who">
-                <Avatar fruit={c.owner.fruit} ring={c.owner.color} size={26} />
+                <Avatar look={c.owner.look} ring={c.owner.color} size={26} />
                 <b>{c.owner.name}</b>
               </div>
             ) : (
@@ -355,7 +355,7 @@ function BannerView({ b }: { b: Banner }) {
       <div class="jg-banner-card">
         {b.winner && (
           <div class="jg-banner-avatar">
-            <Avatar fruit={b.winner.fruit} ring={b.winner.color} size={120} face="wow" />
+            <Avatar look={b.winner.look} ring={b.winner.color} size={120} face="wow" />
             <Icon name="crown" size={44} color="#FFC928" />
           </div>
         )}

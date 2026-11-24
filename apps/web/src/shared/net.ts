@@ -61,8 +61,30 @@ export class Net {
   private readonly inOrder = new InOrder((from, env) => this.emitRelay(from, env));
   readonly clock = new ClockSync();
 
-  /** Built fresh on each (re)connect so tokens learned along the way are used. */
-  constructor(private readonly hello: () => ClientMsg) {}
+  /** Held: the socket opens but says nothing until `release()` (see `hold`). */
+  private holding: boolean;
+  /** The socket is open and waiting for `release()` to send its hello. */
+  private helloDue = false;
+
+  /**
+   * `hello` is built fresh on each (re)connect so tokens learned along the way are used. With
+   * `hold`, the connection is opened ahead of time (TCP and TLS handshakes done, the slow part far
+   * from the server) and the hello only goes out on `release()`: a phone on the name page is then
+   * in the room the moment "Masuk" is tapped.
+   */
+  constructor(
+    private readonly hello: () => ClientMsg,
+    opts: { hold?: boolean } = {},
+  ) {
+    this.holding = opts.hold === true;
+  }
+
+  /** Sends the held hello now (or as soon as the socket is open). */
+  release(): void {
+    if (!this.holding) return;
+    this.holding = false;
+    if (this.helloDue && this.ws?.readyState === WebSocket.OPEN) this.greet(this.ws);
+  }
 
   get status(): NetStatus {
     return this._status;
@@ -156,6 +178,9 @@ export class Net {
   }
 
   private sendRelay(ch: Exclude<Channel, 'r'>, to: RelayTarget, data: unknown): boolean {
+    // Far-away main screens (long-distance play) take whole snapshots over the server only:
+    // nothing to number, a lost one is replaced by the next.
+    if (to === 'mirror') return this.sendWs({ t: 'relay', ch, to, data });
     if (to !== 'all') return this.sendRelayTo(ch, to, data);
     if (!this.recipients) return this.sendWs({ t: 'relay', ch, to, data });
     let ok = true;
@@ -174,6 +199,14 @@ export class Net {
     for (const fn of this.listeners.message) fn(msg);
   }
 
+  private greet(ws: WebSocket): void {
+    this.helloDue = false;
+    ws.send(JSON.stringify(this.hello()));
+    this.ping();
+    window.clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = window.setInterval(() => this.ping(), LIMITS.heartbeatMs);
+  }
+
   private open(): void {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -183,10 +216,8 @@ export class Net {
 
     ws.onopen = () => {
       this.attempt = 0;
-      ws.send(JSON.stringify(this.hello()));
-      this.ping();
-      window.clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = window.setInterval(() => this.ping(), LIMITS.heartbeatMs);
+      if (this.holding) this.helloDue = true;
+      else this.greet(ws);
     };
 
     ws.onmessage = (e) => {

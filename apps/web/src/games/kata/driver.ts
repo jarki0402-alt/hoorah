@@ -7,14 +7,14 @@ import type { ControllerToGame, PlayerInfo } from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import { signal } from '@preact/signals';
 import type { Sfx } from '../../shared/audio';
-import { celebrate, confetti } from '../../shared/confetti';
+import { celebrate } from '../../shared/confetti';
 import { cpuSkill, isCpu, reportSoloResult } from '../common/cpu';
 import { type BrainMove, decide, kataOpponents } from './brain';
 import { GameClock } from './clock';
 import { Lexicon } from './lexicon';
 import { clampLives, type KataEvent, KataMatch, type Presence } from './logic';
 import { buildResult } from './results';
-import { type Banner, FrameBus, type LogEntry, type ScreenModel } from './screen';
+import { type Banner, burstOver, FrameBus, type LogEntry, type ScreenModel } from './screen';
 import { STR } from './strings';
 import { viewFor } from './views';
 import { wordList } from './words';
@@ -273,21 +273,7 @@ export class KataDriver implements ScreenModel {
     this.sfx('win');
     window.setTimeout(celebrate, 250);
     const id = this.match.winner;
-    if (id !== null) window.setTimeout(() => this.burstOver(id), 700);
-  }
-
-  /** Confetti from the winner's card in the players strip. */
-  private burstOver(id: number): void {
-    const el = document.querySelector<HTMLElement>(`[data-pid="${id}"]`);
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    confetti({
-      x: (r.left + r.width / 2) / window.innerWidth,
-      y: r.top / window.innerHeight,
-      count: 70,
-      spread: 0.7,
-      power: 0.75,
-    });
+    if (id !== null) window.setTimeout(() => burstOver(id), 700);
   }
 
   /** A solo game against the computer just ended: nudge its skill for next time. */

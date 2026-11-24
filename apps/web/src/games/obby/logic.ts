@@ -1,15 +1,19 @@
 /**
  * Obby rules (pure, no rendering): a session of short obstacle races. Each track: intro card,
- * 3-2-1, the race, then a podium. Falling sends a runner back to their own save pad; the camera
- * follows the pack, and whoever stays off screen for more than 2 seconds is brought to the save
- * pad nearest the pack and held still for 1 second (owner's decision 2026-11-22). Places give
+ * 3-2-1, the race, then a podium. Falling sends a runner back to their own save pad. Places give
  * points; the total over all tracks decides the winner.
+ *
+ * Cameras (owner 2026-11-24): they look forward along the course, from behind the runners. Up to
+ * four people each get their own part of the main screen (1 full, 2 side by side, 3-4 in a 2x2
+ * grid; with three the fourth part shows the whole pack). Five or more share one camera on the
+ * pack, and whoever stays off that screen for more than 2 seconds is brought to the save pad
+ * nearest the pack and held still for 1 second (owner's decision 2026-11-22).
  */
 
-import type { Fruit } from '@hoorah/protocol';
-import { DEFAULT_RIG, GroupCamera } from '../../shared/kotak/camera';
+import type { Fruit, Look } from '@hoorah/protocol';
+import { type CameraRig, DEFAULT_RIG, GroupCamera } from '../../shared/kotak/camera';
 import { SaveTrail, spawnSpot } from '../../shared/kotak/checkpoints';
-import { type V3, v3 } from '../../shared/kotak/math';
+import type { V3 } from '../../shared/kotak/math';
 import { KotakSim } from '../../shared/kotak/sim';
 import type { PilotInput } from './brain';
 import { buildCourse, type Course } from './course';
@@ -18,8 +22,77 @@ export interface RacerInfo {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   cpu: boolean;
+}
+
+/** A part of the main screen, as fractions (y from the top). */
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface ObbyViewport {
+  /** The runner this camera follows, or null for the camera on the whole pack. */
+  id: number | null;
+  cam: GroupCamera;
+  rect: Rect;
+}
+
+/** Most people with a screen part of their own; more share the pack camera. */
+export const MAX_SPLIT = 4;
+
+/** Screen parts for `n` cameras: 1 full, 2 side by side, 3-4 in a 2x2 grid. */
+export function splitRects(n: number): Rect[] {
+  if (n <= 1) return [{ x: 0, y: 0, w: 1, h: 1 }];
+  if (n === 2)
+    return [
+      { x: 0, y: 0, w: 0.5, h: 1 },
+      { x: 0.5, y: 0, w: 0.5, h: 1 },
+    ];
+  return [
+    { x: 0, y: 0, w: 0.5, h: 0.5 },
+    { x: 0.5, y: 0, w: 0.5, h: 0.5 },
+    { x: 0, y: 0.5, w: 0.5, h: 0.5 },
+    { x: 0.5, y: 0.5, w: 0.5, h: 0.5 },
+  ];
+}
+
+/** Behind one runner, a little above, looking ahead along the course (+x). */
+export const FOLLOW_RIG: CameraRig = {
+  ...DEFAULT_RIG,
+  fov: 58,
+  pitch: 0.42,
+  yaw: -Math.PI / 2,
+  minDist: 9,
+  maxDist: 9,
+  fill: 0.9,
+  followRate: 5,
+  zoomRate: 2,
+  // Looks a few metres ahead; the runner stands in the lower third, whole, feet to head.
+  lead: { x: 3, y: 1.2, z: 0 },
+};
+
+/** Behind the whole pack, higher, zooming out as the pack spreads. */
+export const PACK_RIG: CameraRig = {
+  ...DEFAULT_RIG,
+  fov: 50,
+  pitch: 0.5,
+  yaw: -Math.PI / 2,
+  minDist: 11,
+  maxDist: 32,
+  fill: 0.8,
+  followRate: 3.2,
+  zoomRate: 1.8,
+  lead: { x: 4, y: 0.6, z: 0 },
+};
+
+/** A phone stick (x right, y down) as a move on the course, seen from behind (forward = +x). */
+export function stickToCourse(x: number, y: number): { x: number; z: number } {
+  return { x: -y, z: x };
 }
 
 export type Phase = 'intro' | 'count' | 'race' | 'podium' | 'done';
@@ -140,7 +213,9 @@ export class ObbyMatch {
   course!: Course;
   sim!: KotakSim;
   trail!: SaveTrail;
-  readonly camera: GroupCamera;
+  /** The cameras and their parts of the main screen (see `layoutViews`). */
+  views: ObbyViewport[] = [];
+  private aspect: number;
   /** Interpolation factor of the last advance. */
   alpha = 0;
   lastResults: TrackResult[] = [];
@@ -156,19 +231,8 @@ export class ObbyMatch {
     this.racers = opts.racers.map((r) => this.makeRacer(r));
     this.tracks = Math.max(1, Math.min(5, Math.floor(opts.tracks)));
     this.seed = opts.seed;
-    this.camera = new GroupCamera(
-      {
-        ...DEFAULT_RIG,
-        fov: 40,
-        pitch: 0.5,
-        yaw: 0,
-        minDist: 15,
-        maxDist: 32,
-        fill: 0.78,
-        lead: v3(2.5, 0.6, -0.5),
-      },
-      opts.aspect ?? 16 / 9,
-    );
+    this.aspect = opts.aspect ?? 16 / 9;
+    this.layoutViews();
     this.loadTrack(0);
   }
 
@@ -191,8 +255,57 @@ export class ObbyMatch {
     return this.racers.find((r) => r.id === id);
   }
 
+  /** The first camera (the whole screen when there is only one). */
+  get camera(): GroupCamera {
+    return this.views[0]!.cam;
+  }
+
+  /** True when everyone shares the pack camera (five or more people, or nobody to follow). */
+  get shared(): boolean {
+    return this.views.length === 1 && this.views[0]!.id === null;
+  }
+
   setAspect(aspect: number): void {
-    this.camera.aspect = aspect;
+    this.aspect = aspect;
+    for (const v of this.views) v.cam.aspect = (aspect * v.rect.w) / v.rect.h;
+  }
+
+  /** One camera per person (up to four), else one on the pack; kept when the lineup changes. */
+  private layoutViews(): void {
+    const people = this.racers.filter((r) => !r.cpu).map((r) => r.id);
+    const ids: (number | null)[] =
+      people.length === 0 || people.length > MAX_SPLIT
+        ? [null]
+        : people.length === 3
+          ? [...people, null]
+          : people;
+    const rects = splitRects(ids.length);
+    const old = new Map(this.views.map((v) => [v.id, v.cam]));
+    this.views = ids.map((id, i) => ({
+      id,
+      rect: rects[i]!,
+      cam: old.get(id) ?? new GroupCamera(id === null ? PACK_RIG : FOLLOW_RIG),
+    }));
+    this.setAspect(this.aspect);
+    if (this.sim) this.snapViews();
+  }
+
+  private viewPoints(v: ObbyViewport): V3[] {
+    const ids = v.id === null ? this.packIds() : [v.id];
+    const pts: V3[] = [];
+    for (const id of ids) {
+      const b = this.sim.body(id);
+      // Frame the feet and the head so jumps stay in the picture.
+      if (b) pts.push(b.pos, { x: b.pos.x, y: b.pos.y + 1.6, z: b.pos.z });
+    }
+    return pts;
+  }
+
+  private snapViews(): void {
+    for (const v of this.views) {
+      const pts = this.viewPoints(v);
+      if (pts.length > 0) v.cam.snap(pts);
+    }
   }
 
   setPilot(id: number, pilot: Pilot | null): void {
@@ -234,6 +347,7 @@ export class ObbyMatch {
       this.sim.addBody({ id: r.id, pos: spawnSpot(sp, slot % 8), yaw: Math.PI / 2 });
       this.sim.place(r.id, spawnSpot(sp, slot % 8), Math.PI / 2, 999);
     }
+    this.layoutViews();
   }
 
   removeRacer(id: number): void {
@@ -242,9 +356,10 @@ export class ObbyMatch {
     this.racers.splice(i, 1);
     this.pilots.delete(id);
     this.sim.removeBody(id);
+    this.layoutViews();
   }
 
-  restyle(id: number, look: Partial<Pick<RacerInfo, 'name' | 'fruit' | 'color'>>): void {
+  restyle(id: number, look: Partial<Pick<RacerInfo, 'name' | 'fruit' | 'look' | 'color'>>): void {
     const r = this.racer(id);
     if (r) Object.assign(r, look);
   }
@@ -258,7 +373,8 @@ export class ObbyMatch {
       this.sim.setMove(id, 0, 0);
       return;
     }
-    this.sim.setMove(id, x, y);
+    const move = stickToCourse(x, y);
+    this.sim.setMove(id, move.x, move.z);
   }
 
   jump(id: number): void {
@@ -297,7 +413,7 @@ export class ObbyMatch {
       this.sim.addBody({ id: r.id, pos, yaw: Math.PI / 2 });
       this.sim.place(r.id, pos, Math.PI / 2, 999);
     });
-    this.camera.snap(this.racers.map((r) => this.sim.body(r.id)!.pos));
+    this.snapViews();
     for (const [id, p] of this.pilots) p.resync(this, id);
     this.events.push({ k: 'track', no });
   }
@@ -561,19 +677,18 @@ export class ObbyMatch {
   }
 
   private updateCamera(dt: number): void {
-    const pts: V3[] = [];
-    for (const id of this.packIds()) {
-      const b = this.sim.body(id);
-      // Frame the feet and the head so jumps stay in the picture.
-      if (b) pts.push(b.pos, { x: b.pos.x, y: b.pos.y + 1.6, z: b.pos.z });
+    for (const v of this.views) {
+      const pts = this.viewPoints(v);
+      if (pts.length > 0) v.cam.update(pts, dt);
     }
-    if (pts.length > 0) this.camera.update(pts, dt);
   }
 
+  /** Only the shared pack camera leaves people behind; a camera of one's own never does. */
   private offscreen(dt: number): void {
+    const shared = this.shared;
     for (const r of this.racers) {
       const b = this.sim.body(r.id);
-      if (!b || r.finishedAt !== null || b.frozenLeft > 0 || r.graceLeft > 0 || b.fallen) {
+      if (!shared || !b || r.finishedAt !== null || b.frozenLeft > 0 || r.graceLeft > 0 || b.fallen) {
         r.offFor = 0;
         continue;
       }

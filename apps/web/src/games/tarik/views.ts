@@ -24,7 +24,7 @@ function guests(match: TarikMatch, team: Team): GuestPlayer[] {
   return match
     .roster(otherTeam(team))
     .filter((m) => isCpu(m.id))
-    .map((m) => ({ id: m.id, name: m.name, fruit: m.fruit, color: m.color }));
+    .map((m) => ({ id: m.id, name: m.name, fruit: m.fruit, look: m.look, color: m.color }));
 }
 
 export function waitingView(match: TarikMatch, id: number): ControllerView {

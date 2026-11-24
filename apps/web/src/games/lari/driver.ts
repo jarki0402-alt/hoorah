@@ -157,6 +157,7 @@ export class LariDriver {
       id: p.id,
       name: p.name,
       fruit: p.fruit,
+      look: p.look,
       color: p.color,
     }));
     scene.setRunners(

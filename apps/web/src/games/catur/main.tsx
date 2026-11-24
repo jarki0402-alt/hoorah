@@ -5,7 +5,7 @@
  */
 import type { ControllerToGame, PlayerInfo } from '@hoorah/protocol';
 import { connect, type GameAward, type GameResult, type HoorahGame } from '@hoorah/sdk';
-import { signal } from '@preact/signals';
+import { type Signal, signal } from '@preact/signals';
 import { render } from 'preact';
 import type { Sfx } from '../../shared/audio';
 import { celebrate } from '../../shared/confetti';
@@ -15,6 +15,8 @@ import { loadJson, saveJson } from '../common/store';
 import { boardString, type Color, uci } from './chess';
 import { chooseMove } from './engine';
 import { type CaturEvent, CaturMatch, type PlayedMove, type PlayerPresence, rankings } from './logic';
+import { toMirror } from './mirror';
+import { CaturReplica } from './replica';
 import { reconcile, type Sprite, spritesFrom } from './sprites';
 import { STR } from './strings';
 import { CaturTv, FrameBus, type StageSize, type TvModel } from './tv';
@@ -96,6 +98,10 @@ class CaturDriver implements TvModel {
     game.on('pause', (paused) => {
       this.match.setHeld(paused, this.game.now());
       this.bump();
+    });
+    // Long-distance play: a far-away main screen that starts watching gets the whole state.
+    game.on('mirrors', (on) => {
+      if (on) this.publish();
     });
     if (game.paused) this.match.setHeld(true, game.now());
   }
@@ -215,6 +221,13 @@ class CaturDriver implements TvModel {
   private bump(): void {
     this.version.value++;
     this.syncViews();
+    this.publish();
+  }
+
+  /** Long-distance play: what this screen shows, for far-away main screens (only while watched). */
+  private publish(): void {
+    if (!this.game.mirrored) return;
+    this.game.publish(toMirror(this.match, boardString(this.match.pos), this.notice, this.info));
   }
 
   private onMove(move: PlayedMove, random: boolean): void {
@@ -242,6 +255,7 @@ class CaturDriver implements TvModel {
       this.noticeTimer = window.setTimeout(() => {
         this.notice = null;
         this.version.value++;
+        this.publish();
       }, NOTICE_MS);
     }
   }
@@ -385,6 +399,10 @@ class CaturDriver implements TvModel {
   }
 }
 
+function MirrorRoot({ replica, size }: { replica: CaturReplica; size: Signal<StageSize> }) {
+  return replica.shown.value ? <CaturTv model={replica} size={size} /> : null;
+}
+
 async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) return;
@@ -402,6 +420,14 @@ async function boot(): Promise<void> {
     size.value = { w, h };
   });
   await fontsReady();
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's match, run nothing of our own.
+    const replica = new CaturReplica(game);
+    render(<MirrorRoot replica={replica} size={size} />, stage);
+    replica.start();
+    game.ready();
+    return;
+  }
   // Playing alone: one computer opponent joins (PRD 6.4), colours alternate between games.
   const cpus = soloOpponents(game.allPlayers, 1);
   const human = game.allPlayers[0];

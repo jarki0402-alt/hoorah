@@ -81,8 +81,8 @@ const RULES: Record<GameId, Rule> = {
   eja: (n) => (n <= 4 ? 10 : 8),
   // Not read: one story runs until a side wins (nights and days, about 12–20 minutes).
   siluman: () => 1,
-  // Stages in a row from the one the Host picks (2 to 3 minutes each plus intro and stars).
-  warna: () => 4,
+  // Not read: levels go on until the Host chooses Selesai after one (owner 2026-11-23).
+  warna: () => 1,
   // Rounds, the ghost role passing to someone new each round: alone one round against the
   // computer, two people swap once, bigger groups play three.
   hantu: (n) => (n <= 1 ? 1 : n === 2 ? 2 : 3),

@@ -11,15 +11,34 @@ import { useEffect, useState } from 'preact/hooks';
 import { ensureGfxProfile } from '../games/common/gfx';
 import { autoHideCursor } from '../shared/cursor';
 import { KeepAwake } from '../shared/device';
+import { installErrorReporter } from '../shared/report';
 import { NetBanner, Reactions, Toasts } from './components';
 import { toggleFullscreen } from './fullscreen';
 import { bindKeyboard } from './nav';
+import { AdBreak } from './pages/AdBreak';
 import { DetailPage } from './pages/DetailPage';
 import { GamePage } from './pages/GamePage';
 import { HomePage } from './pages/HomePage';
 import { JoinPage } from './pages/JoinPage';
+import { PartyPage } from './pages/PartyPage';
 import { ResultsPage } from './pages/ResultsPage';
-import { audioOn, initAudio, notice, page, startNet, tutorial, unlockAudio } from './store';
+import { FarBadge, FarOverlay } from './remote';
+import { screenExtra } from './reportContext';
+import {
+  access,
+  adBreak,
+  appConfig,
+  audioOn,
+  finishBreak,
+  initAudio,
+  notice,
+  page,
+  passHint,
+  requestTrial,
+  startNet,
+  tutorial,
+  unlockAudio,
+} from './store';
 import { TutorialOverlay } from './tutorial/TutorialOverlay';
 
 /**
@@ -57,10 +76,24 @@ function App() {
       {p === 'detail' && <DetailPage />}
       {p === 'game' && <GamePage />}
       {p === 'results' && <ResultsPage />}
+      {p === 'party' && <PartyPage />}
       {tutorial.value && (p === 'game' || p === 'detail') && <TutorialOverlay run={tutorial.value} />}
+      {adBreak.value && (
+        <AdBreak
+          next={adBreak.value.next}
+          seconds={appConfig.value.adSeconds}
+          trialMinutes={appConfig.value.trialMinutes}
+          trialUsed={access.value.trialUsed}
+          onTrial={requestTrial}
+          onPass={passHint}
+          onDone={finishBreak}
+        />
+      )}
+      <FarBadge />
       <Toasts />
       <Reactions />
       <NetBanner />
+      <FarOverlay />
       {notice.value && (
         <div class="overlay" style={{ background: 'rgba(17,18,20,0.92)', zIndex: 100 }}>
           <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -76,6 +109,9 @@ function App() {
     </div>
   );
 }
+
+// Uncaught errors on the main screen go to the owner's dashboard (deduped, capped per load).
+installErrorReporter('screen', screenExtra);
 
 const awake = new KeepAwake();
 initAudio();

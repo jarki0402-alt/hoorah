@@ -3,8 +3,12 @@ import { GAMES, type GameId } from '../shared/games';
 import {
   advance,
   isFinalGame,
+  lastOvertake,
+  moveTo,
   newParty,
   PARTY_GAMES,
+  partyPool,
+  partyStep,
   pickLineup,
   placePoints,
   scoreGame,
@@ -18,7 +22,7 @@ function seq(...values: number[]): () => number {
 }
 
 describe('party lineup', () => {
-  it('picks playable games for the player count, varied moods, without repeats', () => {
+  it('picks five playable, short games for the player count, every mood, without repeats', () => {
     for (const seed of [0.1, 0.5, 0.9]) {
       const lineup = pickLineup(2, [], seq(seed, 0.3, 0.7));
       expect(lineup).toHaveLength(PARTY_GAMES);
@@ -28,7 +32,9 @@ describe('party lineup', () => {
         expect(2).toBeGreaterThanOrEqual(GAMES[id].minPlayers);
         expect(2).toBeLessThanOrEqual(GAMES[id].maxPlayers);
       }
-      expect(new Set(lineup.map((id) => GAMES[id].mood)).size).toBe(PARTY_GAMES);
+      // Four moods in five games: each mood at least once.
+      expect(new Set(lineup.map((id) => GAMES[id].mood)).size).toBe(4);
+      for (const id of lineup) expect(GAMES[id].long).toBeFalsy();
     }
   });
 
@@ -38,6 +44,73 @@ describe('party lineup', () => {
     for (const id of lineup) expect(recent).not.toContain(id);
     expect(lineup).not.toContain('kompak'); // needs 2
     expect(lineup).not.toContain('penyusup'); // needs 3
+  });
+
+  it('never draws a long game and draws a new lineup on every start', () => {
+    for (const id of ['ludo', 'catur', 'juragan', 'ular'] as const) expect(partyPool(2)).not.toContain(id);
+    const seen = new Set<string>();
+    for (let i = 0; i < 20; i++) seen.add(pickLineup(2, []).join(','));
+    expect(seen.size).toBeGreaterThan(1);
+  });
+});
+
+describe('party steps', () => {
+  const lineup: GameId[] = ['bajaj', 'kuis', 'tarik'];
+
+  it('reveals the first game, then the next after each scored one, then the champion', () => {
+    let p = newParty(lineup);
+    expect(partyStep(p)).toEqual({ reveal: 0, played: 0 });
+    p = scoreGame(p, 'bajaj', [{ playerId: 1, rank: 1 }]);
+    expect(partyStep(p)).toEqual({ reveal: 1, played: 1 });
+    p = moveTo(p, 1);
+    expect(p.index).toBe(1);
+    // Back on the reveal screen without a result (game left early): the same slot again.
+    expect(partyStep(p)).toEqual({ reveal: 1, played: 1 });
+    p = scoreGame(p, 'kuis', [{ playerId: 1, rank: 1 }]);
+    p = moveTo(p, 2);
+    p = scoreGame(p, 'tarik', [{ playerId: 1, rank: 1 }]);
+    expect(partyStep(p)).toEqual({ reveal: null, played: 3 });
+  });
+
+  it('names who climbed past whom in the last game', () => {
+    let p = newParty(lineup);
+    p = scoreGame(p, 'bajaj', [
+      { playerId: 1, rank: 1 },
+      { playerId: 2, rank: 2 },
+      { playerId: 3, rank: 3 },
+    ]);
+    expect(lastOvertake(p, [1, 2, 3])).toBeNull();
+    p = moveTo(p, 1);
+    p = scoreGame(p, 'kuis', [
+      { playerId: 3, rank: 1 },
+      { playerId: 2, rank: 2 },
+      { playerId: 1, rank: 3 },
+    ]);
+    // 1: 3+1 = 4, 2: 2+2 = 4, 3: 1+3 = 4: everyone level, nobody strictly passed.
+    expect(lastOvertake(p, [1, 2, 3])).toBeNull();
+    p = moveTo(p, 2);
+    p = scoreGame(p, 'tarik', [
+      { playerId: 3, rank: 1 },
+      { playerId: 1, rank: 2 },
+      { playerId: 2, rank: 3 },
+    ]);
+    expect(p.gained).toEqual({ 3: 6, 1: 4, 2: 2 });
+    expect(lastOvertake(p, [1, 2, 3])).toBeNull();
+  });
+
+  it('spots a climber passing a leader', () => {
+    let p = newParty(lineup);
+    p = scoreGame(p, 'bajaj', [
+      { playerId: 1, rank: 1 },
+      { playerId: 2, rank: 2 },
+    ]);
+    p = moveTo(p, 1);
+    p = scoreGame(p, 'kuis', [
+      { playerId: 2, rank: 1 },
+      { playerId: 1, rank: 3 },
+    ]);
+    // 1: 3+1 = 4, 2: 2+3 = 5.
+    expect(lastOvertake(p, [1, 2])).toEqual({ by: 2, passed: 1 });
   });
 });
 

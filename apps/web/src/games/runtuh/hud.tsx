@@ -3,7 +3,7 @@
  * with the big instruction and countdown, the live scoreboard, call-outs (falls, shoves, near
  * misses), the round intro card, the round summary and the final per-round score table.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { Avatar } from '../../shared/ui';
 import { STR } from './strings';
@@ -12,6 +12,7 @@ export interface Chip {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -60,6 +61,7 @@ export interface Toast {
   key: number;
   text: string;
   fruit?: Fruit;
+  look?: Look;
   color?: string;
   tone: 'bad' | 'good' | 'info';
 }
@@ -93,7 +95,12 @@ export class HudStore {
   }
 
   toast(text: string, tone: Toast['tone'], who?: Chip): void {
-    const t: Toast = { key: ++this.key, text, tone, ...(who ? { fruit: who.fruit, color: who.color } : {}) };
+    const t: Toast = {
+      key: ++this.key,
+      text,
+      tone,
+      ...(who ? { fruit: who.fruit, look: who.look, color: who.color } : {}),
+    };
     this.toasts.value = [...this.toasts.value.slice(-2), t];
     window.setTimeout(() => {
       this.toasts.value = this.toasts.value.filter((o) => o.key !== t.key);
@@ -148,7 +155,14 @@ export function Hud({ store }: { store: HudStore }) {
           <div class="lr2-board-title">{STR.statScore}</div>
           {store.scores.value.map((r) => (
             <div key={r.id} class={`lr2-score ${r.out ? 'is-out' : ''} ${r.offline ? 'is-off' : ''}`}>
-              <Avatar fruit={r.fruit} ring={r.color} size={28} dim={r.out} face={r.out ? 'sad' : 'happy'} />
+              <Avatar
+                look={r.look}
+                fruit={r.fruit}
+                ring={r.color}
+                size={28}
+                dim={r.out}
+                face={r.out ? 'sad' : 'happy'}
+              />
               <span class="lr2-score-name">{r.name}</span>
               <span class="lr2-score-value">{r.score}</span>
             </div>
@@ -167,7 +181,9 @@ export function Hud({ store }: { store: HudStore }) {
       <div class="lr2-toasts">
         {store.toasts.value.map((t) => (
           <div key={t.key} class={`lr2-toast tone-${t.tone}`}>
-            {t.fruit && t.color && <Avatar fruit={t.fruit} ring={t.color} size={28} face="sad" />}
+            {t.fruit && t.color && (
+              <Avatar look={t.look} fruit={t.fruit} ring={t.color} size={28} face="sad" />
+            )}
             <span>{t.text}</span>
           </div>
         ))}
@@ -197,7 +213,13 @@ export function Hud({ store }: { store: HudStore }) {
           <div class="lr2-end-rows">
             {end.rows.map((r) => (
               <div key={r.id} class={`lr2-end ${r.survived ? 'is-safe' : ''}`}>
-                <Avatar fruit={r.fruit} ring={r.color} size={44} face={r.survived ? 'happy' : 'sad'} />
+                <Avatar
+                  look={r.look}
+                  fruit={r.fruit}
+                  ring={r.color}
+                  size={44}
+                  face={r.survived ? 'happy' : 'sad'}
+                />
                 <span class="lr2-end-name">{r.name}</span>
                 <span class="lr2-end-pts">{STR.pointsPlus(r.points)}</span>
               </div>
@@ -225,7 +247,7 @@ export function Hud({ store }: { store: HudStore }) {
                 <tr key={r.id} class={r.rank === 1 ? 'is-top' : ''}>
                   <td class="lr2-t-rank">{r.rank}</td>
                   <td class="lr2-t-name">
-                    <Avatar fruit={r.fruit} ring={r.color} size={30} />
+                    <Avatar look={r.look} fruit={r.fruit} ring={r.color} size={30} />
                     <span>{r.name}</span>
                   </td>
                   {Array.from({ length: fin.cols }, (_, i) => (

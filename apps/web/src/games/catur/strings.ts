@@ -112,5 +112,5 @@ export const STR = {
   awardMate: 'Penutup Partai',
   awardMateDesc: 'Memberi skak mat',
 
-  noShell: 'Buka Catur dari aplikasi Hoorah di layar utama.',
+  noShell: 'Buka Catur dari aplikasi Kacawbalaw di layar utama.',
 } as const;

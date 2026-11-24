@@ -1,4 +1,5 @@
 import type { Fruit, PlayerInfo } from '@hoorah/protocol';
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { GameClock } from './clock';
 import { Commentator, HOLD_MS } from './commentary';
@@ -28,6 +29,7 @@ function player(id: number, connected = true): PlayerInfo {
     id,
     name: NAMES[(id - 1) % NAMES.length]!,
     fruit: FRUITS[(id - 1) % FRUITS.length]!,
+    look: lookOfFruit(FRUITS[(id - 1) % FRUITS.length]!),
     color: '#F2453D',
     connected,
     isHost: id === 1,
@@ -110,6 +112,16 @@ describe('helpers', () => {
   it('keeps the beat at the song tempo', () => {
     expect(BEAT_MS).toBeCloseTo(60_000 / BPM);
     expect(DEFAULT_TUNING.beatMs).toBe(BEAT_MS);
+  });
+});
+
+describe('roster', () => {
+  it("keeps each racer's look and follows a restyle", () => {
+    const run = newRun(2);
+    expect(run.m.racer(2)!.look).toEqual(lookOfFruit('alpukat'));
+    run.m.setPlayers([player(1), { ...player(2), look: { c: 'bima', oc: 3 } }]);
+    expect(run.m.racer(2)!.look).toEqual({ c: 'bima', oc: 3 });
+    expect(run.m.drainEvents().some((e) => e.type === 'roster')).toBe(true);
   });
 });
 

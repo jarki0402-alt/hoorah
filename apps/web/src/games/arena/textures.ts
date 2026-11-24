@@ -1,11 +1,13 @@
 /**
- * One texture atlas for everything that moves, so the whole arena draws in very few batches:
- * fruit heads (rasterized from the shared SVG art), round segment frames per snake colour, seed
- * frames per seed colour, and a few white effect frames that are tinted at runtime.
+ * Two texture atlases for everything that moves, so the whole arena draws in very few batches:
+ * one with round segment frames per snake colour, seed frames per seed colour and a few white
+ * effect frames that are tinted at runtime; one with the players' heads (rasterized from the
+ * shared SVG art the first time a look shows up).
  */
-import { FRUITS, type Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import type * as Phaser from 'phaser';
-import { type Face, fruitMarkup } from '../../shared/art/fruits';
+import type { Face } from '../../shared/art/fruits';
+import { avatarMarkup } from '../../shared/art/people';
 import { svgDoc, svgUrl } from '../../shared/art/svg';
 import { loadImage } from '../common/stage';
 
@@ -22,32 +24,92 @@ export const DISC_R = 30;
 export const SEED_R = 26;
 export const GLOW_R = 32;
 
-export const headFrame = (fruit: Fruit, face: Face): string => `head:${fruit}:${face}`;
 export const segFrame = (color: number): string => `seg:${color}`;
 export const bandFrame = (color: number): string => `band:${color}`;
 export const seedFrame = (color: number): string => `seed:${color}`;
 
-/** Fruit faces rasterized at 128 px, drawn into the atlas once Phaser is up. */
-export async function loadHeads(): Promise<Map<string, HTMLImageElement>> {
-  const keys: string[] = [];
-  const jobs: Promise<HTMLImageElement>[] = [];
-  for (const fruit of FRUITS) {
-    for (const face of FACES) {
-      const key = headFrame(fruit, face);
-      keys.push(key);
-      const url = svgUrl(`arena-${key}-${HEAD_PX}`, () =>
-        svgDoc(HEAD_PX, HEAD_PX, fruitMarkup(fruit, face), '0 0 64 64'),
-      );
-      jobs.push(loadImage(url, HEAD_PX, HEAD_PX));
-    }
+export const HEADS_KEY = 'arena-heads';
+/** Transparent built-in texture shown until a head has been rasterized. */
+export const BLANK_KEY = '__DEFAULT';
+const HEADS_W = 1024;
+const HEADS_H = 2048;
+const HEADS_PER_ROW = HEADS_W / HEAD_PX;
+/** Looks the head atlas holds at once: twice the largest field, so recycling is rare. */
+const HEAD_SLOTS = (HEADS_PER_ROW * (HEADS_H / HEAD_PX)) / FACES.length;
+const headFrame = (slot: number, face: Face): string => `head:${slot}:${face}`;
+
+/** Stable text id of a look. */
+export const lookId = (look: Look): string => [look.c, look.s, look.h, look.hc, look.oc].join('.');
+
+/**
+ * Player heads, every face of one look per slot, rasterized the first time a look shows up.
+ * Slots are recycled oldest first once full; `onChange` then lets the scene re-ask.
+ */
+export class HeadAtlas {
+  private readonly tex: Phaser.Textures.CanvasTexture;
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly onChange: () => void;
+  /** Look id to its slot, for looks already drawn. */
+  private readonly slots = new Map<string, number>();
+  private readonly pending = new Set<string>();
+  private drawn = 0;
+
+  constructor(textures: Phaser.Textures.TextureManager, onChange: () => void) {
+    const tex = textures.createCanvas(HEADS_KEY, HEADS_W, HEADS_H);
+    if (!tex) throw new Error('arena head atlas already exists');
+    this.tex = tex;
+    this.ctx = tex.context;
+    this.onChange = onChange;
   }
-  const images = await Promise.all(jobs);
-  const out = new Map<string, HTMLImageElement>();
-  keys.forEach((k, i) => {
-    const img = images[i];
-    if (img) out.set(k, img);
-  });
-  return out;
+
+  /** Frame of a look's face in HEADS_KEY, or null while it is still rasterizing. */
+  frame(look: Look, face: Face): string | null {
+    const id = lookId(look);
+    const slot = this.slots.get(id);
+    if (slot !== undefined) return headFrame(slot, face);
+    this.request(look, id);
+    return null;
+  }
+
+  private request(look: Look, id: string): void {
+    if (this.pending.has(id)) return;
+    this.pending.add(id);
+    const jobs = FACES.map((face) =>
+      loadImage(
+        svgUrl(`arena-head-${id}-${face}-${HEAD_PX}`, () =>
+          svgDoc(HEAD_PX, HEAD_PX, avatarMarkup(look, face), '0 0 64 64'),
+        ),
+        HEAD_PX,
+        HEAD_PX,
+      ),
+    );
+    Promise.all(jobs).then(
+      (images) => {
+        this.pending.delete(id);
+        this.store(id, images);
+        this.onChange();
+      },
+      // A failed head stays pending so it is not retried every frame; the blank stand-in remains.
+      () => undefined,
+    );
+  }
+
+  private store(id: string, images: readonly HTMLImageElement[]): void {
+    const slot = this.drawn % HEAD_SLOTS;
+    const fresh = this.drawn < HEAD_SLOTS;
+    this.drawn++;
+    for (const [other, s] of this.slots) if (s === slot) this.slots.delete(other);
+    FACES.forEach((face, f) => {
+      const cell = slot * FACES.length + f;
+      const x = (cell % HEADS_PER_ROW) * HEAD_PX;
+      const y = Math.floor(cell / HEADS_PER_ROW) * HEAD_PX;
+      this.ctx.clearRect(x, y, HEAD_PX, HEAD_PX);
+      this.ctx.drawImage(images[f]!, x, y, HEAD_PX, HEAD_PX);
+      if (fresh) this.tex.add(headFrame(slot, face), 0, x, y, HEAD_PX, HEAD_PX);
+    });
+    this.slots.set(id, slot);
+    this.tex.refresh();
+  }
 }
 
 function rgb(c: number): string {
@@ -72,20 +134,11 @@ export class Atlas {
   private readonly seeds = new Set<number>();
   private dirty = false;
 
-  constructor(textures: Phaser.Textures.TextureManager, heads: Map<string, HTMLImageElement>) {
+  constructor(textures: Phaser.Textures.TextureManager) {
     const tex = textures.createCanvas(ATLAS_KEY, SIZE, SIZE);
     if (!tex) throw new Error('arena atlas already exists');
     this.tex = tex;
     this.ctx = tex.context;
-    // Heads: 8 per row of 128 px cells in the top half.
-    let i = 0;
-    for (const [key, img] of heads) {
-      const x = (i % 8) * HEAD_PX;
-      const y = Math.floor(i / 8) * HEAD_PX;
-      this.ctx.drawImage(img, x, y, HEAD_PX, HEAD_PX);
-      this.tex.add(key, 0, x, y, HEAD_PX, HEAD_PX);
-      i++;
-    }
     this.effects();
     this.tex.refresh();
   }
@@ -123,8 +176,7 @@ export class Atlas {
 
   private nextCell(): { x: number; y: number } | null {
     const perRow = SIZE / CELL;
-    const firstRow = (HEAD_PX * 4) / CELL;
-    const row = firstRow + Math.floor(this.slot / perRow);
+    const row = Math.floor(this.slot / perRow);
     if (row >= SIZE / CELL) return null;
     const x = (this.slot % perRow) * CELL;
     this.slot++;

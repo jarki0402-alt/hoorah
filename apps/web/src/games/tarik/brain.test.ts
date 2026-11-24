@@ -1,4 +1,5 @@
 import type { PlayerInfo } from '@hoorah/protocol';
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { seeded } from '../../shared/art/svg';
 import { BRAIN_MAX_RATE, PullBrain, type Ring } from './brain';
@@ -31,7 +32,15 @@ function stats(values: number[]): { mean: number; sd: number } {
 }
 
 function player(id: number, name: string): PlayerInfo {
-  return { id, name, fruit: 'semangka', color: '#F2453D', connected: true, isHost: id === 1 };
+  return {
+    id,
+    name,
+    fruit: 'semangka',
+    look: lookOfFruit('semangka'),
+    color: '#F2453D',
+    connected: true,
+    isHost: id === 1,
+  };
 }
 
 /** A whole match between two brains (red = first player); returns the match when it is over. */

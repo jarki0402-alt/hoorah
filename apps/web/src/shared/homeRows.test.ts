@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CATALOG, CATEGORIES, GAMES } from './games';
 import {
+  allGames,
   cardTag,
   catalogByCategory,
   GRID_TABS,
@@ -50,12 +51,27 @@ describe('home rows', () => {
   });
 
   it('gives the phone the same groups', () => {
-    expect(HOME_SECTIONS).toEqual(['fit', ...MOOD_ORDER, 'all']);
-    expect(sectionGames('all', 2)).toEqual(CATALOG.filter((id) => GAMES[id].available));
+    expect(HOME_SECTIONS).toEqual(['all', 'fit', ...MOOD_ORDER]);
+    expect(sectionGames('all', 2)).toEqual(allGames(2));
     expect(sectionGames('fit', 2, ['kuis'])[0]).toBe('kuis');
     expect(isHomeSection('heboh')).toBe(true);
     expect(isHomeSection('papan')).toBe(false);
     expect(isHomeSection(1)).toBe(false);
+  });
+
+  it('orders "Semua" for this screen: fitting first, played here lately first, then the rest', () => {
+    const list = allGames(1, ['dapur', 'kompak', 'rusun']);
+    const playable = CATALOG.filter((id) => GAMES[id].available);
+    expect([...list].sort()).toEqual([...playable].sort());
+    // Kompak needs 2 players: it drops behind every game that fits one player.
+    expect(list.slice(0, 2)).toEqual(['dapur', 'rusun']);
+    const fit = list.map((id) => GAMES[id].minPlayers <= 1);
+    expect(fit).toEqual([...fit].sort((a, b) => Number(b) - Number(a)));
+    // Two screens with different histories see different orders.
+    expect(allGames(1, ['kuis'])[0]).toBe('kuis');
+    // The main screen keeps the teasers, last.
+    const soon = CATALOG.filter((id) => !GAMES[id].available);
+    expect(allGames(1, [], true).slice(playable.length)).toEqual(soon);
   });
 
   it('labels only the newest wave as new', () => {

@@ -76,6 +76,25 @@ export const FRIGHT: Record<Fright, FrightTune> = {
   beneran: { ghostSpeed: 3.5, range: 6.5, roundS: 210, lightsOutS: 9, torchOutS: 2.2, ambient: 0.12 },
 };
 
+/**
+ * Where the ghost is, blinked red on the main screen (owner 2026-11-24: an unseen ghost felt unfair).
+ * Seram Ringan: every 8 s and on every catch. Seram Beneran: every 15 s, or when the ghost comes
+ * close to a resident (heart meter at `nearHeart`). Two pings stay at least `gap` seconds apart.
+ */
+export const PING: Record<Fright, { every: number; onCatch: boolean; nearHeart: number }> = {
+  ringan: { every: 8, onCatch: true, nearHeart: 0 },
+  beneran: { every: 15, onCatch: false, nearHeart: 0.72 },
+};
+export const PING_GAP = 5;
+/** How long one ping shows: three red blinks. */
+export const PING_S = 1.5;
+
+export interface GhostPing {
+  x: number;
+  y: number;
+  age: number;
+}
+
 export interface ResidentStats {
   keys: number;
   /** Seconds at the fuse box while it charged. */
@@ -144,6 +163,7 @@ export type HauntEvent =
   | { type: 'slam'; x: number; y: number }
   | { type: 'near'; id: number }
   | { type: 'battery'; id: number }
+  | { type: 'ping'; x: number; y: number }
   | { type: 'over'; winner: 'penghuni' | 'hantu' };
 
 export interface WorldSetup {
@@ -175,6 +195,11 @@ export class HauntWorld {
   t = 0;
   over = false;
   winner: 'penghuni' | 'hantu' | null = null;
+  /** The ghost's spot blinking on the main screen right now, if any. */
+  ping: GhostPing | null = null;
+  /** Seconds to the next timed ping, and to the earliest next ping of any kind. */
+  pingIn: number;
+  private pingGap = 0;
   readonly opaque: Opaque;
   private openOpaque: Opaque | null = null;
   private events: HauntEvent[] = [];
@@ -185,6 +210,7 @@ export class HauntWorld {
     this.map = s.map;
     this.fright = s.fright;
     this.tune = FRIGHT[s.fright];
+    this.pingIn = PING[s.fright].every;
     const rnd = s.rnd ?? Math.random;
     s.residents.forEach((id, i) => {
       const sp = s.map.spawns[i % Math.max(1, s.map.spawns.length)] ?? { x: 2, y: 2 };
@@ -371,6 +397,31 @@ export class HauntWorld {
     }
   }
 
+  /* ------------------------------------------------------------------ ghost ping */
+
+  private updatePing(step: number): void {
+    if (this.ping) {
+      this.ping.age += step;
+      if (this.ping.age >= PING_S) this.ping = null;
+    }
+    this.pingIn -= step;
+    this.pingGap = Math.max(0, this.pingGap - step);
+    const rule = PING[this.fright];
+    const close =
+      rule.nearHeart > 0 && this.residents.some((r) => r.state === 'in' && r.heart >= rule.nearHeart);
+    if (this.pingIn <= 0 || (close && this.pingGap <= 0)) this.firePing();
+  }
+
+  /** Blinks the ghost's current spot; restarts the timer either way. */
+  private firePing(): void {
+    if (this.pingGap > 0 && this.ping) return;
+    const g = this.ghost;
+    this.ping = { x: g.x, y: g.y, age: 0 };
+    this.pingIn = PING[this.fright].every;
+    this.pingGap = PING_GAP;
+    this.events.push({ type: 'ping', x: g.x, y: g.y });
+  }
+
   /* ------------------------------------------------------------------ step */
 
   update(dt: number): void {
@@ -396,6 +447,7 @@ export class HauntWorld {
 
     this.updateLight(step);
     this.updateCatch();
+    this.updatePing(step);
     this.updateObjectives(step);
     this.checkOver();
   }
@@ -479,6 +531,7 @@ export class HauntWorld {
         r.heart = 0;
         g.catches++;
         this.events.push({ type: 'catch', id: r.id, x: r.x, y: r.y });
+        if (PING[this.fright].onCatch) this.firePing();
         continue;
       }
       if (d < TUNE.nearIn && g.silau <= 0) r.nearArmed = true;

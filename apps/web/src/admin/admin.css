@@ -279,6 +279,22 @@ html.ad-locked {
   background: var(--orange);
 }
 
+.ad-tab-count {
+  display: inline-block;
+  min-width: 20px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--orange);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  text-align: center;
+  vertical-align: 1px;
+}
+
 .ad-tab:focus-visible {
   outline-offset: -4px;
   border-radius: 10px;
@@ -304,7 +320,6 @@ html.ad-locked {
     gap: 4px;
     margin: 0 -12px;
     padding: 0;
-    overflow: visible;
   }
 
   .ad-tab {
@@ -2259,4 +2274,528 @@ html.ad-locked .ad-toast-host {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
+}
+
+/* ------------------------------------------------------------------ Pass kinds */
+
+.ad-pass-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.ad-kind.is-single {
+  background: rgba(47, 140, 255, 0.16);
+  color: #8cc0ff;
+}
+
+.ad-kind.is-promo {
+  background: rgba(255, 90, 31, 0.16);
+  color: #ff9a73;
+}
+
+.ad-filters--kinds {
+  margin-top: -8px;
+}
+
+.ad-filter--quiet {
+  min-height: 34px;
+  font-size: 13px;
+}
+
+@media (pointer: coarse) {
+  .ad-filter--quiet {
+    min-height: 40px;
+  }
+}
+
+.ad-created-actions .ad-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ad-batch {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+  max-height: 40vh;
+  margin: 16px 0 0;
+  padding: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 12px;
+  background: var(--surface-3);
+  list-style: none;
+  text-align: center;
+}
+
+.ad-batch-code {
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-family: var(--ad-mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+/* ------------------------------------------------------------------ Switch */
+
+.ad-switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ad-switch-text {
+  min-width: 0;
+}
+
+.ad-switch-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ad-switch-row .ad-help {
+  margin-top: 4px;
+}
+
+.ad-switch {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  width: 56px;
+  height: 32px;
+  margin-top: 2px;
+}
+
+.ad-switch-input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.ad-switch-input:disabled {
+  cursor: default;
+}
+
+.ad-switch-track {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-3);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.ad-switch-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--text-3);
+  transition:
+    transform 0.18s var(--ease-out),
+    background-color 0.15s ease;
+}
+
+.ad-switch-input:checked + .ad-switch-track {
+  border-color: var(--yellow);
+  background: var(--yellow);
+}
+
+.ad-switch-input:checked + .ad-switch-track .ad-switch-thumb {
+  transform: translateX(24px);
+  background: var(--ink);
+}
+
+.ad-switch-input:focus-visible + .ad-switch-track {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+.ad-switch-input:disabled + .ad-switch-track {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ad-switch-thumb {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Settings */
+
+.ad-settings {
+  display: grid;
+  gap: 12px;
+}
+
+.ad-settings .ad-panel {
+  margin-top: 0;
+}
+
+.ad-settings .ad-panel > .ad-field:last-child,
+.ad-setting-grid .ad-field {
+  margin-bottom: 0;
+}
+
+/* The trial-wide switch: a full ring while it is on. */
+.ad-setting.is-open {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 1px var(--yellow);
+}
+
+.ad-setting-note {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 201, 40, 0.12);
+  color: var(--yellow);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ad-setting-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ad-border);
+}
+
+.ad-select {
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.ad-select:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ad-select--small {
+  width: auto;
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+.ad-savebar {
+  display: grid;
+  gap: 8px;
+  margin: 4px calc(var(--ad-gutter) * -1) 0;
+  padding: 12px var(--ad-gutter) calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--ad-border);
+  background: var(--ink);
+}
+
+/* Stays in view only while there is something to save. */
+.ad-savebar.is-dirty {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+.ad-savebar-state {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.ad-savebar-state:empty {
+  display: none;
+}
+
+.ad-savebar .ad-error {
+  margin: 0;
+}
+
+.ad-savebar-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (min-width: 640px) {
+  .ad-savebar {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    margin: 4px 0 0;
+    padding: 12px 0;
+  }
+
+  .ad-savebar .ad-error {
+    grid-column: 1 / -1;
+  }
+
+  .ad-savebar-actions {
+    display: flex;
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (min-width: 720px) {
+  .ad-setting-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+/* ------------------------------------------------------------------ Reports */
+
+.ad-badge--baru {
+  background: rgba(255, 90, 31, 0.16);
+  color: #ff9a73;
+}
+
+.ad-badge--diproses {
+  background: rgba(255, 201, 40, 0.14);
+  color: var(--yellow);
+}
+
+.ad-badge--selesai {
+  background: rgba(34, 179, 94, 0.14);
+  color: var(--green-text);
+}
+
+.ad-report.is-baru {
+  border-color: rgba(255, 90, 31, 0.55);
+}
+
+.ad-report-head,
+.ad-galat-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 8px;
+}
+
+.ad-galat-head {
+  justify-content: flex-start;
+}
+
+.ad-report-kind.is-teknis {
+  background: rgba(242, 69, 61, 0.14);
+  color: var(--ad-red-text);
+}
+
+.ad-report-kind.is-pass {
+  background: rgba(47, 140, 255, 0.16);
+  color: #8cc0ff;
+}
+
+.ad-report-kind.is-saran {
+  background: rgba(34, 179, 94, 0.14);
+  color: var(--green-text);
+}
+
+.ad-report-text {
+  margin: 10px 0 8px;
+  font-size: 15px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ad-report-meta {
+  color: var(--text-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-report-contact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 10px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 10px;
+  background: var(--surface-3);
+  font-size: 14px;
+}
+
+.ad-report-contact-label {
+  color: var(--text-3);
+}
+
+.ad-report-contact-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.ad-report-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ad-border);
+}
+
+.ad-label--inline {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ Details */
+
+.ad-details {
+  margin-top: 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: 10px;
+}
+
+.ad-details-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ad-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ad-details-summary::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.ad-details[open] > .ad-details-summary::before {
+  transform: rotate(45deg);
+}
+
+.ad-details-summary:focus-visible {
+  border-radius: 10px;
+}
+
+.ad-details-body {
+  padding: 0 12px 12px;
+}
+
+.ad-ctx {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.ad-ctx-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 30%) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.ad-ctx dt {
+  color: var(--text-3);
+}
+
+.ad-ctx dd {
+  margin: 0;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.ad-ctx dd.is-mono {
+  font-family: var(--ad-mono);
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ Errors */
+
+.ad-galat-count {
+  background: rgba(242, 69, 61, 0.14);
+  color: var(--ad-red-text);
+}
+
+.ad-galat-message {
+  margin: 10px 0;
+  font-family: var(--ad-mono);
+  font-size: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ad-galat-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ad-galat-times div {
+  display: flex;
+  gap: 6px;
+}
+
+.ad-galat-times dt {
+  color: var(--text-3);
+}
+
+.ad-galat-times dd {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.ad-stack {
+  max-height: 320px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-family: var(--ad-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.ad-galat-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ad-border);
+}
+
+.ad-galat-summary {
+  margin: 0 0 12px;
 }

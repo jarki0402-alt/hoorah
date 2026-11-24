@@ -3,7 +3,9 @@ import {
   type AdminEvent,
   type AdminEventKind,
   type AdminPass,
+  type AppConfig,
   PASS_MAX_DURATION_MS,
+  type PassKind,
   type PassStatus,
 } from '@hoorah/protocol';
 import { DAY, HOUR, MINUTE } from './format';
@@ -83,6 +85,53 @@ export function upsertPass(passes: readonly AdminPass[], pass: AdminPass): Admin
   const next = [...passes];
   next[at] = pass;
   return next;
+}
+
+/** Puts new passes first in the given order, replacing any with the same id. */
+export function upsertPasses(passes: readonly AdminPass[], added: readonly AdminPass[]): AdminPass[] {
+  const ids = new Set(added.map((p) => p.id));
+  return [...added, ...passes.filter((p) => !ids.has(p.id))];
+}
+
+/* ------------------------------------------------------------------ Pass kinds */
+
+export const PASS_KIND_IDS: readonly PassKind[] = ['shared', 'single', 'promo'];
+export type KindFilter = PassKind | 'all';
+export const KIND_FILTERS: readonly KindFilter[] = ['all', ...PASS_KIND_IDS];
+
+export function filterByKind(passes: readonly AdminPass[], kind: KindFilter): AdminPass[] {
+  return kind === 'all' ? [...passes] : passes.filter((p) => p.kind === kind);
+}
+
+/** Days a single or promo code runs from its first use (the server's `durationDays` bounds). */
+export const DURATION_DAYS = { min: 1, max: 366 } as const;
+/** Single-use codes made in one go. */
+export const BATCH_COUNT = { min: 1, max: 500 } as const;
+/** Screens a promo code may serve when it has a quota. */
+export const PROMO_QUOTA = { min: 1, max: 10_000 } as const;
+
+/** Days of a `durationMs`, rounded, at least 1 (null when the pass has none or it is not a time). */
+export function durationDays(durationMs: number | null | undefined): number | null {
+  return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
+    ? Math.max(1, Math.round(durationMs / DAY))
+    : null;
+}
+
+/** Last day a new single or promo code can be first used: a "Berlaku dipakai sampai" chip. */
+export type UseByPreset = '7d' | '30d' | '90d' | '180d' | '365d';
+export const USE_BY_PRESET_IDS: readonly UseByPreset[] = ['7d', '30d', '90d', '180d', '365d'];
+export const DEFAULT_USE_BY: UseByPreset = '90d';
+const USE_BY_DAYS: Record<UseByPreset, number> = { '7d': 7, '30d': 30, '90d': 90, '180d': 180, '365d': 365 };
+
+export function useByEnd(preset: UseByPreset, now: number): number {
+  return endOfDay(now, USE_BY_DAYS[preset]);
+}
+
+/* ------------------------------------------------------------------ Settings */
+
+/** True when the two settings differ in any field. */
+export function configChanged(a: AppConfig, b: AppConfig): boolean {
+  return (Object.keys(a) as (keyof AppConfig)[]).some((k) => a[k] !== b[k]);
 }
 
 export const MEMORY_TARGET_MB = 300;

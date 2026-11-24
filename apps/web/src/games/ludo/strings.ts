@@ -4,7 +4,7 @@ import type { ColorId } from './logic';
 const COLOR_NAMES = ['Merah', 'Hijau', 'Kuning', 'Biru', 'Merah Muda', 'Tosca', 'Oranye', 'Cokelat'] as const;
 
 export const STR = {
-  noShell: 'Buka Ludo dari layar utama Hoorah.',
+  noShell: 'Buka Ludo dari layar utama Kacawbalaw.',
   logo: 'LUDO',
   unknownPlayer: 'Pemain',
   color: (c: ColorId) => COLOR_NAMES[c],

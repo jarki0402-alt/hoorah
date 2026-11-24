@@ -1,4 +1,5 @@
 import type { PlayerInfo } from '@hoorah/protocol';
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import {
   isCpu,
@@ -16,6 +17,7 @@ const human: PlayerInfo = {
   id: 1,
   name: 'Rina',
   fruit: 'semangka',
+  look: lookOfFruit('semangka'),
   color: '#F2453D',
   connected: true,
   isHost: true,

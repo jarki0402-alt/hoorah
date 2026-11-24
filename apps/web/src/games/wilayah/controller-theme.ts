@@ -1,11 +1,11 @@
 /**
  * Phone theme for Rebut Wilayah: the same dark tegel courtyard as the main screen, with smooth
  * painted territories creeping in from the edges and one dashed trail curving out of a land, its
- * fruit still out on the floor. The middle of the phone stays calm so the joystick and the
+ * runner still out on the floor. The middle of the phone stays calm so the joystick and the
  * numbers read.
  */
 import type { ControllerTheme } from '../../controller/themes';
-import { fruitMarkup } from '../../shared/art/fruits';
+import { castHead } from '../../shared/art/people';
 import { f1 } from '../../shared/art/svg';
 
 const FLOOR = '#1A1B1F';
@@ -66,7 +66,7 @@ function trail(pts: readonly Pt[], color: string): string {
   ].join('');
 }
 
-/** A fruit marker with its heading pointer at `angle` (radians, 0 = right). */
+/** A player marker with its heading pointer at `angle` (radians, 0 = right). */
 function marker(x: number, y: number, ring: string, angle: number): string {
   const r = 17;
   const deg = f1((angle * 180) / Math.PI);
@@ -76,7 +76,7 @@ function marker(x: number, y: number, ring: string, angle: number): string {
     `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r + 1.5}" fill="#111214"/>`,
     `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r}" fill="${ring}"/>`,
     `<circle cx="${f1(x)}" cy="${f1(y)}" r="${r - 3.2}" fill="#FFFAF0"/>`,
-    `<g transform="translate(${f1(x - r + 3)} ${f1(y - r + 3)}) scale(${f1(((r - 3) * 2) / 64)})">${fruitMarkup('jeruk', 'effort')}</g>`,
+    `<g transform="translate(${f1(x - r + 3)} ${f1(y - r + 3)}) scale(${f1(((r - 3) * 2) / 64)})">${castHead('jeruk', 'effort')}</g>`,
   ].join('');
 }
 

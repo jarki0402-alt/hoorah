@@ -4,7 +4,7 @@
  * light. A key glints in a corner and the fuse box waits on the wall. The top left stays dark
  * for the logo.
  */
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { f1, seeded, svgDoc } from './svg';
 
 export function hantuSvg(): string {
@@ -45,7 +45,7 @@ export function hantuSvg(): string {
     motes += `<circle cx="${f1(300 + rnd() * 250)}" cy="${f1(150 + rnd() * 90)}" r="${f1(0.8 + rnd() * 1.4)}"/>`;
   out.push(`<g fill="#FFF6DC" opacity="0.7">${motes}</g>`);
   // The friends.
-  out.push(`<g transform="translate(222 222) scale(0.9)">${fruitMarkup('jeruk', 'wow')}</g>`);
-  out.push(`<g transform="translate(90 162) scale(0.8)">${fruitMarkup('alpukat', 'happy')}</g>`);
+  out.push(`<g transform="translate(222 222) scale(0.9)">${castHead('jeruk', 'wow')}</g>`);
+  out.push(`<g transform="translate(90 162) scale(0.8)">${castHead('alpukat', 'happy')}</g>`);
   return svgDoc(640, 360, out.join(''));
 }

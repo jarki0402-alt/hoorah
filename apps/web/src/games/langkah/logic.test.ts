@@ -1,3 +1,4 @@
+import { lookAt, lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import {
   type Cue,
@@ -25,6 +26,7 @@ function players(n: number, cpu = false): PlayerInfo[] {
     id: i + 1,
     name: `P${i + 1}`,
     fruit: FRUITS[i % FRUITS.length]!,
+    look: lookOfFruit(FRUITS[i % FRUITS.length]!),
     color: '#F2453D',
     cpu,
   }));
@@ -202,6 +204,14 @@ describe('judging', () => {
 });
 
 describe('babak flow', () => {
+  it('carries each player look and restyles it', () => {
+    const m = started('eskalator', 2);
+    expect(m.player(1)!.look).toEqual(lookOfFruit('semangka'));
+    m.restyle(1, { name: 'P1', color: '#2F8CFF', fruit: 'jeruk', look: lookAt(5) });
+    expect(m.player(1)!.look).toEqual(lookAt(5));
+    expect(m.player(2)!.look).toEqual(lookOfFruit('alpukat'));
+  });
+
   it('ends early when everybody fell, then moves to the next babak', () => {
     const m = started('eskalator', 2);
     const ev = runUntil(m, (e) => e.some((x) => x.k === 'babakEnd'));
@@ -249,8 +259,9 @@ describe('babak flow', () => {
 
   it('keeps a late joiner out until the next babak', () => {
     const m = started('eskalator');
-    m.addPlayer({ id: 9, name: 'Late', fruit: 'nanas', color: '#2F8CFF', cpu: false });
+    m.addPlayer({ id: 9, name: 'Late', fruit: 'nanas', look: lookAt(5), color: '#2F8CFF', cpu: false });
     expect(m.player(9)!.inRound).toBe(false);
+    expect(m.player(9)!.look).toEqual(lookAt(5));
     expect(m.press(9, 'up', m.t)).toBeNull();
     expect(
       viewFor({ match: m, id: 9, hostId: 1, guests: [], titles: new Map(), preview: true }),

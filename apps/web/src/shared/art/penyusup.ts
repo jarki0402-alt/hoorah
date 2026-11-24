@@ -1,5 +1,5 @@
 import type { Fruit } from '@hoorah/protocol';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { svgDoc } from './svg';
 
 /**
@@ -18,7 +18,7 @@ export function penyusupSvg(): string {
   ];
   const odd = 410;
   const heads = fruits
-    .map(([f, x, face]) => `<g transform="translate(${x - 32} 232)">${fruitMarkup(f, face)}</g>`)
+    .map(([f, x, face]) => `<g transform="translate(${x - 32} 232)">${castHead(f, face)}</g>`)
     .join('');
   const card = (x: number, word: string, odd = false) => {
     const w = 64;

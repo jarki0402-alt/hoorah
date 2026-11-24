@@ -1,12 +1,12 @@
 /**
- * The playing pieces: fruit pawns (the players' fruit heads from Bajaj Rush on a glossy pawn body
- * in their colour), the two dice, the four building levels and the transport markers in the
+ * The playing pieces: character pawns (the player's cast character as a little head on a glossy
+ * pawn body in their colour), the two dice, the four building levels and the transport markers in the
  * owner's colour, and the owner frame. Procedural geometry only.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { driverGeometry } from '../../bajaj/fruit3d';
+import { type Person, resolveLook, SKIN_PALETTE } from '../../../shared/art/people';
 import { GeoBuilder, SURF } from '../../bajaj/geo';
 import { withSurface } from '../../bajaj/look';
 import { diceFace } from './textures';
@@ -66,7 +66,7 @@ function withGlow(mat: THREE.MeshPhongMaterial): THREE.MeshPhongMaterial {
   return mat;
 }
 
-/** Vertex-coloured clear-coated material that reads per-vertex surfaces (fruit heads, buildings). */
+/** Vertex-coloured clear-coated material that reads per-vertex surfaces (pawn heads, buildings). */
 export function surfaceMaterial(): THREE.MeshPhysicalMaterial | THREE.MeshPhongMaterial {
   if (!headMat) {
     headMat = lite
@@ -137,31 +137,199 @@ function trim(): THREE.Material {
 
 /* ------------------------------------------------------------------ pawns */
 
-const headCache = new Map<Fruit, THREE.BufferGeometry>();
+const headCache = new Map<string, THREE.BufferGeometry>();
+
+const INK = '#1B1B22';
+const BLUSH = '#FF8A8A';
+const WHITE = '#FFFFFF';
+/** Head radius before scaling (about 0.62 across with the hair, like the old fruit heads). */
+const R = 0.29;
+
+/** Cache key of a look: every field that changes the head. */
+function lookKey(look: Look): string {
+  return `${look.c}|${look.s ?? ''}|${look.h ?? ''}|${look.hc ?? ''}|${look.oc ?? ''}`;
+}
+
+/** Add `g` to `b` at `pos`, turned by Euler `rot` and stretched by `scale`. */
+function put(
+  b: GeoBuilder,
+  g: THREE.BufferGeometry,
+  c: string | THREE.Color,
+  pos: readonly [number, number, number],
+  scale: readonly [number, number, number] = [1, 1, 1],
+  rot: readonly [number, number, number] = [0, 0, 0],
+): void {
+  const m = new THREE.Matrix4().compose(
+    new THREE.Vector3(...pos),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(...rot)),
+    new THREE.Vector3(...scale),
+  );
+  b.addGeometry(g, m, c);
+}
 
 /**
- * The fruit head of a Bajaj Rush driver, cut from its body: only triangles above the neck, recentred
- * on the origin (face towards +z, about 0.62 across before scaling).
+ * A hair cap: the top `cover` radians of a sphere slightly larger than the head, tipped back by
+ * `tilt` so it reaches lower at the back than over the forehead.
  */
-function fruitHead(fruit: Fruit): THREE.BufferGeometry {
-  const hit = headCache.get(fruit);
-  if (hit) return hit;
-  const src = driverGeometry(fruit, '#ffffff');
-  const pos = src.getAttribute('position') as THREE.BufferAttribute;
-  const index = src.getIndex();
-  const keep: number[] = [];
-  const cut = 1.16;
-  const tri = index ? index.count / 3 : pos.count / 3;
-  for (let t = 0; t < tri; t++) {
-    const a = index ? index.getX(t * 3) : t * 3;
-    const b = index ? index.getX(t * 3 + 1) : t * 3 + 1;
-    const c = index ? index.getX(t * 3 + 2) : t * 3 + 2;
-    if (pos.getY(a) > cut && pos.getY(b) > cut && pos.getY(c) > cut) keep.push(a, b, c);
+function cap(b: GeoBuilder, c: string, cover: number, tilt: number, grow = 1.08, lift = 0): void {
+  put(
+    b,
+    new THREE.SphereGeometry(R * grow, 24, 12, 0, Math.PI * 2, 0, cover),
+    c,
+    [0, lift, 0],
+    [1, 1, 1],
+    [-tilt, 0, 0],
+  );
+}
+
+function bun(b: GeoBuilder, c: string, r: number, x: number, y: number, z: number): void {
+  put(b, new THREE.SphereGeometry(r, 14, 10), c, [x, y, z]);
+}
+
+/** Hair, veil or hat in the character's colours, built from a few rounded parts. */
+function addHair(b: GeoBuilder, p: Person): void {
+  const hc = p.hairColor;
+  const hat = p.hat ?? hc;
+  b.surface = SURF.satin;
+  switch (p.hair) {
+    case 'bald':
+      return;
+    case 'buzz':
+      cap(b, hc, 1.35, 0.45, 1.02);
+      return;
+    case 'hijab':
+      // A hood around the whole head with an oval opening for the face, falling to the shoulders.
+      b.surface = SURF.fabric;
+      put(
+        b,
+        new THREE.SphereGeometry(R * 1.12, 24, 16, 0, Math.PI * 2, 0.78, Math.PI - 0.78),
+        hc,
+        [0, -0.01, -0.01],
+        [1, 1, 1.08],
+        [Math.PI / 2, 0, 0],
+      );
+      put(b, new THREE.CylinderGeometry(R * 0.95, R * 1.15, 0.16, 20, 1, true), hc, [0, -0.28, -0.02]);
+      return;
+    case 'turban':
+      b.surface = SURF.fabric;
+      cap(b, hat, 1.25, 0.2, 1.16, 0.04);
+      bun(b, hat, 0.07, 0, R * 0.72, R * 0.78);
+      return;
+    case 'beanie':
+      b.surface = SURF.fabric;
+      cap(b, hat, 1.3, 0.22, 1.1);
+      bun(b, hat, 0.07, 0, R * 1.12, -0.03);
+      return;
+    case 'cap': {
+      b.surface = SURF.plastic;
+      cap(b, hat, 1.2, 0.3, 1.08);
+      put(
+        b,
+        new THREE.CylinderGeometry(0.17, 0.17, 0.025, 20, 1, false, -Math.PI / 2, Math.PI),
+        hat,
+        [0, R * 0.55, R * 0.82],
+        [1, 1, 1.1],
+        [0.18, 0, 0],
+      );
+      return;
+    }
+    case 'afro':
+      put(b, new THREE.SphereGeometry(R * 1.3, 20, 14), hc, [0, R * 0.42, -R * 0.5]);
+      return;
+    default:
+      cap(b, hc, 1.5, 0.5);
   }
-  const g = src.clone();
-  g.setIndex(keep);
-  g.translate(0, -1.43, -0.2);
-  headCache.set(fruit, g);
+  switch (p.hair) {
+    case 'bob':
+    case 'wavy':
+    case 'curtain':
+    case 'braids':
+      // Long hair down the back and over the ears.
+      put(b, new THREE.SphereGeometry(R, 20, 14), hc, [0, -0.07, -0.08], [1.12, 1.02, 0.82]);
+      return;
+    case 'twinbuns':
+    case 'pigtails':
+      for (const side of [-1, 1]) bun(b, hc, 0.085, side * R * 0.95, R * 0.45, -R * 0.25);
+      return;
+    case 'pony':
+    case 'manbun':
+    case 'messybun':
+    case 'grandbun':
+      bun(b, hc, 0.095, 0, R * 0.78, -R * 0.72);
+      return;
+    case 'puff':
+      bun(b, hc, 0.15, 0, R * 1.08, -R * 0.2);
+      return;
+    case 'mohawk':
+    case 'spiky':
+    case 'tuft':
+      put(b, new THREE.ConeGeometry(0.07, 0.16, 10), hc, [0, R * 1.08, 0.02], [1, 1, 1], [-0.25, 0, 0]);
+      return;
+    default:
+  }
+}
+
+/** Eyes with a glint, cheeks, a smile, and glasses when the character wears them. */
+function addFace(b: GeoBuilder, p: Person): void {
+  const fz = R * 0.95;
+  for (const side of [-1, 1]) {
+    const x = side * 0.1;
+    b.surface = SURF.eye;
+    put(b, new THREE.SphereGeometry(1, 10, 8), INK, [x, 0.03, fz - 0.035], [0.034, 0.048, 0.02]);
+    put(b, new THREE.SphereGeometry(1, 6, 4), WHITE, [x + 0.012, 0.045, fz - 0.016], [0.01, 0.012, 0.006]);
+    b.surface = SURF.skin;
+    put(
+      b,
+      new THREE.SphereGeometry(1, 10, 6),
+      BLUSH,
+      [side * 0.165, -0.055, fz - 0.07],
+      [0.045, 0.028, 0.02],
+    );
+    if (p.acc.includes('glasses')) {
+      b.surface = SURF.gloss;
+      put(b, new THREE.TorusGeometry(0.058, 0.01, 6, 20), INK, [x, 0.03, fz - 0.005]);
+    }
+  }
+  b.surface = SURF.satin;
+  // Half a ring turned upside down: a smile under the nose.
+  put(
+    b,
+    new THREE.TorusGeometry(0.06, 0.013, 6, 14, Math.PI),
+    INK,
+    [0, -0.06, fz - 0.03],
+    [1, 0.8, 1],
+    [0.15, 0, Math.PI],
+  );
+}
+
+/**
+ * A player's head on the pawn (owner 2026-11-24: players are cast characters, not fruits): a round
+ * head in their skin tone with ears, their hair or veil in their hair colour, a face, and shoulders in
+ * their outfit colour. Centred on the origin, face towards +z, cached per look.
+ */
+function personHead(look: Look): THREE.BufferGeometry {
+  const key = lookKey(look);
+  const hit = headCache.get(key);
+  if (hit) return hit;
+  const p = resolveLook(look);
+  const skin = SKIN_PALETTE[p.skin - 1] ?? SKIN_PALETTE[1];
+  const b = new GeoBuilder();
+  b.surface = SURF.fabric;
+  put(
+    b,
+    new THREE.SphereGeometry(0.2, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+    p.outfitColor,
+    [0, -R * 1.02, 0],
+    [1.25, 0.55, 0.95],
+  );
+  b.surface = SURF.skin;
+  put(b, new THREE.SphereGeometry(R, 28, 20), skin, [0, 0, 0], [1, 1.04, 0.95]);
+  for (const side of [-1, 1])
+    put(b, new THREE.SphereGeometry(0.06, 10, 8), skin, [side * R * 0.97, -0.01, 0], [0.6, 1, 1]);
+  addFace(b, p);
+  addHair(b, p);
+  const g = b.build();
+  headCache.set(key, g);
   return g;
 }
 
@@ -212,10 +380,10 @@ export class PawnModel {
   readonly body = new THREE.Group();
   readonly head: THREE.Mesh;
 
-  constructor(fruit: Fruit, color: string) {
+  constructor(look: Look, color: string) {
     const base = new THREE.Mesh(pawnBody(), glossy(color));
     const ring = new THREE.Mesh(pawnRing(), trim());
-    this.head = new THREE.Mesh(fruitHead(fruit), surfaceMaterial());
+    this.head = new THREE.Mesh(personHead(look), surfaceMaterial());
     this.head.scale.setScalar(HEAD_SCALE);
     this.head.position.y = HEAD_Y;
     // Tip the face up a little so it looks at the camera above the table.

@@ -5,7 +5,7 @@ Catatan pengerjaan proyek. Entri terbaru di paling atas. Setiap perubahan kode, 
 ## Status saat ini
 
 - **Fase:** Fase 1 (MVP) selesai dibangun, menunggu uji di perangkat sungguhan oleh pemilik.
-- **Jalan di:** Docker lokal (nginx), `http://192.168.0.102:1010`, dan produksi `https://hoorah.fajarrizky.my.id` di VM Google Cloud (IP `35.212.156.209` sejak 2026-11-20). Gelombang 3 dikerjakan lokal dulu; deploy VM ditunda.
+- **Jalan di:** Docker lokal (nginx), `http://192.168.0.104:1010`, dan produksi `https://hoorah.fajarrizky.my.id` di VM Google Cloud (IP `35.212.156.209` sejak 2026-11-20). Gelombang 3 dikerjakan lokal dulu; deploy VM ditunda.
 - **Game:** 30 game (18 lama + Gelombang 3: Obby, Lantai Runtuh, Nyebrang, Penyusup, Satu Tali, Bom Oper, Seluncur Es, Langkah Maut, Juara Eja, Kampung Siluman, Petualangan Warna, Hantu Tak Terlihat), semua bisa main sendiri kecuali Kompak Gak?, Kampung Siluman, Penyusup. Gambar Kilat dan Panjat Pinang dihapus.
 - **Hoorah Pass (uji coba):** kode Pass bersama dari dashboard admin `http://192.168.0.102:1010/admin/`, disimpan di SQLite (`/data/hoorah.db` di Docker).
 - **Infrastruktur cloud:** VM e2-micro Google Cloud (Oregon) dipakai bersama Suwwara. Deploy Hoorah siap (`DEPLOY.md`, **build di VM** lewat `deploy/vm/update.sh`, folder `/home/fajarrizky04febriano/hoorah`); langkah VM dijalankan pemilik.
@@ -67,6 +67,457 @@ Daftar ini hasil diskusi. Tidak ada yang dikerjakan sebelum pemilik memutuskan d
 ```
 
 ## Log
+
+### 2026-11-24 · Main bareng teman jauh (dua layar utama, satu room) tahap 1 + 2
+
+**Apa yang diubah** (keputusan pemilik 2026-11-24, eksekusi tahap 1 dan 2):
+- **Konsep:** layar A (Host) menjalankan game; layar B di tempat lain membuka link dari A dan **menggambar sendiri** halaman dan game yang sama dari keadaan yang dikirim A (bukan video/berbagi layar). HP di tempat B scan QR di layar B dan masuk room A. Obrolan lewat telepon/video call di luar aplikasi.
+- **Protokol + server:** hello `role:'mirror'` dengan kunci rahasia 8 karakter (`mirrorKey` di welcome layar A), relay target `'mirror'` (hanya dari layar), `{t:'mirrors', count, key}` ke layar A, `{t:'mirrorsOff'}` (putuskan + kunci baru, error `mirror_stopped`), maks 3 cermin per room, kunci/kode salah dihitung ke batas 20 kode salah per menit, cermin tidak memakan kursi dan tidak bisa mengendalikan apa pun, kunci ikut snapshot room. Link: `/J/<kode>-<kunci>` → `/main?mirror=...` (`parseMirrorLink`).
+- **SDK:** `GameInit.mirror`, `game.isMirror`, `game.publish(state)` (hanya saat ada cermin, duplikat tidak dikirim), `game.mirrored`, event `mirror`/`mirrors`.
+- **Layar A:** tombol "Main bareng teman jauh / LDR? Tetap main bareng!" di bilah atas beranda (bisa dengan d-pad Host), panel link besar + QR + 4 langkah + status "Menunggu layar teman…"/"Layar teman tersambung", Salin link, Putuskan layar teman; tombol menjadi hijau "Teman jauh tersambung". Snapshot tampilan (halaman, fokus, rak beranda, roda Acak, detail, hasil, pesta, tutorial, iklan, musik) dikirim maks tiap 50 ms bila berubah, penuh saat cermin bergabung; suara A ikut dikirim.
+- **Layar B:** mode pengikut (tombol/remote lokal tidak menggerakkan halaman, tombol suara dan layar penuh tetap), chip "Layar teman jauh · Host: <nama>", QR + kode room di pojok (detail: kanan atas), "Menunggu layar utama temanmu" saat A putus, kartu selesai + Coba lagi. Game dimuat dengan pengaturan persis milik A, keadaan terakhir diserahkan setelah iframe siap.
+- **Game didukung (tahap 2):** Kuis Nusantara, Sambung Kata, Juara Eja, Kompak Gak?, Ular Tangga, Ludo, Congklak, Catur. Masing-masing punya `mirror.ts` (+ tes: round trip, input rusak ditolak, ukuran < 5 KB) dan replika di layar B tanpa aturan/CPU; timer dikirim sebagai waktu berakhir; animasi (pion, biji congklak, bidak catur, efek) diputar sendiri di B; Juara Eja membacakan kata juga di B. Selama ada cermin, game lain bertanda "Belum bisa jarak jauh" dan tidak bisa dimulai; Mode Pesta dan Acak hanya dari 8 game itu; picker Host ikut menandai.
+
+**File:** `packages/protocol/src/{constants,messages,validate,protocol.test}.ts`, `packages/sdk/src/{bridge,index}.ts`, `apps/server/src/{rooms,index}.ts`, `apps/server/src/rooms.mirror.test.ts`, `apps/web/src/main.ts`, `apps/web/src/shared/{net,games}.ts`, `apps/web/src/screen/{mode.ts,mirror.ts,mirror.test.ts,nav.follow.test.ts,remote.tsx,store.ts,bridge.ts,nav.ts,party.ts,strings.ts,components.tsx,main.tsx,screen.css,pages/*}`, `apps/web/src/controller/{store,strings}.ts,picker.tsx,picker.css`, `apps/web/src/games/{kuis,kata,eja,kompak,ular,ludo,congklak,catur}/**` (mirror.ts, replica/MirrorScene, refactor kecil driver/screen), `e2e/remote.spec.ts`, `e2e/hoorah.spec.ts`.
+
+**Verifikasi:**
+- `npm run check`: lulus (11 peringatan lint lama, 120 file / 2111 tes unit, build).
+- `npm run e2e`: run penuh 12/12 lulus (run sebelumnya 11/12: tes paket gratis gagal di klik kartu Obby, masalah lama; sekarang tes itu menyimpan cuplikan `free-tier-detail-failed` bila gagal). Tes baru `e2e/remote.spec.ts` (≈20 dtk): panel, link B, B mengikuti fokus Host, picker menandai, detail Kuis di kedua layar, HP lewat QR B muncul di A dan B, putuskan + link baru, Kuis berjalan di kedua layar. Cuplikan A dan B identik.
+- `npm run docker:up`: lulus. IP LAN laptop berubah menjadi 192.168.0.104; `curl http://192.168.0.104:1010/health` → `{"ok":true,...}`, `/J/...` 200, teks "Main bareng teman jauh" dan "Belum bisa jarak jauh" ada di build.
+
+**Berikutnya / sisa:**
+- Belum dicoba dengan dua lokasi sungguhan (butuh deploy VM, dengan izin pemilik). Di Wi-Fi yang sama bisa dicoba dengan dua perangkat.
+- Hitung mundur hasil/pesta, tutorial, dan gelembung reaksi di B berjalan lokal (bisa selisih sedikit).
+- Tahap 3 (Juragan, Kampung Siluman, Penyusup, Seluncur Es) dan tahap 4 menyusul.
+- Tes paket gratis kadang gagal di run penuh: selidiki dari cuplikannya.
+
+### 2026-11-24 · Pilih tokoh setelah masuk (layar penuh + Siap), "Memilih tokoh…" di layar utama, ikon menu jeda polos
+
+**Apa yang diubah:**
+- **Alur HP baru** (permintaan pemilik: pemilih tokoh di halaman nama terasa terpotong): Kode → Nama → Masuk → halaman **"Pilih tokohmu"** layar penuh (pratinjau, Acak, tab Tokoh/Kulit/Rambut/Warna rambut/Baju, kisi mengisi sisa layar, tombol **Siap**) → lobi. Halaman nama kembali ringkas (nama + Masuk). HP mendatar: pratinjau di kiri, kisi di kanan.
+  - Hanya saat join baru (bukan sambung ulang). Tokoh terakhir sudah terpilih, cukup ketuk Siap.
+  - Setiap pilihan langsung terkirim (`profile` dengan `picking: true`) dan tampil di kursi layar utama; kursi menulis **"Memilih tokoh…"** (kuning, berkedip pelan) sampai Siap.
+  - Host memulai game saat ada yang masih memilih: HP itu otomatis selesai memilih dengan tokoh yang sedang terpilih.
+  - Protokol: `PlayerInfo.picking?`, `profile.picking?` (divalidasi boolean). Server: `Player.picking`, hanya dikirim saat HP tersambung.
+- **Menu jeda remote Host:** ikon tidak lagi di kotak berwarna, polos seperti tombol remote beranda (Keluar tetap merah, status Nyala/Mati di bawah label). Properti `tint` dihapus.
+
+**File:** `packages/protocol/src/{messages.ts,validate.ts,protocol.test.ts}`, `apps/server/src/{rooms.ts,rooms.test.ts}`, `apps/web/src/controller/{store.ts,avatar-editor.tsx,setup.tsx,room.tsx,strings.ts,ingame.tsx,controller.css}`, `apps/web/src/screen/{pages/JoinPage.tsx,strings.ts,screen.css}`, `e2e/hoorah.spec.ts`, `e2e/host-offer.spec.ts`.
+
+**Verifikasi:**
+- `npm run check`: lulus (11 peringatan lint lama, 109 file / 2042 tes unit, build).
+- `npm run e2e`: run penuh terakhir 11/11 lulus. Satu run penuh sebelumnya 10/11: tes paket gratis gagal di klik kartu Obby di beranda (masalah lama, lulus saat dijalankan sendiri 2x). E2e sekarang memeriksa halaman pilih tokoh, "Memilih tokoh…" di layar utama sampai Siap, dan menekan Siap di setiap join.
+- Cuplikan e2e: halaman pilih tokoh iPhone (kisi lega, Siap di bawah), menu jeda (ikon polos), layar utama 1080p (Budi "Siap main").
+- `npm run docker:up`: lulus, `http://192.168.0.121:1010/health` → `{"ok":true,...}`, teks baru ada di build.
+
+**Berikutnya / sisa:** tes paket gratis kadang gagal di run penuh (klik kartu beranda); selidiki penyebabnya. Belum commit, belum deploy VM.
+
+### 2026-11-24 · Ganti nama Kacawbalaw + logo, avatar tokoh di aplikasi dan 30 game, `/` selalu landing, kedipan Hantu, Obby layar dibagi, latihan Dapur
+
+**Apa yang diubah:**
+- **Nama dan logo** (keputusan pemilik 2026-11-24, juga dicatat di PRD bagian atas dan CLAUDE.md):
+  - Semua teks pemain: Hoorah menjadi **Kacawbalaw**, Hoorah Pass menjadi **Kacaw Pass** (strings semua game, layar utama, HP, admin, landing, judul, meta pratinjau). Nama file CSV admin `kacaw-pass-...csv`.
+  - `shared/art/brand.ts` (baru): logo tulisan "kacaw / balaw" (Baloo 2 ExtraBold, celah antarhuruf sama dari ukuran huruf terukur, satu bentuk w gelombang) dan ikon dua pita miring (satu pita di bawah 24 px). `Logo`, `LogoMark`, `Wordmark` di `shared/ui.tsx`.
+  - `public/icon.svg` (favicon satu pita), `icon-app.svg`, PNG `apple-touch-icon`/`icon-192`/`icon-512` dari `scripts/brand-icons.mjs`; `manifest.webmanifest` + meta `application-name`/`apple-mobile-web-app-title` = "Kacawbalaw". `brand.test.ts` menjaga file ikon tetap sama dengan kode (`UPDATE_ICONS=1` menulis ulang).
+  - Nama internal tidak diubah: package `@hoorah/*`, repo, image, folder dan subdomain VM, kunci `hoorah.*`.
+- **Avatar pemain = 24 tokoh** (menggantikan buah):
+  - Protokol: `Look` (tokoh, kulit 1-5, model rambut dari tokoh lain, warna rambut 0-7, warna baju 0-7), `parseLook`, `PlayerInfo.look`, hello `look?`/`fruit?`, pesan baru `profile` (ganti nama dan tokoh di room). Server menyimpan look, membagi buah per kursi (`freeFruit`), HP lama tanpa look mendapat tokoh dari buahnya, snapshot lama dipulihkan.
+  - HP: pemilih tokoh (`controller/avatar-editor.tsx`): Tokoh, Kulit, Rambut, Warna rambut, Baju, Acak; tersimpan di HP; tombol "Ubah nama dan tokoh" di lobi (tidak saat game berjalan).
+  - `people.ts`: `resolveLook`, palet rambut/baju/kulit, `avatarMarkup` (pengganti `fruitMarkup` pada kisi 64), `castHead` untuk gambar dekoratif. `Avatar` memakai `PersonBadge`.
+  - Layar utama, HP, admin, key art semua game, gambar tutorial (`fruit()` sekarang menggambar tokoh; Bajaj dan Lari pakai `fruitHead`), karakter 3D dunia kotak (`kotak/render/avatar.ts`: orang kotak-kotak dengan kulit, rambut/kerudung/topi, baju), dan 28 game memakai look pemain. Bajaj Rush dan Lari Terus: karakter 3D tetap buah (keputusan pemilik), HUD-nya tokoh. Lawan komputer memakai tokoh yang tidak dipilih pemain.
+  - Game Phaser 2D: kepala dibuat saat look pertama muncul (`games/common/heads.ts`, dipakai tarik, karung, kerupuk, wilayah, warna, hantu; arena dan nyebrang punya atlas sendiri). Juragan: kepala pion 3D dari look.
+- **`/` selalu landing page:** perangkat yang pernah jadi layar utama melihat tombol "Lanjutkan sebagai layar utama"; `/?depan` dihapus (`shared/visit.ts`, `main.ts`, `landing/hero.tsx`). Logo di bilah atas layar utama membuka landing di tab baru ("Tentang Kacawbalaw").
+- **Hantu Tak Terlihat:** kedipan merah 3x di posisi hantu di layar utama (`world.ts` `PING`, `scene.ts` `drawPing`). Seram Ringan tiap 8 detik dan setiap tertangkap; Seram Beneran tiap 15 detik atau saat hantu dekat penghuni (jarak minimal 5 detik). Tips katalog ditambah.
+- **Obby:** kamera dari belakang menghadap ke depan (joystick atas = maju, `stickToCourse`). Sampai 4 orang layar dibagi (1 penuh, 2 kiri-kanan, 3-4 empat bagian; 3 orang: bagian keempat rombongan), 5+ satu kamera rombongan (aturan tarik ke rombongan hanya di mode ini). Bingkai bernama per bagian, label nama 3D disembunyikan saat dibagi, bayangan diturunkan.
+- **Dapur Heboh:** latihan praktik di dapur sungguhan sebelum game pertama di layar ini (`guide.ts` + tes): satu pesanan Kentang goreng, panah memantul di atas stasiun, kartu langkah di layar, langkah dan tombol yang disorot di HP, langkah berikut hanya setelah langkah sekarang dikerjakan, Lewati (ketuk 2x), jam tidak berjalan, lalu ronde biasa. Tombol pad HP sekarang menghormati `pulse` (`is-pulse`).
+
+**Alasan:** permintaan pemilik 2026-11-24 ("eksekusi semuanya", Kacaw Pass, nama di ikon Kacawbalaw, domain nanti, Bajaj dan Lari tetap buah dulu).
+
+**File:** `deploy/nginx/hoorah-server.conf` (tipe manifest), `packages/protocol/src/{look.ts,messages.ts,validate.ts,index.ts,protocol.test.ts}`, `apps/server/src/{rooms.ts,rooms.test.ts}`, `apps/web/src/shared/{art/brand.ts,art/brand.test.ts,art/people.ts,person.tsx,ui.tsx,brandStrings.ts,visit.ts,tutorial/draw.ts,kotak/render/avatar.ts,kotak/render/players.ts,games.ts,art/*.ts}`, `apps/web/src/controller/{avatar-editor.tsx,setup.tsx,room.tsx,store.ts,strings.ts,common.tsx,pad.tsx,main.tsx,controller.css}`, `apps/web/src/screen/**`, `apps/web/src/landing/{hero.tsx,steps.tsx,strings.ts}`, `apps/web/src/admin/{main.tsx,csv.ts,csv.test.ts,strings.ts}`, `apps/web/src/main.ts`, `apps/web/src/games/*/**` (semua game), `apps/web/src/games/common/{cpu.ts,heads.ts}`, `apps/web/{index.html,*/index.html,public/*}`, `scripts/brand-icons.mjs`, `e2e/hoorah.spec.ts`, `PRD-Hoorah.md`, `CLAUDE.md`.
+
+**Verifikasi:**
+- `npm run check`: lulus (lint 11 peringatan lama, typecheck, 109 file / 2040 tes unit, build).
+- `npm run e2e`: 11/11 lulus (run akhir pada kode final, 3,5 menit). Sebelumnya gagal karena (1) bug sungguhan: aplikasi HP crash saat dimuat (`pick` dipakai sebelum dideklarasikan di `controller/store.ts`, diperbaiki), (2) tes masih mengeklik tombol buah (diganti pemilih tokoh: Mia, Bram, tab Baju), (3) Dapur kini diawali latihan (tes memeriksa kartu latihan lalu Lewati 2x), (4) klik kartu Obby di tes paket gratis kadang hilang (diulang otomatis sampai halaman detail terbuka, lulus 2x berturut-turut).
+- `npm run docker:up`: lulus. `curl http://192.168.0.121:1010/health` → `{"ok":true,...}`. Build berisi teks baru ("Kacaw Pass" ada, "Hoorah Pass" tidak ada, "Lanjutkan sebagai layar utama", "Tulis nama & pilih tokohmu"), `/manifest.webmanifest` bertipe `application/manifest+json` (aturan nginx baru), ikon PNG 200.
+- Cek tampilan (Playwright, server dev, tanpa error halaman): landing 1440x900 perangkat lama (tombol Lanjutkan), beranda layar utama 1280x720 (logo baru), halaman nama + pemilih tokoh di HP (Pixel 7), Juragan demo 4 pion berkepala tokoh, Obby `?demo=1/2/3&people=1` di 1280x720 dan 1024x768 (4:3): kamera awal terlalu rendah sehingga pemain terpotong, diperbaiki (FOLLOW_RIG lebih tinggi dan jauh, tes baru "runner whole in the picture"); label bagian layar dan jam disusun ulang (jam di tengah, label di pojok, klasemen samping disembunyikan saat dibagi).
+
+**Berikutnya / sisa:**
+- Belum dicek di perangkat sungguhan: kepala tokoh di game Phaser (muncul beberapa ms setelah look pertama), pion Juragan, kepala koki Dapur, panah dan kartu latihan Dapur di 16:9/16:10/4:3, layar dibagi Obby dengan banyak pemain.
+- Bajaj Rush dan Lari Terus masih buah di 3D (diganti nanti).
+- Belum commit dan belum deploy VM.
+
+### 2026-11-24 · Avatar pemeran (24 tokoh) di landing page, landing lebih ramai, garis progres dihapus
+
+**Apa yang diubah:**
+- **Pemeran Hoorah di kode** (baru):
+  - `apps/web/src/shared/art/people.ts` berisi gambar 24 tokoh dan 14 ekspresi, sama persis dengan desain avatar versi 2 yang disetujui pemilik di Claude Design.
+  - Isinya hanya fungsi yang menghasilkan teks SVG, tanpa DOM. Setiap gambar memakai id clip-path baru supaya tidak bentrok kalau tokoh yang sama tampil dua kali.
+  - `shared/person.tsx`: `PersonArt` (tokoh tanpa bingkai) dan `PersonBadge` (lingkaran berwarna dengan cincin warna pemain, pengganti `Avatar` buah).
+  - `shared/peopleStrings.ts`: nama tokoh.
+  - Tes `people.test.ts` memeriksa semua tokoh × semua ekspresi: markup lengkap, tanpa NaN, dan setiap clip-path ada definisinya.
+- **Landing page: semua buah diganti tokoh.**
+  - Bagian pembuka: 3 HP (Leo, Putri, Bayu). 3 tokoh melayang (Lala, Kiki, Doni) berganti ekspresi dan muncul gelembung reaksi bergiliran (Hore!, Seru!, Wih!, dan lainnya).
+  - Adegan langkah: pemain Mia, Juna, dan Sinta.
+  - Podium Mode Pesta: Lala menang, Rio senang, Bayu menangis.
+  - Kartu "Cocok untuk": rombongan 3 tokoh per kartu (keluarga, tongkrongan, kantor, 17-an, arisan).
+  - Penutup: tokoh melayang (Rio, Ayu, Dino).
+- **Lebih ramai:**
+  - Pawai 24 tokoh berjalan di bawah bagian pembuka (`cast.tsx`, `Parade`).
+  - Tokoh mengintip di samping judul Perangkat (Kai), Harga (Bayu, melet), dan Tanya jawab (Tara, gugup), dengan gelembung kata.
+  - Kerumunan 8 tokoh bersorak di bawah ajakan penutup. Mereka muncul bergiliran saat terlihat.
+  - Mode ringan Smart TV dan "kurangi gerakan" mematikan semua animasi baru.
+  - Di HP sempit, gelembung kata dan tokoh melayang di penutup disembunyikan supaya tidak menutupi teks.
+- **Garis progres di atas dihapus**, beserta CSS-nya.
+- **Teks pembuka:** "Scan, pilih buah" menjadi "Scan, tulis nama" (netral selama aplikasi masih memakai buah).
+- **e2e free tier:** ditambah jeda 800 ms setelah masuk beranda, sama seperti tes lain.
+  - Tes ini gagal 2 kali berturut-turut karena klik kartu Obby terlalu cepat sehingga halaman detail tidak terbuka.
+  - Setelah ada jeda, tes lulus 2 kali berturut-turut.
+  - Penyebabnya waktu, bukan perubahan landing.
+
+**Alasan:** permintaan pemilik 2026-11-23: avatar pemeran dipakai di landing page, landing terasa sepi, dan garis progres tidak perlu.
+
+**File:**
+- baru: `apps/web/src/shared/art/people.ts`, `apps/web/src/shared/art/people.test.ts`, `apps/web/src/shared/person.tsx`, `apps/web/src/shared/peopleStrings.ts`, `apps/web/src/landing/cast.tsx`;
+- diubah: `apps/web/src/landing/{hero,steps,party,info,main,art}.tsx`, `apps/web/src/landing/strings.ts`, `apps/web/src/landing/landing.css`, `e2e/hoorah.spec.ts`, `PROGRESS.md`.
+
+**Verifikasi:**
+- `npm run check` lulus: 105 file tes, 1991 tes, build OK. Ada 11 peringatan lint lama, tidak ada yang baru.
+- `npm run e2e`: 10 lulus, 1 gagal (free tier, karena waktu, lihat di atas). Setelah diperbaiki, tes itu dijalankan ulang 2× dan lulus. Suite penuh belum dijalankan ulang.
+- `npm run docker:up` OK; `/health` → `{"ok":true,...}`. Teks baru ada di aset container, `lp-progress` sudah tidak ada.
+- Tangkapan layar Playwright di 1920×1080 (16:9), 1440×900 (16:10), 1024×768 (4:3), dan HP 390×844: tanpa galat halaman, tanpa gulir menyamping. Hero, pawai, podium, harga, penutup, dan HP dicek visual.
+
+**Berikutnya:**
+- Mengganti buah di aplikasi (pemilih avatar di HP, layar utama, game, protokol `fruit` menjadi avatar) secara bertahap.
+- Daftar "layar terdekat" di landing masih menampilkan buah pemain sungguhan sampai langkah itu dikerjakan.
+
+### 2026-11-23 · Landing page di `/`, layar utama pindah ke `/main`
+
+**Apa yang diubah:**
+- **Alamat** (`apps/web/src/main.ts`):
+  - `/` = landing page; layar utama dan HP = `/main`; `/R/<kode>` dan `?r=` tetap langsung ke halaman gabung.
+  - Perangkat yang pernah menjalankan layar utama (`hoorah.screenUsed`) langsung ke `/main`; `/?depan` tetap menampilkan landing.
+  - `?tv`, `?ctrl`, `?diag` tidak berubah.
+- **Landing page** (`apps/web/src/landing/`, dibuat oleh agent, ±13 KB gzip, gambar game dimuat setelah tampil pertama):
+  1. Hero dengan tombol Mulai main sekarang / Gabung pakai kode. Di HP: kotak kode 6 angka paling atas, plus kartu "Ada layar Hoorah di Wi-Fi ini" dari `/api/nearby`.
+  2. Cerita 3 langkah dengan perangkat menempel saat digulir.
+  3. Etalase 30 game: dua baris bergeser berlawanan arah, saring suasana, chip GRATIS.
+  4. Mode Pesta: 5 kotak terbuka bergiliran, lalu podium.
+  5. Cocok untuk.
+  6. Perangkat + angka menghitung naik.
+  7. Gratis vs Pass: "Harga segera hadir", Coba gratis 60 menit.
+  8. Tanya jawab.
+  9. Ajakan penutup + kaki halaman (privasi/syarat "segera").
+
+  Juga:
+  - Animasi muncul saat digulir, fruit parallax, hormat "kurangi gerakan".
+  - Navigasi panah dan remote; zoom diizinkan di landing.
+  - Judul dan meta deskripsi/OG di `index.html` ("Hoorah: game pesta di layar mana pun"); belum ada gambar OG.
+- **Default yang dipakai** (4 keputusan belum dijawab pemilik): alamat seperti di atas, harga "segera hadir", 9 bagian, tanpa tombol WhatsApp.
+- e2e memakai `/main`; tes baru untuk landing. CLAUDE.md mencatat alamat baru.
+
+**Alasan:** permintaan pemilik 2026-11-23.
+
+**File:** `apps/web/src/main.ts`, `apps/web/src/landing/*` (baru: `main.tsx`, `hero.tsx`, `steps.tsx`, `showcase.tsx`, `party.tsx`, `info.tsx`, `art.tsx`, `artLoader.ts`, `motion.ts`, `nav.ts`, `logic.ts`, `logic.test.ts`, `strings.ts`, `landing.css`), `apps/web/index.html`, `e2e/hoorah.spec.ts`, `e2e/host-offer.spec.ts`, `CLAUDE.md`, `PROGRESS.md`
+
+**Verifikasi:**
+- `npm run check` lulus: 11 peringatan lint (5 lama + 6 urutan spesifisitas di `landing.css`), 1984 tes, build.
+- `npm run e2e`: 11/11 lulus, termasuk tes landing: tombol mulai ke `/main`, kunjungan ulang langsung `/main`, `/?depan`, HP mengetik kode lalu masuk ke halaman nama.
+- Agent memeriksa tangkapan layar di 1920×1080, 1440×900, 1024×768, 390×844, 320×568 (tanpa gulir menyamping, tanpa galat konsol). Saya meninjau hero, cerita langkah, etalase, Mode Pesta, harga, FAQ, dan penutup.
+- `npm run docker:up` → `/health` ok; `/`, `/main`, `/R/123456` = 200 HTML; judul baru dan teks landing ada di aset.
+
+**Selanjutnya / catatan:**
+- Belum dicoba di Smart TV dan HP sungguhan.
+- Gambar pratinjau OG (1200×630) belum ada.
+- Halaman privasi/syarat belum ada.
+- Di layar 4K murni (3840 px CSS), logo bilah atas terlihat kecil.
+- Peringatan lint `landing.css` bisa dirapikan.
+
+### 2026-11-23 · Tombol Lainnya di remote, tanda Gratis/Coba/PASS, hitung mundur Pass, jam kode di admin
+
+**Apa yang diubah:**
+- **Remote HP:**
+  - Tautan "Punya kode Hoorah Pass?" dan "Laporkan masalah" di atas D-pad dihapus, karena sering tertekan tidak sengaja.
+  - Baris tombol jadi 3+3: Kembali, Beranda, Ganti Host / Getar, **Lainnya**, Keluar.
+  - Lainnya membuka lembar berisi kode Pass dan Laporkan masalah.
+  - Lobi pemain: tautan dipindah ke tombol Lainnya di baris Getar/Keluar.
+- **Tanda akses:**
+  - Layar utama (bilah atas beranda dan halaman gabung) menampilkan chip abu-abu "Gratis · 2 pemain", oranye "Coba gratis · N menit", kuning "PASS · sisa 23:59:59" (hitung mundur jika < 48 jam) atau "PASS · sampai <tanggal jam>", biru "Uji coba · semua terbuka".
+  - HP: badge di bawah nama (Gratis / Coba gratis · N mnt / PASS / Uji coba).
+- Pengingat toast 30 dan 5 menit sebelum Coba gratis/Pass habis.
+- Saat Pass habis: toast. Game yang sedang jalan tetap selesai, lalu tawaran Pass muncul sekali ("Hoorah Pass sudah berakhir").
+- **Admin:** kode sekali pakai menampilkan "Mulai <jam>, habis <jam>"; kode promo menampilkan "Pertama dipakai <jam>". Server mengirim `firstStartedAt`/`lastRunsUntil`.
+- Pass 1 hari = tepat 24 jam sejak kode pertama dipakai di layar.
+
+**Alasan:** permintaan pemilik 2026-11-23.
+
+**File:**
+- `apps/web/src/controller/{room.tsx,common.tsx,strings.ts,controller.css}`
+- `apps/web/src/screen/{components.tsx,store.ts,strings.ts,screen.css,pages/JoinPage.tsx,pages/OfferOverlay.tsx}`
+- `apps/web/src/shared/{when.ts,ui.tsx}`
+- `apps/web/src/admin/{pass-card.tsx,strings.ts,csv.test.ts,logic.test.ts}`
+- `apps/server/src/{passes.ts,admin/service.ts}`, `packages/protocol/src/admin.ts`
+- `e2e/hoorah.spec.ts`, `PROGRESS.md`
+
+**Verifikasi:**
+- `npm run check` lulus: 5 peringatan lint lama, 1964 tes, build.
+- `npm run e2e`:
+  - 8 lulus, 2 gagal: tes Pass masih mencari `.pass-chip` lama, dan Dapur ikut gagal karena saklar semua terbuka tidak dikembalikan.
+  - Locator diganti `.access-chip.is-pass`, lalu kedua tes lulus.
+- Uji Playwright (server DB memori):
+  - kode sekali pakai 1 hari dipakai lewat Lainnya, lalu layar utama menampilkan "PASS · sisa 23:59:59" dan HP badge PASS;
+  - admin mencatat mulai dan habis tepat 24 jam;
+  - remote di 320×568 dan 568×320: nama dan badge terlihat, tidak ada tombol di atas D-pad.
+- `npm run docker:up` → `/health` ok, teks baru ada di aset container.
+
+**Selanjutnya:** coba di HP sungguhan.
+
+### 2026-11-23 · Fase 0 MVP: gratis vs Pass, Coba gratis, kode voucher, iklan promo, pengaduan, galat, pengaturan admin
+
+**Apa yang diubah** (dikerjakan 4 agent paralel dengan kontrak bersama di `packages/protocol/src/access.ts`, lalu disambungkan):
+- **Protokol:**
+  - `RoomAccess` (free/trial/pass/open), `AppConfig`, hello layar membawa id layar.
+  - Pesan baru: `{t:'trial'}`, welcome/room membawa `access` + `config`, `{t:'config'}`, `{t:'trial',ok:false}`, `{t:'turnedAway'}`.
+  - `PassKind` (shared/single/promo), PassReject `used`, `LIMITS.premiumPlayers` 16.
+  - Tipe admin untuk config, pengaduan, galat, dan pembuatan kode massal.
+- **Server:**
+  - Migrasi 3 (kolom pass, `entitlements`, `trials`, `settings`, `reports`, `error_groups`).
+  - Akses room open > pass > trial > free. Kursi: gratis 2, pass sesuai kode, trial/open 16.
+  - Kode sekali pakai menempel ke layar (pindah maks 1x/6 jam); kode promo dengan kuota per layar.
+  - Coba gratis 1x per layar (maks 3 layar per alamat per 30 hari).
+  - `POST /api/report` dan `/api/errors` (dibatasi per alamat).
+  - Admin: config, pengaduan, galat, buat kode massal.
+  - Layar utama diberi tahu saat pemain ke-3 ditolak.
+  - `OPEN_ALL=1` menyalakan "semua terbuka" sampai pemilik menyimpan pengaturan.
+- **Layar utama:**
+  - Daftar gratis + Game Minggu Ini (bergilir Senin WIB, `shared/freeTier.ts`).
+  - Chip PASS / GRATIS MINGGU INI.
+  - Tawaran Pass (game terkunci, Mode Pesta, pemain ke-3, Coba gratis habis).
+  - Chip hitung mundur Coba gratis.
+  - Acak hanya game yang bisa dimainkan bagi room gratis.
+  - Warna Hutan 1–5 saja tanpa Pass.
+  - Iklan promo 15 dtk tidak bisa dilewati (`screen/ads.ts` + `pages/AdBreak.tsx`). Aturannya: setiap 2 game selesai, jarak minimal 10 menit, bukan sebelum game pertama, bukan di Mode Pesta. Game berikutnya di-prefetch selama iklan, dan iklan selesai sendiri bila Coba gratis/Pass aktif.
+  - Petunjuk "Laporkan masalah" di halaman gabung.
+  - Pencatat galat (juga dari iframe game).
+- **HP:**
+  - "Punya kode Hoorah Pass?" di lobi dan remote Host (PassEntry), kode `used`, Coba gratis dari lembar Pass.
+  - Lembar "Laporkan masalah" di remote, lobi, dan menu jeda/pemain.
+  - Pencatat galat.
+  - Selama iklan, HP menampilkan "Bersiap, game dimulai…" dan Host tetap bisa memakai D-pad.
+- **Admin `/admin/`:**
+  - Jenis kode (bersama/sekali pakai/promo), buat sampai 500 sekaligus, salin semua/unduh CSV, chip jenis + pemakaian.
+  - Tab Pengaturan (semua terbuka, iklan, angka-angka, lama Coba gratis, Game Minggu Ini), tab Pengaduan (status Baru/Diproses/Selesai), tab Galat.
+- **Docker lokal:** `OPEN_ALL=1` (uji coba semua terbuka). VM tidak berubah: bawaan mati, nyalakan di admin.
+
+**Alasan:** keputusan pemilik 2026-11-23 (PRD 3.4.2).
+
+**File (ringkas):**
+- `packages/protocol/src/{access.ts (baru),access.test.ts (baru),messages.ts,pass.ts,admin.ts,constants.ts,validate.ts,index.ts,protocol.test.ts}`
+- `apps/server/src/{db.ts,passes.ts,rooms.ts,limiter.ts,index.ts,config.ts,settings.ts (baru),trials.ts (baru),reports.ts (baru),rooms.access.test.ts (baru),reports.test.ts (baru),rooms.pass.test.ts,admin/*}`
+- `apps/web/src/admin/*` (+ `settings-tab`, `reports-tab`, `errors-tab`, `csv`, `feedback`)
+- `apps/web/src/screen/{store.ts,strings.ts,components.tsx,main.tsx,screen.css,ads.ts,prefetch.ts,adStrings.ts,reportContext.ts,pages/*}`
+- `apps/web/src/shared/{freeTier.ts,report.ts,reportStrings.ts,ui.tsx}`
+- `apps/web/src/controller/{store.ts,pass.tsx,report.tsx,room.tsx,ingame.tsx,main.tsx,setup.tsx,strings.ts,controller.css}`
+- `apps/web/src/games/warna/*`, `apps/web/vite.config.ts`, `apps/web/src/env.d.ts`
+- `docker/compose.yaml`, `playwright.config.ts`, `e2e/hoorah.spec.ts`
+- `PRD-Hoorah.md` (3.4.2), `PLAN.md` (3b), `PROGRESS.md`
+
+**Verifikasi:**
+- `npm run check` lulus: 5 peringatan lint lama, 1964 tes dalam 103 file, build.
+- `npm run e2e`:
+  - 10 tes. Run pertama 9 lulus + 1 gagal (tes baru "free tier": chip Coba gratis hanya ada di beranda).
+  - Setelah tes diperbaiki: lulus.
+  - Tes lain lulus dengan saklar semua terbuka dimatikan/dinyalakan lewat API admin untuk bagian batas gratis.
+- Uji manual (dev server, DB memori, iklan dipercepat): iklan tampil sebelum Kuis, HP Host menyembunyikan Pilih game, game mulai setelah hitung mundur, tanpa galat.
+- Agent memeriksa tata letak HP 320×568 dan 568×320 (tanpa gulir/perkecil) dan dashboard 390/1280 px.
+- `npm run docker:up` → `/health` ok, `POST /api/report` = 204 (migrasi jalan di DB Docker yang ada), teks baru ada di aset container.
+
+**Selanjutnya / catatan:**
+- Belum dicoba di HP dan layar sungguhan.
+- Versi aplikasi di laporan masih `dev` pada build Docker/GitHub, karena `.git` tidak ikut build. Perlu `ARG HOORAH_VERSION` di Dockerfile + build-arg di workflow.
+- Pilihan game di HP Host (picker) belum menampilkan chip PASS.
+- RTT HP belum ikut di laporan.
+- Galat yang terjadi sangat awal saat game dimuat belum tertangkap.
+
+### 2026-11-23 · QR: pinggiran 2 kotak, abu-abu #B8B8B8
+
+**Apa yang diubah:**
+- Pinggiran terang QR 2 kotak (dari 3). Batas aman: lebih tipis lagi, latar gelap menempel ke kotak penanda.
+- Latar `#B8B8B8` (dari `#C4C4C4`), kontras dengan hitam ±10:1.
+
+**Alasan:** pemilik 2026-11-23: scan secepat dan seoptimal mungkin, silau sekecil mungkin.
+
+**File:** `apps/web/src/screen/{components.tsx,screen.css}`, `PROGRESS.md`
+
+**Verifikasi:**
+- `BarcodeDetector` Chromium membaca QR di semua uji:
+  - ukuran 400, 110, dan 80 px;
+  - 110 px buram;
+  - silau (kecerahan 160% + buram);
+  - redup (50% + buram);
+  - kontras 50%.
+- `npm run check` lulus.
+- `npm run docker:up` → `/health` ok, warna baru ada di aset container.
+
+**Selanjutnya:** uji kamera HP sungguhan.
+
+### 2026-11-23 · QR abu-abu, pinggiran lebih tipis
+
+**Apa yang diubah:** latar QR `#C4C4C4` (dari `#EDEDED`) dengan kotak hitam pekat `#000`, kontras ±12:1. Pinggiran terang 3 kotak (dari 4), supaya area terang yang menyilaukan kamera di ruangan gelap lebih sedikit.
+**Alasan:** pemilik 2026-11-23: layarnya sangat terang, putih di sekitar QR menyilaukan.
+**File:** `apps/web/src/screen/{components.tsx,screen.css}`, `PROGRESS.md`
+**Verifikasi:**
+- `BarcodeDetector` Chromium membaca QR di 400 px, 110 px, 110 px buram, dan 400 px dengan kecerahan 160% + buram (simulasi silau): semuanya terbaca.
+- `npm run check` lulus.
+- `npm run docker:up` → `/health` ok, warna baru ada di aset container.
+
+**Selanjutnya:** uji kamera HP sungguhan di ruangan gelap dan terang.
+
+### 2026-11-23 · QR gabung: lebih renggang, tanpa logo, tidak silau, sudut rapi
+
+**Apa yang diubah:**
+- QR pakai tingkat koreksi L. Link produksi turun ke 25×25 kotak (dari 29×29), jadi tiap kotak ±16% lebih besar.
+- Logo di tengah QR dihapus. Tanpa logo, tidak ada kotak yang perlu dikoreksi, sehingga tingkat L aman.
+- Latar QR `#EDEDED`, bukan putih penuh, supaya kamera tidak silau dari dekat dan kotak hitam tidak "luber".
+- Kartu QR `overflow: hidden`: sudut putih tidak lagi menyembul dari bingkai oranye yang membulat.
+- `QrWithLogo` diganti `QrCard`.
+
+**Alasan:** pemilik 2026-11-23: QR tidak rapi, dan scan dari dekat lebih lambat daripada dari jauh. Penyebabnya fokus, silau, dan pola piksel layar.
+
+**File:** `apps/web/src/screen/{components.tsx,screen.css,pages/JoinPage.tsx}`, `PROGRESS.md`
+
+**Verifikasi:**
+- QR halaman gabung dibaca `BarcodeDetector` Chromium → `HTTP://192.168.0.104:5173/R/<kode>` (25 kotak + pinggiran 4).
+- `npm run check` lulus: 5 peringatan lint lama, 1863 tes, build.
+- `npm run docker:up` → `/health` ok, perubahan ada di aset container.
+
+**Selanjutnya:** uji scan dengan kamera iPhone dan Android di jarak dekat dan jauh.
+
+### 2026-11-23 · Petualangan Warna tanpa batas level, musik beranda lebih pelan, QR lebih cepat, bulan Lantai Runtuh
+
+**Apa yang diubah:**
+- **Petualangan Warna:**
+  - Batas 4 level per sesi dihapus. Setelah tiap level (bintang tampil), fase baru `next`. HP Host menawarkan **Lanjut ke Level N** (otomatis setelah 10 detik), **Pilih level lain** (kembali ke peta dunia), atau **Selesai** (halaman hasil, menghitung semua level yang dimainkan).
+  - Pemain lain melihat "Menunggu Host memilih…". Level terakhir dunia menunggu pilihan Host.
+  - Di peta setelah bermain, Host juga bisa Selesai.
+  - Teks "tahap" di tips diganti "level".
+  - `WarnaMatch` tidak lagi menerima jumlah level; aturan otomatis `warna` tidak dipakai.
+- **Musik beranda:**
+  - Lagu menu 40% dari volume lagu game.
+  - Memudar setelah 2 menit tanpa aktivitas (fokus, halaman, pemain baru), dan kembali pelan saat ada aktivitas.
+  - Efek suara tidak berubah. Musik tetap mulai otomatis begitu browser mengizinkan suara (biasanya setelah ketukan atau klik pertama, aturan browser).
+- **Beranda:**
+  - Label OK di tombol bagian atas dihapus.
+  - Bagian atas game menampilkan 2 baris deskripsi game, ditambah chip kontrol dan posisi HP di baris atas (kalimat pendek diganti deskripsi supaya muat di 16:9).
+- **Lantai Runtuh:** bulan sabit dulu dilubangi langsung di petak, sehingga lubangnya menembus warna petak dan tampak bulatan hitam. Sekarang sabit digambar di kanvas terpisah lalu ditempel.
+- **QR lebih cepat:**
+  - Link `HTTPS://HOST/R/<kode>` huruf kapital (mode alfanumerik QR, 29×29 dari 33×33).
+  - Pinggiran putih 4 kotak, logo 11% (dari 16%), QR di halaman gabung 260 px (dari 214).
+  - `main.ts` mengubah `/R/<kode>` menjadi `/?r=<kode>`. nginx sudah mengembalikan index.html untuk path apa pun, jadi tidak perlu aturan baru.
+- **Gabung lebih cepat:**
+  - `Net` bisa menahan hello (`hold`/`release`). Di halaman nama, HP sudah membuka koneksi WebSocket (handshake TCP/TLS ke server selesai saat nama diketik).
+  - "Masuk" hanya mengirim hello. Server uWS menjaga soket yang belum hello tetap hidup dengan ping otomatis.
+
+**Alasan:** permintaan pemilik 2026-11-23.
+
+**File:** `apps/web/src/games/warna/{logic.ts,logic.test.ts,driver.ts,views.ts,strings.ts,hud.tsx,main.tsx}`, `apps/web/src/shared/{automode.ts,games.ts,audio.ts,net.ts}`, `apps/web/src/screen/{store.ts,strings.ts,components.tsx,screen.css,pages/HomePage.tsx,pages/JoinPage.tsx,pages/home.css}`, `apps/web/src/controller/store.ts`, `apps/web/src/games/runtuh/scene.ts`, `apps/web/src/main.ts`, `PROGRESS.md`
+
+**Verifikasi:**
+- `npm run check` lulus: 5 peringatan lint lama, 1863 tes, build. Tes Warna baru: lanjut otomatis ke level 2, kembali ke peta, Selesai, bintang maksimum mengikuti level yang dimainkan.
+- `npm run e2e`: 9 dari 9 lulus.
+- Playwright:
+  - `/R/<kode>` di HP berubah jadi `/?r=<kode>` dan bisa masuk room. "Masuk" sampai menjadi Host ±140 ms di lokal.
+  - Beranda 16:9 dan 4:3 tidak menabrak bilah atas.
+- `npm run docker:up` → `/health` ok. `http://192.168.0.104:1010/R/123456` = 200 HTML. Teks "Lanjut ke Level" ada di aset container.
+
+**Selanjutnya / catatan:**
+- QR huruf kapital dan bunyi/getar perlu dicoba dengan kamera HP sungguhan (iPhone dan Android).
+- Simbol bulan dan alur level Warna belum dilihat langsung di layar (diuji lewat tes logika).
+- Kecepatan buka halaman dari Indonesia baru akan banyak membaik dengan Cloudflare Pages (tahap terpisah).
+
+### 2026-11-23 · HP: D-pad cincin, menu jeda gaya remote tanpa gulir, "Jadi Host?" selalu terlihat
+
+**Apa yang diubah:**
+- **D-pad remote Host** (`ringpad.tsx`): lingkaran penuh dibagi empat potongan melengkung (atas/kanan/bawah/kiri, garis X tipis) dengan OK oranye di tengah.
+  - Ketukan di mana pun dalam seperempat cincin dihitung sebagai arah itu.
+  - Tepi 3D, tombol turun saat ditekan, getar.
+  - Ukurannya ikut ruang yang ada (tegak dan mendatar).
+  - D-pad kotak lama dan CSS-nya dihapus.
+- **Tombol bawah remote:** baris tombol punya wadah sendiri (container query). Kalau lebarnya < 380 px, lima tombol jadi 3 + 2 dengan ukuran huruf yang sama, jadi "Kembali" dan "Beranda" tidak menempel lagi.
+- **Menu jeda Host dan menu pemain:**
+  - Satu layar tanpa gulir dan tanpa diperkecil di semua ukuran.
+  - Tombol gaya remote: kotak 3D, ikon besar di kotak berwarna, label di bawah.
+  - Host: Lanjutkan, aksi 2×2 (Tambah pemain, Ulang, Ganti Host, Keluar game), satu baris sakelar Musik/Suara/Getar (hijau "Nyala", abu-abu "Mati").
+  - Pemain: Lanjut main, kode room untuk ajak teman, Kode Pass/Getar/Keluar room.
+  - HP tegak: tombol dikumpulkan di bawah dekat jempol. HP mendatar: dua kolom.
+  - Ikon baru `music` dan `ticket`. Kotak konfirmasi: Batal dan Ya dalam satu baris.
+- **Tambah pemain di HP:** info cara bergabung dihapus (sudah tampil di layar utama). Isinya satu baris pendek, tombol **Selesai**, dan **Kode Pass** (membuka popup Pass).
+- **Layar belakang popup bergerak:**
+  - Mutasi yang masuk/keluar `.sheet`, atau terjadi di dalamnya, tidak lagi memicu hitung ulang `fit.ts`.
+  - Kelas `fit-scroll` (menu bergulir) dihapus karena menu sudah muat.
+- **Ganti Host:** pertanyaan "Jadi Host?" tertutup layar "Putar HP-mu" (z-index 90 di atas sheet 80), sehingga pemain tujuan tidak melihatnya.
+  - Sheet tawaran sekarang `.sheet-top` (z-index 95).
+  - HP tujuan bergetar, berbunyi dua nada pendek (Web Audio), sheet bergoyang, dan ada hitungan "Sisa N detik untuk menjawab" (batas 30 detik dari `LIMITS.hostOfferMs`).
+
+**Alasan:** permintaan pemilik 2026-11-23.
+
+**File:** `apps/web/src/controller/{ringpad.tsx (baru),room.tsx,ingame.tsx,hostoffer.tsx,fit.ts,strings.ts,controller.css}`, `apps/web/src/shared/ui.tsx`, `e2e/hoorah.spec.ts`, `PROGRESS.md`
+
+**Verifikasi:**
+- `npm run check` lulus: 5 peringatan lint lama, 1863 tes, build.
+- `npm run e2e`:
+  - Run pertama: 8 lulus, 1 gagal (teks lama "Hanya Host yang bisa menjeda." dan "QR tampil di layar utama").
+  - Tes diperbarui, lalu "full flow" lulus. Tes Ganti Host (`host-offer.spec.ts`) dan tombol arah (Kanan/OK dipakai di beberapa tes) lulus.
+- Audit Playwright di 320×568, 360×640, 390×844, 568×320, 640×360, 740×360, 844×390 untuk remote Host, lobi, menu jeda, Tambah pemain, konfirmasi keluar, dan menu pemain: semuanya `--fit-s` = 1 (tidak diperkecil) dan tidak meluap (tidak perlu gulir).
+- D-pad Kanan memindah fokus layar utama (party → random).
+- "Jadi Host?" tampil di atas layar "Putar HP-mu" saat game mendatar berjalan.
+- `npm run docker:up` → `http://192.168.0.104:1010/health` = `{"ok":true,...}`, teks baru ada di aset container.
+
+**Selanjutnya / catatan:**
+- Belum dicoba di HP sungguhan (getar, bunyi, sentuhan D-pad cincin).
+- Bunyi di HP butuh izin audio browser dari ketukan sebelumnya; kalau ditolak, tetap ada getar dan goyangan.
+
+### 2026-11-23 · Mode Pesta 5 game diacak, roda Acak, beranda "Semua", perbaikan HP (jeda, mendatar)
+
+**Apa yang diubah:**
+- **Mode Pesta:** 5 game (dulu 3). Isinya diacak ulang setiap kali mulai dan tidak terlihat dulu. Game panjang (Ular Tangga, Ludo, Catur, Juragan; penanda `long` di katalog) tidak ikut.
+- **Halaman pesta baru** (`page 'party'`, ke HP dikirim sebagai `loading`):
+  - "Pesta dimulai!" dengan 5 kotak (kotak 5 = Grand Final, poin ganda). Kotak berikutnya mengacak lalu berhenti di game yang dimainkan. Hitung mundur 5 detik (8 detik setelah game). OK langsung main, Kembali keluar pesta.
+  - Setelah tiap game tampil klasemen: batang poin, +poin game terakhir, dan "X menyalip Y".
+  - Setelah Grand Final: podium Juara Pesta, dengan "Pesta lagi" dan "Ke beranda".
+  - Halaman hasil game saat pesta: tombol "Lihat klasemen" / "Lihat juara" dengan hitung mundur. Tabel lama di halaman hasil dihapus.
+- **Beranda:**
+  - Tombol kecil Mode Pesta/Acak diganti dua kartu khusus di depan setiap baris, dan Mode Pesta terpilih saat beranda dibuka.
+  - Poster besar di bagian atas: Mode Pesta berupa kolase game dengan "?" dan mahkota, Acak berupa roda.
+  - Tombol aksi di bagian atas bisa diklik mouse atau sentuh.
+  - Acak membuka roda besar (maks 10 game yang cocok jumlah pemain), berbunyi tiap irisan, lalu "Terpilih" dengan Main sekarang / Putar lagi.
+- **Tab:**
+  - "Semua" jadi tab pertama dan default. Urutannya per layar: cocok jumlah pemain dulu, lalu yang baru dimainkan di layar ini, lalu game baru, lalu yang tidak cocok, lalu "segera".
+  - "Pas untuk kalian" pindah ke posisi kedua.
+  - Pilihan game di HP Host mengikuti urutan yang sama (tanpa judul kategori).
+- **Kartu terpotong:** baris pertama digeser setinggi padding atas, sehingga cincin fokus terpotong. Perbaikan: geser dihitung dari baris pertama, padding atas 22 px, tinggi area 372 px.
+- **HP, jeda dan tambah pemain:** `fit.ts` memperkecil seluruh layar kalau isinya tidak muat, sehingga font terlihat mengecil. Menu dalam game (`.fit-scroll`) sekarang hanya dirapatkan lalu digulir, tidak pernah diperkecil.
+- **HP mendatar:** pill HOST bertumpuk dengan pill Kode di HP kecil.
+  - Grid status sekarang `auto 1fr auto`, dengan HOST di tengah sisa ruang.
+  - Lewat container query, "Terhubung" tinggal titik di bawah 320 px dan label "Kode" hilang di bawah 230 px.
+
+**Alasan:** permintaan pemilik 2026-11-23.
+
+**File:** `apps/web/src/screen/{party.ts,party.test.ts,store.ts,main.tsx,strings.ts,specialArt.tsx}`, `apps/web/src/screen/pages/{HomePage.tsx,PartyPage.tsx,WheelOverlay.tsx,ResultsPage.tsx,home.css,party.css}`, `apps/web/src/shared/{games.ts,homeRows.ts,homeRows.test.ts}`, `apps/web/src/controller/{picker.tsx,common.tsx,fit.ts,ingame.tsx,controller.css}`, `e2e/hoorah.spec.ts`, `PRD-Hoorah.md` (bab 9, catatan Mode Pesta 2026-11-23), `PROGRESS.md`
+
+**Verifikasi:**
+- `npm run check` lulus: lint 5 peringatan lama, 1863 tes, build.
+- `npm run e2e`: 8 lulus, 1 gagal (Acak sekarang membuka roda, bukan detail). Tes disesuaikan, lalu kedua tes "same Wi-Fi" lulus.
+- Tangkapan layar Playwright:
+  - beranda 16:9, 16:10, 4:3;
+  - roda berputar dan berhenti tepat di irisan terpilih;
+  - halaman pesta (awal, klasemen, juara) dan klasemen 4:3;
+  - HP Host mendatar 568/640/667/740 px dan tegak 320 px: tidak ada tumpukan;
+  - menu jeda dan tambah pemain mendatar: font sama dengan layar lain.
+- `npm run docker:up` → `http://192.168.0.104:1010/health` = `{"ok":true,...}`, teks "Pesta dimulai" ada di aset container.
+
+**Selanjutnya / catatan:**
+- Belum dicoba di HP dan Smart TV sungguhan.
+- Satu game pesta selesai sungguhan belum dimainkan ujung ke ujung; klasemen dan juara diuji dengan mengisi skor lewat store.
+- Penyusup ikut pesta (tidak ditandai panjang); tandai `long` kalau terasa lama.
 
 ### 2026-11-23 · Image dibangun di GitHub Actions, VM hanya mengambil (tahap A)
 

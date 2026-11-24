@@ -85,7 +85,7 @@ export function PadView({ v }: { v: V<'pad'> }) {
       style={{ '--pad-color': v.color }}
     >
       <div class="pad-status">
-        <Me size={38} fruit={v.fruit} />
+        <Me size={38} look={v.look} fruit={v.fruit} />
         <div class="pad-heading">
           {v.eyebrow && <div class="pad-eyebrow">{v.eyebrow}</div>}
           <div class="pad-title">{v.title}</div>
@@ -782,7 +782,7 @@ function PadButtons({ buttons, locked }: { buttons: PadButton[]; locked: boolean
         <button
           key={b.id}
           type="button"
-          class={`pad-btn tone-${b.tone} slot-${i} ${i === 0 ? 'is-big' : ''} ${down[b.id] ? 'pressed' : ''} ${rest[b.id] !== undefined ? 'is-resting' : ''}`}
+          class={`pad-btn tone-${b.tone} slot-${i} ${i === 0 ? 'is-big' : ''} ${down[b.id] ? 'pressed' : ''} ${rest[b.id] !== undefined ? 'is-resting' : ''} ${b.pulse ? 'is-pulse' : ''}`}
           aria-label={b.sub ? `${b.label}, ${b.sub}` : b.label}
           disabled={locked}
           onPointerDown={(e) => {

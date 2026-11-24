@@ -1,6 +1,7 @@
 /**
  * How the game catalog is grouped on the main screen's home and in the Host's phone picker (the
- * same groups on both): "Pas untuk kalian", one row per mood, then every game by category.
+ * same groups on both): "Semua" first (every game, ordered for the players on this screen), then
+ * "Pas untuk kalian" and one row per mood.
  */
 import {
   CATALOG,
@@ -18,7 +19,10 @@ export type HomeSection = 'fit' | GameMood | 'all';
 /** Mood rows top to bottom: the loud ones first, the calm one last. */
 export const MOOD_ORDER: readonly GameMood[] = ['heboh', 'otak', 'ramai', 'santai'];
 
-export const HOME_SECTIONS: readonly HomeSection[] = ['fit', ...MOOD_ORDER, 'all'];
+export const HOME_SECTIONS: readonly HomeSection[] = ['all', 'fit', ...MOOD_ORDER];
+
+/** The shelf home opens on (owner 2026-11-23: every game, ordered for this screen). */
+export const DEFAULT_SECTION: HomeSection = 'all';
 
 export function isHomeSection(v: unknown): v is HomeSection {
   return typeof v === 'string' && (HOME_SECTIONS as readonly string[]).includes(v);
@@ -68,18 +72,41 @@ export function gridGames(tab: GridTab, withSoon = true): GameId[] {
   );
 }
 
-/** Every game grouped by category (the phone picker's "Semua" groups, same order). */
+/** Every game grouped by category, in catalog order within each group. */
 export function catalogByCategory(withSoon = true): GameId[] {
   return CATEGORIES.flatMap((c) => gridGames(c.id, withSoon));
 }
 
-/** The phone picker's list for a section: the row's games, or the whole catalog for `all`. */
+/**
+ * "Semua", ordered for the players on this screen, so each screen sees its own order: games that
+ * fit this many players first (the ones played here lately first, then the newest wave, then
+ * catalog order), then the ones needing a different count, then the "segera hadir" teasers when
+ * `withSoon` (the main screen shows them, the phone picker does not).
+ */
+export function allGames(players: number, recent: readonly string[] = [], withSoon = false): GameId[] {
+  const n = Math.max(1, players);
+  const playable = CATALOG.filter((id) => GAMES[id].available);
+  const played = (id: GameId) => {
+    const i = recent.indexOf(id);
+    return i < 0 ? Number.POSITIVE_INFINITY : i;
+  };
+  const ranked = [...playable].sort(
+    (a, b) =>
+      Number(fits(b, n)) - Number(fits(a, n)) ||
+      played(a) - played(b) ||
+      Number(isNewGame(b)) - Number(isNewGame(a)) ||
+      CATALOG.indexOf(a) - CATALOG.indexOf(b),
+  );
+  return withSoon ? [...ranked, ...CATALOG.filter((id) => !GAMES[id].available)] : ranked;
+}
+
+/** The phone picker's list for a section: the row's games, or every game for `all`. */
 export function sectionGames(
   section: HomeSection,
   players: number,
   recent: readonly string[] = [],
 ): GameId[] {
-  if (section === 'all') return gridGames('all', false);
+  if (section === 'all') return allGames(players, recent);
   return homeRows(players, recent).find((r) => r.id === section)?.games ?? [];
 }
 

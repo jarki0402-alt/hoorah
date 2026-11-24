@@ -4,7 +4,7 @@
  * podium between tracks. Structure changes go through signals a few times a second; name tags are
  * moved by the box-world renderer every frame.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { Avatar } from '../../shared/ui';
 import { STR } from './strings';
@@ -13,7 +13,19 @@ export interface RunnerChip {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
+}
+
+/** One part of a split main screen (fractions), with the name of whose camera it is. */
+export interface SplitPane {
+  key: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** The runner followed, or null for the pack camera. */
+  who: RunnerChip | null;
 }
 
 export interface StandRow extends RunnerChip {
@@ -42,6 +54,7 @@ export interface Toast {
   key: number;
   text: string;
   fruit?: Fruit;
+  look?: Look;
   color?: string;
 }
 
@@ -81,6 +94,8 @@ export class HudStore {
   readonly help = signal(false);
   readonly racing = signal(false);
   readonly paused = signal(false);
+  /** Parts of a split main screen (empty or one part: no frames). */
+  readonly split = signal<SplitPane[]>([]);
   private key = 0;
 
   shout(text: string, tone: 'count' | 'go' | 'end'): void {
@@ -96,7 +111,11 @@ export class HudStore {
   }
 
   toast(text: string, who?: RunnerChip): void {
-    const t: Toast = { key: ++this.key, text, ...(who ? { fruit: who.fruit, color: who.color } : {}) };
+    const t: Toast = {
+      key: ++this.key,
+      text,
+      ...(who ? { fruit: who.fruit, look: who.look, color: who.color } : {}),
+    };
     this.toasts.value = [...this.toasts.value.slice(-2), t];
     window.setTimeout(() => {
       this.toasts.value = this.toasts.value.filter((o) => o.key !== t.key);
@@ -110,7 +129,7 @@ function Standings({ rows }: { rows: StandRow[] }) {
       {rows.map((r) => (
         <div key={r.id} class={`ob-row ${r.finished ? 'is-done' : ''} ${r.offline ? 'is-off' : ''}`}>
           <span class="ob-place">{r.place}</span>
-          <Avatar fruit={r.fruit} ring={r.color} size={30} dim={r.offline} />
+          <Avatar look={r.look} fruit={r.fruit} ring={r.color} size={30} dim={r.offline} />
           <span class="ob-name">{r.name}</span>
           {r.finished && <span class="ob-pill">{STR.finished}</span>}
         </div>
@@ -133,10 +152,43 @@ function Progress({ rows, saves }: { rows: StandRow[]; saves: number[] }) {
             class="ob-dot"
             style={{ left: `${(r.progress * 100).toFixed(2)}%`, borderColor: r.color }}
           >
-            <Avatar fruit={r.fruit} ring={r.color} size={26} />
+            <Avatar look={r.look} fruit={r.fruit} ring={r.color} size={26} />
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Frames between the parts of a split screen, each with the name of whose camera it is. */
+function SplitFrames({ panes }: { panes: SplitPane[] }) {
+  if (panes.length < 2) return null;
+  return (
+    <div class="ob-split" aria-hidden="true">
+      {panes.map((p) => (
+        <div
+          key={p.key}
+          class="ob-pane"
+          style={{
+            left: `${p.x * 100}%`,
+            top: `${p.y * 100}%`,
+            width: `${p.w * 100}%`,
+            height: `${p.h * 100}%`,
+            ...(p.who ? { '--pane': p.who.color } : {}),
+          }}
+        >
+          <span class={`ob-pane-tag ${p.x >= 0.5 ? 'is-right' : ''}`}>
+            {p.who ? (
+              <>
+                <Avatar look={p.who.look} fruit={p.who.fruit} ring={p.who.color} size={30} />
+                {p.who.name}
+              </>
+            ) : (
+              STR.packView
+            )}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -147,7 +199,10 @@ export function Hud({ store }: { store: HudStore }) {
   const podium = store.podium.value;
   const racing = store.racing.value;
   return (
-    <div class={`ob-hud ${store.paused.value ? 'is-paused' : ''}`}>
+    <div
+      class={`ob-hud ${store.paused.value ? 'is-paused' : ''} ${store.split.value.length > 1 ? 'is-split' : ''}`}
+    >
+      <SplitFrames panes={store.split.value} />
       <div class="ob-brand">{store.brand.value}</div>
       {racing && (
         <div class={`ob-clock ${store.urgent.value ? 'is-urgent' : ''}`}>
@@ -164,7 +219,7 @@ export function Hud({ store }: { store: HudStore }) {
             class="ob-off"
             style={{ ['--k' as string]: o.k.toFixed(3), ['--c' as string]: o.color }}
           >
-            <Avatar fruit={o.fruit} ring={o.color} size={34} />
+            <Avatar look={o.look} fruit={o.fruit} ring={o.color} size={34} />
             <span class="ob-off-text">
               <b>{o.name}</b>
               <span>{STR.offIn(o.left)}</span>
@@ -184,7 +239,7 @@ export function Hud({ store }: { store: HudStore }) {
       <div class="ob-toasts">
         {store.toasts.value.map((t) => (
           <div key={t.key} class="ob-toast">
-            {t.fruit && t.color && <Avatar fruit={t.fruit} ring={t.color} size={28} />}
+            {t.fruit && t.color && <Avatar look={t.look} fruit={t.fruit} ring={t.color} size={28} />}
             <span>{t.text}</span>
           </div>
         ))}
@@ -231,7 +286,7 @@ export function Hud({ store }: { store: HudStore }) {
             {podium.rows.map((r) => (
               <div key={r.id} class={`ob-prow place-${Math.min(4, r.place)}`}>
                 <span class="ob-prow-place">{r.place}</span>
-                <Avatar fruit={r.fruit} ring={r.color} size={40} />
+                <Avatar look={r.look} fruit={r.fruit} ring={r.color} size={40} />
                 <span class="ob-prow-name">
                   {r.name}
                   {r.note && <em>{r.note}</em>}

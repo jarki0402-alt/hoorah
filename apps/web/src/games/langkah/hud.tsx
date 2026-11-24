@@ -5,7 +5,7 @@
  * walker list, call-outs, the babak intro card with its picture, the babak summary and the final
  * per-babak table.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { THUMBS } from '../../controller/thumbs/langkah';
 import { svgUrl } from '../../shared/art/svg';
@@ -17,6 +17,7 @@ export interface Chip {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -271,6 +272,7 @@ export function Hud({ store }: { store: HudStore }) {
               class={`lm-row ${r.fallen ? 'is-out' : ''} ${r.waiting ? 'is-wait' : ''} ${r.offline ? 'is-off' : ''}`}
             >
               <Avatar
+                look={r.look}
                 fruit={r.fruit}
                 ring={r.color}
                 size={rows.length > 10 ? 22 : 28}
@@ -296,7 +298,9 @@ export function Hud({ store }: { store: HudStore }) {
       <div class="lm-toasts">
         {store.toasts.value.map((t) => (
           <div key={t.key} class="lm-toast">
-            {t.who && <Avatar fruit={t.who.fruit} ring={t.who.color} size={28} face="sad" />}
+            {t.who && (
+              <Avatar look={t.who.look} fruit={t.who.fruit} ring={t.who.color} size={28} face="sad" />
+            )}
             <span>{t.text}</span>
           </div>
         ))}
@@ -331,7 +335,13 @@ export function Hud({ store }: { store: HudStore }) {
             <div class="lm-end-rows">
               {end.rows.map((r) => (
                 <div key={r.id} class={`lm-end ${r.safe ? 'is-safe' : ''}`}>
-                  <Avatar fruit={r.fruit} ring={r.color} size={36} face={r.safe ? 'happy' : 'sad'} />
+                  <Avatar
+                    look={r.look}
+                    fruit={r.fruit}
+                    ring={r.color}
+                    size={36}
+                    face={r.safe ? 'happy' : 'sad'}
+                  />
                   <span class="lm-end-name">{r.name}</span>
                   <span class="lm-end-pts display">{STR.pointsPlus(r.points)}</span>
                 </div>
@@ -361,7 +371,12 @@ export function Hud({ store }: { store: HudStore }) {
                 <tr key={r.id} class={r.rank === 1 ? 'is-top' : ''}>
                   <td class="lm-t-rank">{r.rank}</td>
                   <td class="lm-t-name">
-                    <Avatar fruit={r.fruit} ring={r.color} size={fin.rows.length > 8 ? 22 : 28} />
+                    <Avatar
+                      look={r.look}
+                      fruit={r.fruit}
+                      ring={r.color}
+                      size={fin.rows.length > 8 ? 22 : 28}
+                    />
                     <span>{r.name}</span>
                   </td>
                   {Array.from({ length: fin.cols }, (_, i) => (

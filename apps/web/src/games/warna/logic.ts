@@ -1,7 +1,9 @@
 /**
- * Petualangan Warna session (pure): the Host picks a world, then a stage of it (stages open in
- * order: a stage is open once the one before it was finished or skipped on this screen), then
- * the group plays `stages` stages in a row. Each stage builds a fresh World from the people
+ * Petualangan Warna session (pure): the Host picks a world, then a level of it (levels open in
+ * order: a level is open once the one before it was finished or skipped on this screen), then
+ * the group plays it. After every level the Host chooses (owner 2026-11-23, no fixed number of
+ * levels any more): on to the next level (also by itself after NEXT_S), another level from the
+ * map, or Selesai for the result. Each stage builds a fresh World from the people
  * connected at its start (two characters for someone playing alone, swapped with TUKAR), scores
  * up to three stars and adds every character's deeds to its owner's tally for the awards.
  *
@@ -9,14 +11,17 @@
  * path), a hint button that pulses after HINT_IDLE_S without progress, and the Host may skip a
  * stage after SKIP_AFTER_S.
  *
- * Phases: select (world → level) → intro → play → clear → (intro of the next stage | done).
+ * Phases: select (world → level) → intro → play → clear → next → (intro of the next level |
+ * select | done).
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Fruit, type Look, lookOfFruit } from '@hoorah/protocol';
 import { BIOMES, type BiomeId, biomeOf, type HintTarget, LEVELS, type Level, type Slot } from './levels';
 import { type CharSpec, type CharStats, TUNE, World, type WorldEvent } from './world';
 
 export const INTRO_S = 3.2;
 export const CLEAR_S = 5.5;
+/** The Host's choice after a level: the next level starts by itself after this long. */
+export const NEXT_S = 10;
 /** A restart vote stays open this long (solo: the second tap must come within it). */
 export const VOTE_S = 6;
 export const VOTE_SOLO_S = 3;
@@ -27,7 +32,7 @@ export const HINT_SHOW_S = 12;
 /** The Host may skip a stage after this long in it. */
 export const SKIP_AFTER_S = 180;
 
-export type Phase = 'select' | 'intro' | 'play' | 'clear' | 'done';
+export type Phase = 'select' | 'intro' | 'play' | 'clear' | 'next' | 'done';
 export type PickStep = 'world' | 'level';
 
 /** Best stars per stage id on this screen; present = finished (0 = skipped). */
@@ -51,12 +56,31 @@ export function isOpen(lv: Level, progress: Progress): boolean {
   return prev !== undefined && progress[prev.id] !== undefined;
 }
 
+/** Without Hoorah Pass (owner 2026-11-23) only the first stages of Hutan can be played. */
+export const FREE_WORLD: BiomeId = 'hutan';
+export const FREE_LEVELS = 5;
+
+/** A stage that needs Hoorah Pass on a free main screen (`limited`); nothing is locked otherwise. */
+export function needsPass(lv: Level, limited: boolean): boolean {
+  return limited && !(lv.biome === FREE_WORLD && lv.number <= FREE_LEVELS);
+}
+
+/** A world with no stage open on a free main screen. */
+export function worldNeedsPass(world: BiomeId, limited: boolean): boolean {
+  return limited && biomeOf(world).levels.every((lv) => needsPass(lv, limited));
+}
+
+/** Whether a stage can be played now: open by progress and not behind Hoorah Pass. */
+export function canPlayLevel(lv: Level, progress: Progress, limited: boolean): boolean {
+  return isOpen(lv, progress) && !needsPass(lv, limited);
+}
+
 /** The stage a world opens on: the first open stage not finished yet, else its last open one. */
-export function resumeLevel(world: BiomeId, progress: Progress): Level | undefined {
+export function resumeLevel(world: BiomeId, progress: Progress, limited = false): Level | undefined {
   const levels = biomeOf(world).levels;
   let last: Level | undefined;
   for (const lv of levels) {
-    if (!isOpen(lv, progress)) break;
+    if (!canPlayLevel(lv, progress, limited)) break;
     last = lv;
     if (progress[lv.id] === undefined) return lv;
   }
@@ -74,10 +98,17 @@ export function secondFruit(f: Fruit | undefined): Fruit {
   return f === 'semangka' ? 'nanas' : 'semangka';
 }
 
+/** Solo: the second character is another cast member so the two are easy to tell apart. */
+export function secondLook(look: Look | undefined): Look {
+  const first = lookOfFruit('semangka');
+  return look?.c === first.c ? lookOfFruit('nanas') : first;
+}
+
 export interface Person {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
 }
@@ -159,10 +190,9 @@ export class WarnaMatch {
   pick = 0;
   /** Best stars per stage on this screen (updated as stages are finished). */
   readonly progress: Progress;
-  /** Levels of this session, in play order. */
+  /** Levels of this session, in play order (grows as the group plays on). */
   order: number[] = [];
   stage = 0;
-  readonly stages: number;
   sim: World | null = null;
   /** People in the current stage (owners of characters). */
   cast: Person[] = [];
@@ -188,10 +218,16 @@ export class WarnaMatch {
   /** Last stick per person, re-applied when the solo steer swaps. */
   private readonly sticks = new Map<number, { x: number; jump: boolean }>();
 
-  constructor(stages: number, progress: Progress = {}) {
-    this.stages = Math.max(1, Math.min(LEVELS.length, Math.floor(stages)));
+  /**
+   * @param limited free main screen: only the first Hutan stages can be picked (missing setting =
+   *   everything open).
+   */
+  constructor(
+    progress: Progress = {},
+    readonly limited = false,
+  ) {
     this.progress = { ...progress };
-    const first = resumeLevel('hutan', this.progress);
+    const first = resumeLevel('hutan', this.progress, limited);
     if (first) this.pick = first.index;
   }
 
@@ -227,7 +263,7 @@ export class WarnaMatch {
   pickWorld(id: string): boolean {
     if (this.phase !== 'select' || this.pickStep !== 'world') return false;
     const b = BIOMES.find((x) => x.id === id);
-    if (!b?.ready) return false;
+    if (!b?.ready || worldNeedsPass(b.id, this.limited)) return false;
     this.world = b.id;
     return true;
   }
@@ -235,7 +271,7 @@ export class WarnaMatch {
   /** World chosen: show its stages, the next unfinished one highlighted. */
   toLevels(): boolean {
     if (this.phase !== 'select' || this.pickStep !== 'world') return false;
-    const lv = resumeLevel(this.world, this.progress);
+    const lv = resumeLevel(this.world, this.progress, this.limited);
     if (!lv) return false;
     this.pick = lv.index;
     this.pickStep = 'level';
@@ -251,21 +287,71 @@ export class WarnaMatch {
   pickLevel(id: string): boolean {
     if (this.phase !== 'select' || this.pickStep !== 'level') return false;
     const lv = LEVELS.find((l) => l.id === id);
-    if (!lv || lv.biome !== this.world || !isOpen(lv, this.progress)) return false;
+    if (!lv || lv.biome !== this.world || !canPlayLevel(lv, this.progress, this.limited)) return false;
     this.pick = lv.index;
     return true;
   }
 
+  /** The level picked on the map starts; the session keeps its earlier levels and stars. */
   start(): void {
     if (this.phase !== 'select' || this.pickStep !== 'level') return;
     const first = LEVELS[this.pick];
-    if (!first || !isOpen(first, this.progress)) return;
-    const levels = biomeOf(first.biome).levels;
-    this.order = [];
-    for (let n = first.number; n < first.number + this.stages && n <= levels.length; n++)
-      this.order.push(levels[n - 1]!.index);
-    this.stage = 0;
+    if (!first || !canPlayLevel(first, this.progress, this.limited)) return;
+    this.order.push(first.index);
+    this.stage = this.order.length - 1;
     this.beginStage();
+  }
+
+  /** The level after the current one in its world, if there is one (it is open once this is done). */
+  nextLevel(): Level | undefined {
+    const next = this.followingLevel();
+    return next && !needsPass(next, this.limited) ? next : undefined;
+  }
+
+  /** The next level exists but needs Hoorah Pass (a free main screen at the end of its stages). */
+  nextNeedsPass(): boolean {
+    const next = this.followingLevel();
+    return next !== undefined && needsPass(next, this.limited);
+  }
+
+  private followingLevel(): Level | undefined {
+    const lv = this.level;
+    return biomeOf(lv.biome).levels[lv.number];
+  }
+
+  /** Seconds left before the next level starts by itself (0 when there is no next level). */
+  nextLeft(): number {
+    return this.phase === 'next' && this.nextLevel() ? Math.max(0, NEXT_S - this.phaseT) : 0;
+  }
+
+  /** After a level: the Host plays on with the next one. */
+  playNext(): boolean {
+    if (this.phase !== 'next') return false;
+    const lv = this.nextLevel();
+    if (!lv) return false;
+    this.order.push(lv.index);
+    this.stage = this.order.length - 1;
+    this.beginStage();
+    return true;
+  }
+
+  /** After a level: back to the map of this world, the next unfinished level highlighted. */
+  toMap(): boolean {
+    if (this.phase !== 'next') return false;
+    this.world = this.level.biome;
+    const lv = resumeLevel(this.world, this.progress, this.limited) ?? this.level;
+    this.pick = lv.index;
+    this.pickStep = 'level';
+    this.setPhase('select');
+    return true;
+  }
+
+  /** After a level: the session ends (the result counts every level played). */
+  finish(): boolean {
+    if (this.phase !== 'next' && this.phase !== 'select') return false;
+    if (this.scores.length === 0) return false;
+    this.setPhase('done');
+    return true;
   }
 
   private setPhase(p: Phase): void {
@@ -557,12 +643,11 @@ export class WarnaMatch {
         return;
       }
       case 'clear':
-        if (this.phaseT >= CLEAR_S) {
-          if (this.stage + 1 < this.order.length) {
-            this.stage++;
-            this.beginStage();
-          } else this.setPhase('done');
-        }
+        if (this.phaseT >= CLEAR_S) this.setPhase('next');
+        return;
+      case 'next':
+        // Nobody chose: play on (the last level of a world waits for the Host instead).
+        if (this.phaseT >= NEXT_S && this.nextLevel()) this.playNext();
         return;
       default:
         return;
@@ -615,7 +700,7 @@ export class WarnaMatch {
   }
 
   maxStars(): number {
-    return this.order.length * 3;
+    return this.scores.length * 3;
   }
 
   /** Colour of a person's steered character (solo: the active one). */

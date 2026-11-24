@@ -2,8 +2,9 @@
  * SVG art rasterized into Phaser textures, at the canvas resolution (1.5x the 1280x720 world) or
  * better, so nothing is upscaled on a 1080p screen.
  */
-import { FRUITS, type Fruit } from '@hoorah/protocol';
-import { type Face, fruitMarkup } from '../../shared/art/fruits';
+import type { Look } from '@hoorah/protocol';
+import type * as Phaser from 'phaser';
+import type { Face } from '../../shared/art/fruits';
 import {
   BACKDROP_H,
   BACKDROP_W,
@@ -13,8 +14,12 @@ import {
   sackBody,
   sackShirt,
 } from '../../shared/art/karung';
+import { avatarMarkup } from '../../shared/art/people';
 import { svgDoc, svgUrl } from '../../shared/art/svg';
+import { BLANK_KEY, HeadBank as LookHeads, lookId } from '../common/heads';
 import { loadImage } from '../common/stage';
+
+export { BLANK_KEY, lookId };
 
 /** Canvas pixels per world pixel. */
 export const RENDER_SCALE = 1.5;
@@ -26,7 +31,9 @@ export const FACES: readonly Face[] = ['happy', 'effort', 'wow', 'sad'];
 export const BACKDROP_KEY = 'karung-backdrop';
 export const SHIRT_KEY = 'karung-shirt';
 export const SACK_KEY = 'karung-sack';
-export const headKey = (fruit: Fruit, face: Face): string => `karung-head-${fruit}-${face}`;
+/** Stable text id of a look, for texture keys. */
+export const headKey = (look: Look, face: Face): string => `karung-head-${lookId(look)}-${face}`;
+/** Transparent built-in texture shown until a head has been rasterized. */
 /** Head texture size in racer units (64 grid scaled like in the art). */
 export const HEAD_SIZE = 64 * RACER_HEAD.scale;
 const HEAD_PX = Math.ceil(HEAD_SIZE * RACER_PX);
@@ -65,19 +72,6 @@ function jobs(): Job[] {
     w: rw,
     h: rh,
   });
-  for (const fruit of FRUITS) {
-    for (const face of FACES) {
-      const key = headKey(fruit, face);
-      list.push({
-        key,
-        url: svgUrl(`${key}-${HEAD_PX}`, () =>
-          svgDoc(HEAD_PX, HEAD_PX, fruitMarkup(fruit, face), '0 0 64 64'),
-        ),
-        w: HEAD_PX,
-        h: HEAD_PX,
-      });
-    }
-  }
   return list;
 }
 
@@ -88,4 +82,32 @@ export async function loadTextures(): Promise<Map<string, HTMLImageElement>> {
   const out = new Map<string, HTMLImageElement>();
   for (let i = 0; i < list.length; i++) out.set(list[i]!.key, images[i]!);
   return out;
+}
+
+/** Rasterizes one look's head in every face. */
+async function loadHeads(look: Look): Promise<Map<string, HTMLImageElement>> {
+  const keys = FACES.map((face) => headKey(look, face));
+  const images = await Promise.all(
+    FACES.map((face, i) =>
+      loadImage(
+        svgUrl(`${keys[i]}-${HEAD_PX}`, () =>
+          svgDoc(HEAD_PX, HEAD_PX, avatarMarkup(look, face), '0 0 64 64'),
+        ),
+        HEAD_PX,
+        HEAD_PX,
+      ),
+    ),
+  );
+  const out = new Map<string, HTMLImageElement>();
+  keys.forEach((k, i) => {
+    out.set(k, images[i]!);
+  });
+  return out;
+}
+
+/** Player heads as Phaser textures, rasterized the first time a look shows up. */
+export class HeadBank extends LookHeads<Face> {
+  constructor(textures: Phaser.Textures.TextureManager, onReady: (look: Look) => void) {
+    super(textures, headKey, loadHeads, onReady);
+  }
 }

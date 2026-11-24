@@ -8,6 +8,10 @@
  *   2. otherwise `html.fit-compact` tightens gaps, paddings and button heights;
  *   3. still too big -> the whole screen is scaled down uniformly (`--fit-s`) until it fits.
  * The result: one screen on any phone and orientation, never clipped, never scrolled.
+ *
+ * Pop-up sheets (`.sheet`) sit over the screen and never change its size, so opening or closing
+ * one does not re-measure: that briefly re-laid the screen behind it, which looked like the
+ * background moving (owner 2026-11-23).
  */
 
 const MIN_SCALE = 0.55;
@@ -76,7 +80,7 @@ function requestFitSoon(): void {
  * whole screen mid-tap.
  */
 function isFx(n: Node): boolean {
-  return n instanceof Element && n.hasAttribute('data-fx');
+  return n instanceof Element && (n.hasAttribute('data-fx') || n.classList.contains('sheet'));
 }
 
 function onMutations(records: MutationRecord[]): void {
@@ -84,7 +88,10 @@ function onMutations(records: MutationRecord[]): void {
     for (let i = 0; i < list.length; i++) if (!isFx(list[i]!)) return true;
     return false;
   };
-  if (records.some((r) => changed(r.addedNodes) || changed(r.removedNodes))) requestFitSoon();
+  // Changes inside an open sheet (a typed Pass code, a spinner) do not touch the screen either.
+  const inSheet = (r: MutationRecord) => r.target instanceof Element && r.target.closest('.sheet') !== null;
+  if (records.some((r) => !inSheet(r) && (changed(r.addedNodes) || changed(r.removedNodes))))
+    requestFitSoon();
 }
 
 export function startAutoFit(): void {

@@ -1,5 +1,5 @@
 /**
- * Rebut Wilayah entry: connect to the shell, rasterize the avatars, then stack three layers: the
+ * Rebut Wilayah entry: connect to the shell, then stack three layers: the
  * ground canvas (courtyard, floor and smooth territories, drawn on demand), a transparent Phaser
  * canvas (trails, markers, effects; 1.5x the stage, camera zoom 1.5 over the 1280x720 world) and
  * the Preact HUD. Then hand control to the director.
@@ -12,7 +12,7 @@ import { Director } from './director';
 import { Hud } from './hud';
 import { WilayahScene } from './scene';
 import { STR } from './strings';
-import { loadTextures, RENDER_SCALE } from './textures';
+import { RENDER_SCALE } from './textures';
 
 function layer(stage: HTMLElement, className: string): HTMLDivElement {
   const el = document.createElement('div');
@@ -35,7 +35,6 @@ async function boot(): Promise<void> {
   if (!root) return;
   const { stage, width: stageWidth, height: stageHeight, onResize } = mountStage(root);
   // Start the slow work while the shell handshake runs.
-  const textures = loadTextures();
   const fonts = fontsReady();
   let game: HoorahGame;
   try {
@@ -44,7 +43,6 @@ async function boot(): Promise<void> {
     showError(stage);
     return;
   }
-  const images = await textures;
   await fonts;
 
   const groundHost = layer(stage, 'wl-ground');
@@ -52,7 +50,7 @@ async function boot(): Promise<void> {
   const hudHost = layer(stage, 'wl-hud-host');
   hudHost.style.pointerEvents = 'none';
 
-  const scene = new WilayahScene(images, groundHost);
+  const scene = new WilayahScene(groundHost);
   const width = stageWidth() * RENDER_SCALE;
   const height = stageHeight() * RENDER_SCALE;
   const phaser = new Phaser.Game({

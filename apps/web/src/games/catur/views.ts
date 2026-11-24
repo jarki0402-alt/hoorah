@@ -49,7 +49,15 @@ export function boardView(
     eyebrow: '',
     // Phones only know room players, so a computer opponent's looks travel along.
     ...(guests.length
-      ? { guests: guests.map(({ id: g, name, fruit, color }) => ({ id: g, name, fruit, color })) }
+      ? {
+          guests: guests.map(({ id: g, name, fruit, look, color }) => ({
+            id: g,
+            name,
+            fruit,
+            ...(look ? { look } : {}),
+            color,
+          })),
+        }
       : {}),
   };
   if (last) view.last = last.uci;

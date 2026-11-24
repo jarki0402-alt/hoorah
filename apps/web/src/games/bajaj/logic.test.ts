@@ -1,4 +1,11 @@
-import { DRIVE_BRAKE, DRIVE_GAS, DRIVE_LEFT, DRIVE_RIGHT, type PlayerInfo } from '@hoorah/protocol';
+import {
+  DRIVE_BRAKE,
+  DRIVE_GAS,
+  DRIVE_LEFT,
+  DRIVE_RIGHT,
+  lookOfFruit,
+  type PlayerInfo,
+} from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { allowedSpeed, safeSpeed } from './ai';
 import { getArena } from './arena';
@@ -34,9 +41,23 @@ const DT = 1 / 60;
 function racers(humans: number, cpus: number): RacerSetup[] {
   const out: RacerSetup[] = [];
   for (let i = 0; i < cpus; i++)
-    out.push({ id: -(i + 1), human: false, name: `CPU${i}`, color: '#22B35E', fruit: 'jeruk' });
+    out.push({
+      id: -(i + 1),
+      human: false,
+      name: `CPU${i}`,
+      color: '#22B35E',
+      fruit: 'jeruk',
+      look: lookOfFruit('jeruk'),
+    });
   for (let i = 0; i < humans; i++)
-    out.push({ id: i + 1, human: true, name: `P${i + 1}`, color: '#2F8CFF', fruit: 'semangka' });
+    out.push({
+      id: i + 1,
+      human: true,
+      name: `P${i + 1}`,
+      color: '#2F8CFF',
+      fruit: 'semangka',
+      look: lookOfFruit('semangka'),
+    });
   return out;
 }
 
@@ -718,8 +739,24 @@ describe('results and setup', () => {
 
   it('builds racers with picked colours and distinct CPU colours', () => {
     const players: PlayerInfo[] = [
-      { id: 1, name: 'Rina', fruit: 'semangka', color: '#F2453D', connected: true, isHost: true },
-      { id: 2, name: 'Budi', fruit: 'alpukat', color: '#2F8CFF', connected: true, isHost: false },
+      {
+        id: 1,
+        name: 'Rina',
+        fruit: 'semangka',
+        look: lookOfFruit('semangka'),
+        color: '#F2453D',
+        connected: true,
+        isHost: true,
+      },
+      {
+        id: 2,
+        name: 'Budi',
+        fruit: 'alpukat',
+        look: lookOfFruit('alpukat'),
+        color: '#2F8CFF',
+        connected: true,
+        isHost: false,
+      },
     ];
     const r = buildRacers(players, 'gp', STR.cpuNames, new Map([[1, '#FFC928']]));
     expect(r.length).toBe(6);
@@ -728,6 +765,10 @@ describe('results and setup', () => {
     expect(buildRacers(players, 'duel', STR.cpuNames).length).toBe(2);
     expect(buildRacers(players.slice(0, 1), 'duel', STR.cpuNames).length).toBe(2);
     expect(buildRacers(players, 'arena', STR.cpuNames).length).toBe(4);
+    // Humans keep their look; computer racers get characters nobody picked.
+    expect(r.find((x) => x.id === 2)!.look).toEqual(lookOfFruit('alpukat'));
+    const people = r.map((x) => x.look.c);
+    expect(new Set(people).size).toBe(6);
   });
 
   it('splits the screen by the number of humans', () => {

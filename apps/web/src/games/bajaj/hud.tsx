@@ -5,7 +5,7 @@
  * through signals a few times per second; per-frame values (minimap dots, name tags, timers) are
  * written straight to the DOM from `HudStore.frame()` so nothing re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useRef } from 'preact/hooks';
@@ -26,6 +26,7 @@ export interface KartCard {
   idx: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   human: boolean;
 }
@@ -90,6 +91,7 @@ export interface MenuPlayer {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   ready: boolean;
   host: boolean;
@@ -717,7 +719,7 @@ function ViewportHud({ store, vi, info }: { store: HudStore; vi: number; info: V
         <Minimap store={store} focus={info.kart} width={mapW} />
       </div>
       <div class="bj-who">
-        <Avatar fruit={card.fruit} ring={card.color} size={34} />
+        <Avatar look={card.look} fruit={card.fruit} ring={card.color} size={34} />
         <div>
           <div class="bj-who-name">{card.name}</div>
           {m.offline && <div class="bj-who-sub">{STR.offline}</div>}
@@ -813,7 +815,7 @@ function Tags({ store }: { store: HudStore }) {
               class={`bj-tag ${c.human ? 'is-human' : ''}`}
               style={{ ['--c' as string]: c.color }}
             >
-              {c.human && <Avatar fruit={c.fruit} ring={c.color} size={22} />}
+              {c.human && <Avatar look={c.look} fruit={c.fruit} ring={c.color} size={22} />}
               <span>{c.name}</span>
               {ghost && <em>{STR.ghostTag}</em>}
             </div>
@@ -907,7 +909,7 @@ function Standings({ store, title }: { store: HudStore; title?: string }) {
         return (
           <div key={r.idx} class={`bj-stand-row ${c.human ? 'is-human' : ''} ${r.out ? 'is-out' : ''}`}>
             <span class="bj-stand-p display">{r.place}</span>
-            <Avatar fruit={c.fruit} ring={c.color} size={26} dim={r.out} />
+            <Avatar look={c.look} fruit={c.fruit} ring={c.color} size={26} dim={r.out} />
             <span class="bj-stand-n">{c.name}</span>
             <span class="bj-stand-l">{right}</span>
           </div>
@@ -948,7 +950,7 @@ function Results({ store }: { store: HudStore }) {
             <span class="display bj-results-p" style={{ color: placeColor(r.place) }}>
               {r.place}
             </span>
-            <Avatar fruit={r.card.fruit} ring={r.card.color} size={34} />
+            <Avatar look={r.card.look} fruit={r.card.fruit} ring={r.card.color} size={34} />
             <span class="bj-results-n">
               {r.card.name}
               {!r.card.human && <em>{STR.cpuTag}</em>}
@@ -1039,7 +1041,7 @@ function MenuHead({ eyebrow, title, m }: { eyebrow: string; title: string; m: Me
       <h1 class="bj-menu-title display outline-text">{title}</h1>
       {host && (
         <div class="bj-menu-host">
-          <Avatar fruit={host.fruit} ring={host.color} size={28} />
+          <Avatar look={host.look} fruit={host.fruit} ring={host.color} size={28} />
           <span>{STR.menuHostPicks}</span>
         </div>
       )}
@@ -1181,7 +1183,7 @@ function GarageScreen({ store, m }: { store: HudStore; m: MenuModel }) {
             class={`bj-plate ${p.ready ? 'is-ready' : ''}`}
             style={{ ['--c' as string]: p.color }}
           >
-            <Avatar fruit={p.fruit} ring={p.color} size={36} />
+            <Avatar look={p.look} fruit={p.fruit} ring={p.color} size={36} />
             <div>
               <div class="bj-plate-name">{p.name}</div>
               <div class="bj-plate-sub">

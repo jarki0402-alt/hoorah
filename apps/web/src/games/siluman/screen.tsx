@@ -162,7 +162,7 @@ function BigAvatar({
   if (!info) return null;
   return (
     <div class="sl-bigav">
-      <Avatar fruit={info.fruit} ring={info.color} size={132} face={face} />
+      <Avatar look={info.look} ring={info.color} size={132} face={face} />
       <div class="sl-bigav-name">{info.name}</div>
     </div>
   );
@@ -410,7 +410,7 @@ function MiniAvatar({ model, id }: { model: ScreenModel; id: number }) {
   if (!info) return null;
   return (
     <span class="sl-mini">
-      <Avatar fruit={info.fruit} ring={info.color} size={44} />
+      <Avatar look={info.look} ring={info.color} size={44} />
       <span>{info.name}</span>
     </span>
   );
@@ -495,7 +495,7 @@ function CastCard({ model, s }: { model: ScreenModel; s: Seat }) {
   return (
     <div class={`sl-cast ${s.alive ? '' : 'is-out'}`}>
       <img src={roleSrc(s.role)} alt="" width={96} height={72} />
-      <Avatar fruit={info.fruit} ring={info.color} size={40} face={s.alive ? 'happy' : 'sad'} />
+      <Avatar look={info.look} ring={info.color} size={40} face={s.alive ? 'happy' : 'sad'} />
       <div class="sl-cast-name">{info.name}</div>
       <div class="sl-cast-role">{ROLE_NAME[s.role]}</div>
     </div>
@@ -536,7 +536,7 @@ function Strip({ model }: { model: ScreenModel }) {
             )}
             <div class="sl-seat-av">
               <Avatar
-                fruit={info.fruit}
+                look={info.look}
                 ring={info.color}
                 size={dense ? 46 : 56}
                 face={ghost ? 'sad' : 'happy'}

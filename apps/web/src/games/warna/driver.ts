@@ -3,7 +3,7 @@
  * DOM HUD: phone input, Host menu actions, sounds, adaptive music, phone views (throttled and
  * deduplicated), the stage picker memory (best stars per stage on this screen) and the result.
  */
-import type { PlayerInfo, RelayedInput } from '@hoorah/protocol';
+import { lookOfFruit, type PlayerInfo, type RelayedInput } from '@hoorah/protocol';
 import type { GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
 import type * as Phaser from 'phaser';
 import { celebrate } from '../../shared/confetti';
@@ -13,16 +13,18 @@ import type { Hud, HudState, LegendRow, Overlay } from './hud';
 import { type StickCommand, StickInputs } from './input';
 import { BIOMES, biomeOf, Cell, LEVELS, type Slot } from './levels';
 import {
-  isOpen,
+  canPlayLevel,
   type MatchEvent,
+  needsPass,
   type Person,
   type Progress,
-  secondFruit,
+  secondLook,
   WarnaMatch,
+  worldNeedsPass,
   worldStars,
 } from './logic';
 import { buildResult } from './results';
-import type { WarnaScene } from './scene';
+import type { CharLook, WarnaScene } from './scene';
 import { BIOME_TEXT, formatClock, levelName, levelTip, STR } from './strings';
 import { resultView, type ViewContext, viewFor } from './views';
 import { TUNE, type World, type WorldEvent } from './world';
@@ -68,9 +70,9 @@ export class Driver {
     private readonly scene: WarnaScene,
     private readonly hud: Hud,
     private readonly phaser: Phaser.Game,
-    stages: number,
   ) {
-    this.match = new WarnaMatch(stages, loadProgress());
+    // A free main screen sends `limited: true`; a missing setting keeps every stage open.
+    this.match = new WarnaMatch(loadProgress(), game.settings.limited === true);
     this.onPlayers();
   }
 
@@ -105,6 +107,7 @@ export class Driver {
       id: p.id,
       name: p.name,
       fruit: p.fruit,
+      look: p.look,
       color: p.color,
       connected: p.connected,
     }));
@@ -155,6 +158,16 @@ export class Driver {
         break;
       case 'start':
         if (host && m.phase === 'select') m.start();
+        break;
+      // After a level (owner 2026-11-23): play on, pick another level, or end with the result.
+      case 'go-next':
+        if (host && m.playNext()) this.sfx('select');
+        break;
+      case 'go-map':
+        if (host && m.toMap()) this.sfx('back');
+        break;
+      case 'go-done':
+        if (host) m.finish();
         break;
       case 'hint':
         m.hint(from);
@@ -218,14 +231,14 @@ export class Driver {
     for (const e of m.drainEvents()) this.onEvent(e);
   }
 
-  private look(key: number): { name: string; fruit: PlayerInfo['fruit']; idle: boolean } {
+  private look(key: number): CharLook {
     const m = this.match;
     const c = m.sim?.chars[key];
     const p = c ? m.person(c.owner) : undefined;
     const idle = Boolean(m.solo && c && c.sub !== m.steer);
     return {
       name: p?.name ?? '',
-      fruit: (c?.sub === 1 ? secondFruit(p?.fruit) : p?.fruit) ?? 'jeruk',
+      look: (c?.sub === 1 ? secondLook(p?.look) : p?.look) ?? lookOfFruit('jeruk'),
       idle,
     };
   }
@@ -432,6 +445,7 @@ export class Driver {
       const inside = active.filter((c) => c.inExit).length;
       level = inside >= active.length - 1 && active.length > 1 ? 3 : inside * 2 >= active.length ? 2 : 1;
     } else if (m.phase === 'clear') level = 3;
+    else if (m.phase === 'next') level = 2;
     else if (m.phase === 'intro') level = 1;
     if (level !== this.intensity) {
       this.intensity = level;
@@ -471,7 +485,7 @@ export class Driver {
         .filter((c) => c.slot === s)
         .map((c) => {
           const look = this.look(c.key);
-          return { name: look.name, fruit: look.fruit, color: m.person(c.owner)?.color ?? '#FFFFFF' };
+          return { name: look.name, look: look.look, color: m.person(c.owner)?.color ?? '#FFFFFF' };
         });
       rows.push({ slot: s as Slot, people });
     }
@@ -488,15 +502,18 @@ export class Driver {
           return {
             kind: 'worlds',
             host,
-            stages: m.stages,
             selected: m.world,
-            worlds: BIOMES.map((b) => ({
-              id: b.id,
-              name: BIOME_TEXT[b.id].name,
-              sub: b.ready ? BIOME_TEXT[b.id].sub : STR.soon,
-              ready: b.ready,
-              ...worldStars(b.id, m.progress),
-            })),
+            worlds: BIOMES.map((b) => {
+              const pass = b.ready && worldNeedsPass(b.id, m.limited);
+              return {
+                id: b.id,
+                name: BIOME_TEXT[b.id].name,
+                sub: pass ? STR.passSub : b.ready ? BIOME_TEXT[b.id].sub : STR.soon,
+                ready: b.ready,
+                pass,
+                ...worldStars(b.id, m.progress),
+              };
+            }),
           };
         }
         const levels = biomeOf(m.world).levels;
@@ -512,7 +529,8 @@ export class Driver {
             name: levelName(lv.id),
             stars: m.progress[lv.id] ?? 0,
             done: m.progress[lv.id] !== undefined,
-            open: isOpen(lv, m.progress),
+            open: canPlayLevel(lv, m.progress, m.limited),
+            pass: needsPass(lv, m.limited),
           })),
         };
       }
@@ -526,10 +544,12 @@ export class Driver {
           legend: this.legend(),
           solo: m.solo,
         };
-      case 'clear': {
+      case 'clear':
+      case 'next': {
         const s = m.lastScore();
-        const nextIdx = m.order[m.stage + 1];
-        const next = nextIdx !== undefined ? LEVELS[nextIdx] : undefined;
+        const next = m.nextLevel();
+        const choosing = m.phase === 'next';
+        const host = this.nameOf(this.hostId());
         return {
           kind: 'clear',
           eyebrow: STR.worldLevel(worldName, m.level.number),
@@ -543,7 +563,17 @@ export class Driver {
               ],
           time: s?.skipped ? STR.skippedNote : STR.clearTime(formatClock(s?.time ?? 0)),
           gems: s?.skipped ? '' : STR.clearGems(s?.gems ?? 0, s?.gemTotal ?? 0),
-          next: next ? STR.nextStage(levelName(next.id)) : STR.lastStage,
+          next: !choosing
+            ? next
+              ? STR.nextStage(levelName(next.id))
+              : m.nextNeedsPass()
+                ? STR.passNext
+                : STR.lastStage
+            : next
+              ? STR.nextIn(next.number, Math.ceil(m.nextLeft()), host)
+              : m.nextNeedsPass()
+                ? STR.passNextHost(host)
+                : STR.worldDone(host),
         };
       }
       default:
@@ -570,7 +600,7 @@ export class Driver {
             : STR.hintExit
       : '';
     return {
-      show: m.phase === 'play' || m.phase === 'clear',
+      show: m.phase === 'play' || m.phase === 'clear' || m.phase === 'next',
       stage: STR.worldLevel(BIOME_TEXT[m.level.biome].name, m.level.number),
       name: levelName(m.level.id),
       timer: formatClock(m.playT),

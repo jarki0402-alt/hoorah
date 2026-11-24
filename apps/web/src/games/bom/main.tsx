@@ -7,7 +7,7 @@
  * picks MSAA, shadows and pixel ratio; the quality ladder steps down while chasing if frames run
  * slow. Debug pins: `?q=0..3` shadow tier, `?k=` pixel ratio.
  */
-import { FRUITS, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
+import { FRUITS, lookOfFruit, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
 import { connect, type GameResult } from '@hoorah/sdk';
 import { render } from 'preact';
 import { LEVELS, QualityLadder, readOverrides, startRatio } from '../bajaj/quality';
@@ -34,6 +34,7 @@ class DemoGame implements GameLike {
       id: -(i + 1),
       name: names[i]!,
       fruit: FRUITS[i % FRUITS.length]!,
+      look: lookOfFruit(FRUITS[i % FRUITS.length]!),
       color: PLAYER_COLORS[i % PLAYER_COLORS.length]!,
       connected: true,
       isHost: i === 0,

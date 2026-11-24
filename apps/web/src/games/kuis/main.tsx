@@ -6,7 +6,7 @@
 
 import type { ControllerToGame } from '@hoorah/protocol';
 import { connect, type HoorahGame } from '@hoorah/sdk';
-import { signal } from '@preact/signals';
+import { effect, type ReadonlySignal, signal } from '@preact/signals';
 import { render } from 'preact';
 import type { Sfx } from '../../shared/audio';
 import { celebrate, confetti } from '../../shared/confetti';
@@ -22,8 +22,9 @@ import {
   type SoloRecord,
   soloRecord,
 } from './logic';
+import { applyMirror, type KuisMirror, MirrorScene, toMirror } from './mirror';
 import { STR } from './strings';
-import { FrameBus, KuisTv, type StageSize, type TvModel } from './tv';
+import { FrameBus, KuisTv, type SeatInfo, type StageSize, type TvModel } from './tv';
 import { optionIndex, viewFor } from './views';
 import './kuis.css';
 
@@ -68,6 +69,20 @@ function saveRecent(recent: string[], asked: string[]): void {
   } catch {
     // Storage blocked: the next game just draws from the whole bank.
   }
+}
+
+/** Confetti from the fastest correct player's podium. */
+function burstAt(playerId: number): void {
+  const el = document.querySelector<HTMLElement>(`[data-pid="${playerId}"]`);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  confetti({
+    x: (r.left + r.width / 2) / window.innerWidth,
+    y: r.top / window.innerHeight,
+    count: 70,
+    spread: 0.7,
+    power: 0.75,
+  });
 }
 
 class KuisDriver implements TvModel {
@@ -161,21 +176,7 @@ class KuisDriver implements TvModel {
     }
     if (outcomes.some((o) => o.score.doubled)) this.sfx('super', 550);
     else if (outcomes.length >= 2 && outcomes.every((o) => o.score.correct)) this.sfx('cheer', 550);
-    if (fastest !== null) window.setTimeout(() => this.burstAt(fastest), 480);
-  }
-
-  /** Confetti from the fastest correct player's podium. */
-  private burstAt(playerId: number): void {
-    const el = document.querySelector<HTMLElement>(`[data-pid="${playerId}"]`);
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    confetti({
-      x: (r.left + r.width / 2) / window.innerWidth,
-      y: r.top / window.innerHeight,
-      count: 70,
-      spread: 0.7,
-      power: 0.75,
-    });
+    if (fastest !== null) window.setTimeout(() => burstAt(fastest), 480);
   }
 
   /** A solo match stores its score once, when the final card goes up (PRD 6.4). */
@@ -278,6 +279,10 @@ async function boot(): Promise<void> {
     size.value = { w, h };
   });
   await Promise.all([fontsReady(), preloadStage(size.value)]);
+  if (game.isMirror) {
+    bootMirror(game, stage, size);
+    return;
+  }
   const recent = loadRecent();
   const match = new KuisMatch({
     seed: randomSeed(),
@@ -297,6 +302,100 @@ async function boot(): Promise<void> {
   game.ready();
   game.music('kuis');
   driver.start();
+  publishMirror(game, driver);
+}
+
+/** Host's screen: send the display state to far-away screens on every stage change. */
+function publishMirror(game: HoorahGame, driver: KuisDriver): void {
+  const send = () => {
+    if (!game.mirrored) return;
+    game.publish(
+      toMirror(driver.match, game.now(), driver.match.held, {
+        players: game.allPlayers,
+        waiting: driver.waiting.peek(),
+        recordBefore: driver.recordBefore,
+        record: driver.record,
+      }),
+    );
+  };
+  effect(() => {
+    void driver.version.value;
+    void driver.waiting.value;
+    send();
+  });
+  game.on('mirrors', (on) => {
+    if (on) send();
+  });
+}
+
+/** Far-away screen: the stage model fed by the Host's published states (no rules, no phones). */
+class MirrorModel implements TvModel {
+  readonly version = signal(0);
+  readonly waiting = signal(false);
+  readonly frame = new FrameBus();
+
+  constructor(readonly match: MirrorScene) {}
+
+  get recordBefore(): number | null {
+    return this.match.current.rb;
+  }
+
+  get record(): SoloRecord | null {
+    return this.match.current.rec;
+  }
+
+  info = (id: number): SeatInfo | undefined => this.match.info(id);
+
+  apply(next: KuisMirror, now: number): void {
+    const prev = this.match.current;
+    this.match.set(next, now);
+    this.waiting.value = next.wait;
+    this.version.value++;
+    const newPhase = prev.ph !== next.ph || prev.r !== next.r;
+    if (!newPhase) return;
+    // The same flourishes the Host's driver fires on these phase changes.
+    if (next.ph === 'reveal' && next.fc !== null) {
+      const fastest = next.fc;
+      window.setTimeout(() => burstAt(fastest), 480);
+    } else if (next.ph === 'final') {
+      window.setTimeout(celebrate, 250);
+    }
+  }
+}
+
+function bootMirror(game: HoorahGame, stage: HTMLElement, size: ReadonlySignal<StageSize>): void {
+  let model: MirrorModel | null = null;
+  game.on('mirror', (raw) => {
+    const state = applyMirror(raw);
+    if (!state) return;
+    const now = game.now();
+    if (model) {
+      model.apply(state, now);
+      return;
+    }
+    const scene = new MirrorScene(state);
+    if (game.paused) scene.setLocalPause(true, now);
+    const created = new MirrorModel(scene);
+    created.waiting.value = state.wait;
+    model = created;
+    game.on('pause', (paused) => scene.setLocalPause(paused, game.now()));
+    render(<KuisTv model={created} size={size} />, stage);
+    const loop = () => {
+      created.frame.emit(game.now());
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+    window.setInterval(() => created.frame.emit(game.now()), FALLBACK_TICK_MS);
+  });
+  // Backdrop only until the Host's first state arrives.
+  const { w, h } = size.value;
+  render(
+    <div class="kz-root">
+      <img class="kz-bg" src={backdropUrl(w, h)} alt="" width={w} height={h} draggable={false} />
+    </div>,
+    stage,
+  );
+  game.ready();
 }
 
 void boot();

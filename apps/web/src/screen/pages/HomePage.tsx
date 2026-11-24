@@ -1,36 +1,47 @@
 /**
  * Home of the main screen, one calm screen instead of a long scroll (owner 2026-11-22): the focused
- * game up top (big art, name, players, one line), the Mode Pesta and Acak quick starts under it,
- * one row of shelf tabs (the same groups as the Host's phone picker) and one grid of cards, two
- * rows of five in view. Down/up moves top bar → quick starts → shelves → grid; a shelf follows the
- * tab in focus at once, and a long shelf glides one card row at a time.
+ * item up top (big art, name, one line), one row of shelf tabs (the same groups as the Host's phone
+ * picker) and one grid of cards, two rows of five in view. Every shelf opens with the two special
+ * cards, Mode Pesta and Acak (owner 2026-11-23), and home opens on Mode Pesta with its big poster.
+ * Down/up moves top bar → shelves → grid; a shelf follows the tab in focus at once, and a long
+ * shelf glides one card row at a time.
  */
-import type { JSX } from 'preact';
+import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { GAMES, type GameId, gamesForTab, MOODS } from '../../shared/games';
-import { cardTag, catalogByCategory, type HomeRow, type HomeSection, homeRows } from '../../shared/homeRows';
+import { GAMES, type GameId, gamesForTab, MOODS, playsRemote } from '../../shared/games';
+import { allGames, cardTag, type HomeRow, type HomeSection, homeRows } from '../../shared/homeRows';
 import { KeyArt } from '../../shared/keyart';
 import { Icon } from '../../shared/ui';
-import { FocusButton, InvitePanel, TopBar } from '../components';
+import { AccessTag, FocusButton, InvitePanel, TopBar } from '../components';
 import { cardFocusId, cardGame, PARTY_ID, RANDOM_ID, shelfId, shelfOf } from '../homeFocus';
 import { focus, focused, focusFromPointer, press, setFocusMap } from '../nav';
+import { PARTY_GAMES, partyPool } from '../party';
+import { REMOTE_ID, RemoteButton, RemoteChip, RemotePanel } from '../remote';
+import { PartyCardArt, PartyHeroArt, RandomCardArt, RandomHeroArt } from '../specialArt';
 import {
   connected,
   goJoin,
   homeJump,
   homeTab,
+  homeView,
   inviting,
+  isMirror,
+  offer,
   openDetail,
-  page,
-  partyLineup,
+  openRemotePanel,
   recent,
+  remoteOn,
+  remotePanel,
   runTopBar,
   setInviting,
   sfx,
   startParty,
   TOP_BAR_IDS,
+  wheelView,
 } from '../store';
-import { HOME } from '../strings';
+import { HOME, REMOTE } from '../strings';
+import { OfferLayer } from './OfferOverlay';
+import { WheelOverlay } from './WheelOverlay';
 import './home.css';
 
 const CARD_W = 224;
@@ -56,35 +67,66 @@ function chunk<T>(list: readonly T[], size: number): T[][] {
   return out;
 }
 
-/** Games on a shelf: a home row, or the whole catalog grouped like the phone's "Semua". */
-function shelfGames(shelf: HomeSection, rows: readonly HomeRow[]): GameId[] {
-  if (shelf === 'all') return catalogByCategory();
+/** The two special cards that open every shelf. */
+const SPECIALS = [PARTY_ID, RANDOM_ID] as const;
+type Special = (typeof SPECIALS)[number];
+
+/** Games on a shelf: a home row, or every game ordered for this screen ("Semua"). */
+function shelfGames(
+  shelf: HomeSection,
+  rows: readonly HomeRow[],
+  n: number,
+  played: readonly string[],
+): GameId[] {
+  if (shelf === 'all') return allGames(n, played, true);
   return rows.find((r) => r.id === shelf)?.games ?? [];
+}
+
+/** Grid rows of focus ids: the special cards first, then the shelf's games, five to a row. */
+function gridOf(games: readonly GameId[], shelf: HomeSection): string[][] {
+  return chunk([...SPECIALS, ...games.map((g) => cardFocusId(g, shelf))], GRID_COLS);
+}
+
+/** Random picks for the special cards' art (a fresh look each time home opens). */
+function sample(list: readonly GameId[], count: number): GameId[] {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a.slice(0, count);
 }
 
 const shelfLabel = (s: HomeSection): string =>
   s === 'fit' ? HOME.shelfFit : s === 'all' ? HOME.allTab : MOODS[s].label;
 
-type Spin = { phase: 'idle' } | { phase: 'spin' | 'done'; shown: GameId };
-
 export function HomePage() {
   const n = connected.value.length;
-  const rows = homeRows(n, recent.value).filter((r) => r.games.length > 0);
-  const shelves: HomeSection[] = [...rows.map((r) => r.id), 'all'];
+  const played = recent.value;
+  const rows = homeRows(n, played).filter((r) => r.games.length > 0);
+  const shelves: HomeSection[] = ['all', ...rows.map((r) => r.id)];
+  // A far-away main screen shows the Host's home as it is: shelf, card row, hero, art, wheel.
+  const far = isMirror ? homeView.value : null;
   const [shelfState, setShelf] = useState<HomeSection>(lastShelf);
-  const shelf = shelves.includes(shelfState) ? shelfState : 'fit';
+  const shelfWanted = far ? far.shelf : shelfState;
+  const shelf = shelves.includes(shelfWanted) ? shelfWanted : 'all';
   lastShelf = shelf;
-  const games = shelfGames(shelf, rows);
-  const gridRows = chunk(games, GRID_COLS);
+  const games = shelfGames(shelf, rows, n, played);
+  const gridRows = gridOf(games, shelf);
   const invitingNow = inviting.value;
+  const remoteOpen = remotePanel.value;
+  const remote = remoteOn.value;
+  const [wheelState, setWheelOpen] = useState(false);
+  const wheelOpen = isMirror ? wheelView.value !== null : wheelState;
+  // The Hoorah Pass offer owns the focus while open (Mode Pesta or a locked pick from the wheel).
+  const offerOpen = offer.value !== null;
   const fid = focused.value;
   const jump = homeJump.value;
 
   const nav: NavRow[] = [
-    { key: 'top', ids: ['invite', ...TOP_BAR_IDS] },
-    { key: 'quick', ids: [PARTY_ID, RANDOM_ID] },
+    { key: 'top', ids: isMirror ? [...TOP_BAR_IDS] : [REMOTE_ID, 'invite', ...TOP_BAR_IDS] },
     { key: 'shelves', ids: shelves.map(shelfId) },
-    ...gridRows.map((c, i) => ({ key: `grid${i}`, ids: c.map((g) => cardFocusId(g, shelf)) })),
+    ...gridRows.map((ids, i) => ({ key: `grid${i}`, ids })),
   ];
   const navKey = nav.map((r) => r.ids.join(',')).join('|');
   const navRef = useRef(nav);
@@ -96,55 +138,15 @@ export function HomePage() {
   /** Column each row was left on, so coming back lands where you were. */
   const memory = useRef<Record<string, number>>({});
 
-  // The party lineup is shown up top before it starts; a new one when the room changes.
-  const [lineup, setLineup] = useState<GameId[]>(() => partyLineup());
-  useEffect(() => setLineup(partyLineup()), [n]);
-  const lineupRef = useRef(lineup);
-  lineupRef.current = lineup;
-
-  /* ------------------------------------------------------------ Acak */
-  const [spin, setSpin] = useState<Spin>({ phase: 'idle' });
-  const spinning = useRef(false);
-  const timers = useRef<number[]>([]);
-  useEffect(
-    () => () => {
-      for (const t of timers.current) window.clearTimeout(t);
-    },
-    [],
-  );
-  const spinRef = useRef<() => void>(() => {});
-  spinRef.current = () => {
-    if (spinning.current) return;
-    const pool = gamesForTab('fit', n);
-    if (pool.length === 0) {
-      sfx('wrong');
-      return;
-    }
-    spinning.current = true;
-    const pick = pool[Math.floor(Math.random() * pool.length)]!;
-    const start = Math.floor(Math.random() * pool.length);
-    const steps = 14;
-    let t = 0;
-    for (let i = 0; i < steps; i++) {
-      // Slows down like a wheel: short steps first, longer ones near the end.
-      t += 55 + i * i * 1.1;
-      const last = i === steps - 1;
-      const shown = last ? pick : pool[(start + i) % pool.length]!;
-      timers.current.push(
-        window.setTimeout(() => {
-          setSpin({ phase: last ? 'done' : 'spin', shown });
-          sfx(last ? 'select' : 'tick');
-        }, t),
-      );
-    }
-    timers.current.push(
-      window.setTimeout(() => {
-        spinning.current = false;
-        setSpin({ phase: 'idle' });
-        if (page.peek() === 'home') openDetail(pick);
-      }, t + 700),
-    );
-  };
+  // Art of the special cards: party games for the poster, fitting games for the wheel.
+  const [ownArt] = useState(() => ({
+    party: sample(partyPool(Math.max(1, n), remote), 3),
+    wheel: sample(
+      gamesForTab('fit', Math.max(1, n)).filter((id) => !remote || playsRemote(id)),
+      8,
+    ),
+  }));
+  const art = far ? far.art : ownArt;
 
   /* ------------------------------------------------------------ focus map */
   const jumpTo = (section: HomeSection) => {
@@ -153,30 +155,42 @@ export function HomePage() {
     focus(shelfId(target));
   };
 
+  // The offer replaces the wheel (a pick this room cannot start).
   useEffect(() => {
-    // The invite panel owns the focus while open; this map comes back when it closes.
-    if (invitingNow) return;
+    if (offerOpen) setWheelOpen(false);
+  }, [offerOpen]);
+
+  useEffect(() => {
+    // The invite and long-distance panels, the wheel and the offer own the focus while open; this
+    // map comes back after.
+    if (invitingNow || wheelOpen || offerOpen || remoteOpen) return;
     const all = nav.flatMap((r) => r.ids);
     const current = focused.peek();
     // A card that left the grid (other shelf, a new game played) hands over to the shelf tab.
     const initial =
       current === 'close'
         ? 'invite'
-        : all.includes(current)
-          ? current
-          : all.includes(lastFocus)
-            ? lastFocus
-            : cardGame(current) || cardGame(lastFocus)
-              ? shelfId(shelfRef.current)
-              : PARTY_ID;
+        : current.startsWith('remote-')
+          ? REMOTE_ID
+          : all.includes(current)
+            ? current
+            : all.includes(lastFocus)
+              ? lastFocus
+              : cardGame(current) || cardGame(lastFocus)
+                ? shelfId(shelfRef.current)
+                : PARTY_ID;
     const dispose = setFocusMap(
       {
         rows: nav.map((r) => r.ids),
         onOk: (id) => {
           if (runTopBar(id)) return;
           if (id === 'invite') return setInviting(true);
-          if (id === PARTY_ID) return startParty(lineupRef.current);
-          if (id === RANDOM_ID) return spinRef.current();
+          if (id === REMOTE_ID) return openRemotePanel();
+          if (id === PARTY_ID) return startParty();
+          if (id === RANDOM_ID) {
+            sfx('select');
+            return setWheelOpen(true);
+          }
           // OK on a shelf tab steps into its grid.
           if (shelfOf(id)) return press('down');
           const g = cardGame(id);
@@ -204,11 +218,11 @@ export function HomePage() {
       jumpTo(homeTab.peek());
     }
     return dispose;
-  }, [navKey, invitingNow]);
+  }, [navKey, invitingNow, wheelOpen, offerOpen, remoteOpen]);
 
   // A group tapped in the Host's phone picker: show that shelf with its tab in focus.
   useEffect(() => {
-    if (seenJump === jump || invitingNow) return;
+    if (seenJump === jump || invitingNow || wheelOpen || offerOpen || remoteOpen) return;
     seenJump = jump;
     jumpTo(homeTab.peek());
   }, [jump]);
@@ -216,7 +230,8 @@ export function HomePage() {
   /* ------------------------------------------------------------ follow the focus */
   const scroller = useRef<HTMLDivElement>(null);
   const [topRow, setTopRow] = useState(0);
-  const [pinned, setPinned] = useState<GameId | null>(null);
+  // The item the hero shows while the focus is on the tabs or the top bar: the last card visited.
+  const [pinned, setPinned] = useState<GameId | Special>(PARTY_ID);
 
   useEffect(() => {
     const at = nav.findIndex((r) => r.ids.includes(fid));
@@ -228,6 +243,7 @@ export function HomePage() {
     lastFocus = fid;
     const game = cardGame(fid);
     if (game) setPinned(game);
+    else if (fid === PARTY_ID || fid === RANDOM_ID) setPinned(fid);
     // The grid follows the shelf tab in focus at once (no OK needed on a remote).
     if (row.key === 'shelves') {
       const next = shelvesRef.current[col]!;
@@ -245,11 +261,20 @@ export function HomePage() {
   // Another shelf starts from its first row.
   useEffect(() => setTopRow(0), [shelf]);
 
-  const top = Math.min(topRow, Math.max(0, gridRows.length - ROWS_IN_VIEW));
+  const top = Math.min(far ? far.top : topRow, Math.max(0, gridRows.length - ROWS_IN_VIEW));
+  const pinnedNow = far ? far.pinned : pinned;
+
+  // Far-away main screens draw this home as it is (the store sends it on every change).
+  useEffect(() => {
+    if (isMirror) return;
+    homeView.value = { shelf, top, pinned, art: ownArt };
+  }, [shelf, top, pinned]);
   const [offset, setOffset] = useState(0);
   useEffect(() => {
+    // Measured from the first row, so the top padding (room for the focus ring) is never scrolled away.
+    const first = scroller.current?.querySelector<HTMLElement>('[data-nav="grid0"]');
     const el = scroller.current?.querySelector<HTMLElement>(`[data-nav="grid${top}"]`);
-    setOffset(el ? el.offsetTop : 0);
+    setOffset(el && first ? el.offsetTop - first.offsetTop : 0);
   }, [top, navKey]);
 
   // Mouse wheel and trackpads step through the rows like the arrow keys.
@@ -263,66 +288,65 @@ export function HomePage() {
 
   /* ------------------------------------------------------------ render */
   const fidGame = cardGame(fid);
-  const spinShown = fid === RANDOM_ID && spin.phase !== 'idle' ? spin.shown : null;
-  const featured: GameId =
-    fidGame ??
-    spinShown ??
-    (fid === PARTY_ID ? lineup[0] : null) ??
-    pinned ??
-    games[0] ??
-    lineup[0] ??
-    'bajaj';
+  const shown: GameId | Special =
+    fidGame ?? (fid === PARTY_ID || fid === RANDOM_ID ? fid : null) ?? pinnedNow;
   const hint =
     gridRows.length > ROWS_IN_VIEW
       ? HOME.hintRows(top + 1, top + ROWS_IN_VIEW, gridRows.length)
       : shelf === 'fit'
         ? HOME.hintFit(n)
         : HOME.hintCount(games.length);
+  const partyCount = Math.min(PARTY_GAMES, partyPool(Math.max(1, n), remote).length);
+  // The hero's button does what OK on the shown card does (for a mouse or a touch screen).
+  const heroGo = () => {
+    if (shown === PARTY_ID) return startParty();
+    if (shown === RANDOM_ID) {
+      sfx('select');
+      return setWheelOpen(true);
+    }
+    openDetail(shown);
+  };
 
   return (
     <div class="page home">
-      <div class="hero-art" key={featured}>
-        <KeyArt id={featured} width={1100} logo={false} />
-      </div>
+      {shown === PARTY_ID ? (
+        <PartyHeroArt games={art.party} />
+      ) : shown === RANDOM_ID ? (
+        <RandomHeroArt games={art.wheel} />
+      ) : (
+        <div class="hero-art" key={shown}>
+          <KeyArt id={shown} width={1100} logo={false} />
+        </div>
+      )}
       <div class="scrim-left" />
       <div class="scrim-bottom" />
-      <TopBar />
+      <TopBar extra={<RemoteChip />}>
+        <RemoteButton />
+      </TopBar>
 
       <div class="home-body">
         <section class="home-hero">
-          {fid === PARTY_ID ? (
+          {shown === PARTY_ID ? (
             <HeroText
-              eyebrow={HOME.partyEyebrow}
-              title={HOME.partyTitle(lineup.length)}
-              line={lineup.map((id) => GAMES[id].title).join(' · ')}
-              sub={HOME.partyText}
+              eyebrow={HOME.partyEyebrow(partyCount)}
+              title={HOME.partyTitle}
+              line={HOME.partyText(partyCount)}
+              sub={HOME.partySub}
             />
-          ) : fid === RANDOM_ID ? (
-            <HeroText
-              eyebrow={
-                spin.phase === 'idle'
-                  ? HOME.randomEyebrow
-                  : spin.phase === 'done'
-                    ? HOME.randomPicked
-                    : HOME.randomSpinning
-              }
-              title={spinShown ? GAMES[spinShown].title : HOME.randomTitle}
-              line={spinShown ? GAMES[spinShown].tagline : HOME.randomText}
-            />
+          ) : shown === RANDOM_ID ? (
+            <HeroText eyebrow={HOME.randomEyebrow} title={HOME.randomTitle} line={HOME.randomText} />
           ) : (
-            <GameHero id={featured} n={n} />
+            <GameHero id={shown} n={n} />
           )}
-          <div class="home-quick">
-            <FocusButton id={PARTY_ID} class="quick quick-party">
-              <Icon name="play" size={16} color="#111214" />
-              {HOME.partyButton}
-              <span class="quick-count">{lineup.length}</span>
-            </FocusButton>
-            <FocusButton id={RANDOM_ID} class={`quick quick-random is-${spin.phase}`}>
-              <Die />
-              {spin.phase === 'spin' ? HOME.randomSpinning : HOME.randomButton}
-            </FocusButton>
-          </div>
+          <button
+            type="button"
+            tabIndex={-1}
+            class={`hero-go ${shown === RANDOM_ID ? 'is-yellow' : ''}`}
+            onClick={heroGo}
+          >
+            <Icon name="play" size={16} color="#111214" />
+            {shown === PARTY_ID ? HOME.partyGo : shown === RANDOM_ID ? HOME.randomGo : HOME.openGo}
+          </button>
         </section>
 
         <nav class="home-shelf" aria-label={HOME.shelvesLabel}>
@@ -330,7 +354,7 @@ export function HomePage() {
             <FocusButton key={s} id={shelfId(s)} class={`home-shelf-tab ${shelf === s ? 'on' : ''}`}>
               {s !== 'fit' && s !== 'all' && <Icon name={MOODS[s].icon} size={16} stroke={2.6} />}
               <span class="home-shelf-label">{shelfLabel(s)}</span>
-              <span class="home-shelf-count">{shelfGames(s, rows).length}</span>
+              <span class="home-shelf-count">{shelfGames(s, rows, n, played).length}</span>
             </FocusButton>
           ))}
           <span class="home-shelf-hint">{hint}</span>
@@ -338,22 +362,37 @@ export function HomePage() {
 
         <div class="home-grid-viewport" onWheel={onWheel}>
           <div class="home-scroll" ref={scroller} style={{ transform: `translateY(${-offset}px)` }}>
-            {games.length === 0 && <div class="cards-empty">{HOME.empty}</div>}
-            {gridRows.map((c, i) => (
+            {gridRows.map((ids, i) => (
               <div
                 class={`home-grid-row ${i < top || i >= top + ROWS_IN_VIEW ? 'off' : ''}`}
                 data-nav={`grid${i}`}
                 key={`${shelf}-${i}`}
               >
-                {c.map((id) => (
-                  <GameCard key={id} id={id} shelf={shelf} n={n} on={fid === cardFocusId(id, shelf)} />
-                ))}
+                {ids.map((id) => {
+                  const g = cardGame(id);
+                  if (g)
+                    return <GameCard key={id} id={g} shelf={shelf} n={n} on={fid === id} remote={remote} />;
+                  return id === PARTY_ID ? (
+                    <SpecialCard key={id} id={PARTY_ID} title={HOME.partyCard}>
+                      <AccessTag game="party" />
+                      <PartyCardArt width={CARD_W} />
+                    </SpecialCard>
+                  ) : (
+                    <SpecialCard key={id} id={RANDOM_ID} title={HOME.randomCard}>
+                      <RandomCardArt width={CARD_W} games={art.wheel} />
+                    </SpecialCard>
+                  );
+                })}
               </div>
             ))}
+            {games.length === 0 && <div class="cards-empty">{HOME.empty}</div>}
           </div>
         </div>
       </div>
       {invitingNow && <InvitePanel />}
+      {remoteOpen && <RemotePanel />}
+      {wheelOpen && <WheelOverlay players={n} onClose={() => setWheelOpen(false)} />}
+      <OfferLayer />
     </div>
   );
 }
@@ -381,7 +420,7 @@ function HeroText({
   );
 }
 
-/** The focused game: mood, players, tag, big name and its one-line pitch. */
+/** The focused game: mood, players, tag, controls and phone grip, big name and two lines about it. */
 function GameHero({ id, n }: { id: GameId; n: number }) {
   const g = GAMES[id];
   const tag = cardTag(id);
@@ -394,24 +433,50 @@ function GameHero({ id, n }: { id: GameId; n: number }) {
           {fits ? HOME.players(g.minPlayers, g.maxPlayers) : HOME.needs(g.minPlayers)}
         </span>
         {tag && <span class={`tag card-badge-${tag.toLowerCase()}`}>{tag}</span>}
+        <AccessTag game={id} />
+        <span class="home-hero-fact">
+          <Icon name="tap" size={14} stroke={2.4} />
+          {g.control}
+        </span>
+        <span class="home-hero-fact">
+          <Icon name="rotate" size={14} stroke={2.4} />
+          {HOME.phoneHold(g.orientation)}
+        </span>
       </span>
       <h1 class="home-hero-title display">{g.title}</h1>
-      <p class="home-hero-line">{g.tagline}</p>
+      {/* The full description (two lines), not only the one-liner: owner 2026-11-23. */}
+      <p class="home-hero-desc">{g.description}</p>
     </div>
   );
 }
 
-function GameCard({ id, shelf, n, on }: { id: GameId; shelf: HomeSection; n: number; on: boolean }) {
+function GameCard({
+  id,
+  shelf,
+  n,
+  on,
+  remote,
+}: {
+  id: GameId;
+  shelf: HomeSection;
+  n: number;
+  on: boolean;
+  /** A far-away main screen watches: games it cannot show yet say so. */
+  remote: boolean;
+}) {
   const info = GAMES[id];
   const tag = cardTag(id);
   const fits = n === 0 || (n >= info.minPlayers && n <= info.maxPlayers);
+  const farOff = remote && !playsRemote(id);
   return (
     <FocusButton
       id={cardFocusId(id, shelf)}
-      class={`card ${info.available ? '' : 'soon'} ${fits ? '' : 'short'} ${on ? 'on' : ''}`}
+      class={`card ${info.available ? '' : 'soon'} ${fits && !farOff ? '' : 'short'} ${on ? 'on' : ''}`}
     >
       <div class="card-art">
         {tag && <span class={`tag card-badge card-badge-${tag.toLowerCase()}`}>{tag}</span>}
+        <AccessTag game={id} />
+        {farOff && <span class="tag remote-tag">{REMOTE.tag}</span>}
         <KeyArt id={id} width={CARD_W} radius={12} />
       </div>
       <span class="card-title">{info.title}</span>
@@ -419,15 +484,12 @@ function GameCard({ id, shelf, n, on }: { id: GameId; shelf: HomeSection; n: num
   );
 }
 
-function Die() {
+/** Mode Pesta or Acak in the grid: its own art, the same size and focus ring as a game card. */
+function SpecialCard({ id, title, children }: { id: Special; title: string; children: ComponentChildren }) {
   return (
-    <svg class="quick-die" viewBox="0 0 80 80" aria-hidden="true">
-      <rect x="6" y="6" width="68" height="68" rx="16" fill="#fff" stroke="#111214" stroke-width="6" />
-      <circle cx="24" cy="24" r="7" fill="#111214" />
-      <circle cx="56" cy="24" r="7" fill="#111214" />
-      <circle cx="40" cy="40" r="7" fill="#FF5A1F" />
-      <circle cx="24" cy="56" r="7" fill="#111214" />
-      <circle cx="56" cy="56" r="7" fill="#111214" />
-    </svg>
+    <FocusButton id={id} class={`card special-card ${focused.value === id ? 'on' : ''}`}>
+      <div class="card-art">{children}</div>
+      <span class="card-title">{title}</span>
+    </FocusButton>
   );
 }

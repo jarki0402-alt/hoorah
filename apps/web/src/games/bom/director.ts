@@ -13,6 +13,7 @@ import {
   type PlayerInfo,
   type RelayedInput,
   STICK_OP,
+  sameLook,
   unpackStick,
 } from '@hoorah/protocol';
 import type { GameAward, HoorahGame, MusicIntensity } from '@hoorah/sdk';
@@ -124,16 +125,16 @@ export class Director {
   }
 
   private info(p: PlayerInfo): RunnerInfo {
-    return { id: p.id, name: p.name, fruit: p.fruit, color: p.color };
+    return { id: p.id, name: p.name, fruit: p.fruit, look: p.look, color: p.color };
   }
 
   private chip(id: number): RunnerChip | null {
     const r = this.match?.runner(id);
-    return r ? { id, name: r.name, fruit: r.fruit, color: r.color } : null;
+    return r ? { id, name: r.name, fruit: r.fruit, look: r.look, color: r.color } : null;
   }
 
   private guests(): GuestPlayer[] {
-    return this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color }));
+    return this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color }));
   }
 
   /* ------------------------------------------------------------------ picker */
@@ -189,7 +190,9 @@ export class Director {
   private syncLooks(): void {
     const m = this.match;
     if (!m) return;
-    this.scene.setPlayers(m.runners.map((r) => ({ id: r.id, name: r.name, fruit: r.fruit, color: r.color })));
+    this.scene.setPlayers(
+      m.runners.map((r) => ({ id: r.id, name: r.name, fruit: r.fruit, look: r.look, color: r.color })),
+    );
   }
 
   private onPlayers(): void {
@@ -220,8 +223,8 @@ export class Director {
           this.takeover.add(p.id);
           m.setPilot(p.id, new BomBrain(TAKEOVER_SKILL));
         }
-        if (r.name !== p.name || r.color !== p.color || r.fruit !== p.fruit)
-          m.restyle(p.id, { name: p.name, color: p.color, fruit: p.fruit });
+        if (r.name !== p.name || r.color !== p.color || r.fruit !== p.fruit || !sameLook(r.look, p.look))
+          m.restyle(p.id, { name: p.name, color: p.color, fruit: p.fruit, look: p.look });
       }
       this.syncLooks();
     }

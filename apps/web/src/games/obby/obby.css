@@ -535,3 +535,53 @@
   font: 800 22px / 1.3 var(--font-ui);
   background: #16171a;
 }
+
+/* ---------------------------------------------------------------- split screen (2-4 people) */
+
+.ob-split {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ob-pane {
+  position: absolute;
+  box-sizing: border-box;
+  border: 3px solid #111214;
+  box-shadow: inset 0 0 0 3px var(--pane, #fff7f0);
+}
+
+.ob-pane-tag {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 4px 4px;
+  border-radius: 999px;
+  background: rgba(17, 18, 20, 0.78);
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+/* Parts on the right carry their name on the right, clear of the clock in the middle. */
+.ob-pane-tag.is-right {
+  left: auto;
+  right: 14px;
+}
+
+/* With the screen split, each part's corner holds its name: the clock moves to where the parts
+   meet, and the track chip and side standings give way (the progress bar still shows the race). */
+.ob-hud.is-split .ob-clock {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.ob-hud.is-split .ob-brand,
+.ob-hud.is-split .ob-stand {
+  display: none;
+}

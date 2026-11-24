@@ -396,7 +396,7 @@ export class Driver {
     return m.order().map((s) => ({
       id: s.id,
       name: s.name,
-      fruit: s.fruit,
+      look: s.look,
       color: s.color,
       len: m.shown(s.len),
       kos: s.kos,
@@ -414,7 +414,7 @@ export class Driver {
       .map((r) => ({
         id: r.snake.id,
         name: r.snake.name,
-        fruit: r.snake.fruit,
+        look: r.snake.look,
         color: r.snake.color,
         rank: r.rank,
         len: r.final,

@@ -6,15 +6,16 @@
 
 import type { ControllerToGame } from '@hoorah/protocol';
 import { connect, type HoorahGame } from '@hoorah/sdk';
-import { signal } from '@preact/signals';
+import { effect, type ReadonlySignal, signal } from '@preact/signals';
 import { render } from 'preact';
 import type { Sfx } from '../../shared/audio';
 import { celebrate, confetti } from '../../shared/confetti';
 import { fontsReady, mountStage } from '../common/stage';
 import { backdropUrl } from './backdrop';
 import { buildResult, type KompakEvent, KompakMatch, type PlayerPresence, type RoundScore } from './logic';
+import { applyMirror, type KompakMirror, MirrorScene, toMirror } from './mirror';
 import { STR } from './strings';
-import { FrameBus, KompakTv, type StageSize, type TvModel } from './tv';
+import { FrameBus, KompakTv, type SeatInfo, type StageSize, type TvModel } from './tv';
 import { optionIndex, viewFor } from './views';
 import './kompak.css';
 
@@ -56,6 +57,23 @@ function saveRecent(recent: string[], played: string[]): void {
     localStorage.setItem(RECENT_KEY, JSON.stringify(next));
   } catch {
     // Storage blocked: the next game just draws from the whole bank.
+  }
+}
+
+/** Confetti from each winning column's stamp. */
+function burstOver(winners: readonly number[]): void {
+  const cols = document.querySelectorAll<HTMLElement>('.kp-col');
+  for (const i of winners) {
+    const el = cols[i];
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    confetti({
+      x: (r.left + r.width / 2) / window.innerWidth,
+      y: Math.max(0.15, (r.top + r.height * 0.3) / window.innerHeight),
+      count: winners.length > 1 ? 40 : 70,
+      spread: 0.6,
+      power: 0.7,
+    });
   }
 }
 
@@ -146,24 +164,7 @@ class KompakDriver implements TvModel {
       if (!this.connected.has(o.playerId)) continue;
       this.game.vibrate(o.playerId, o.points > 0 ? 30 : [60, 40, 60]);
     }
-    if (scored) window.setTimeout(() => this.burstOver(result.winners), STAMP_MS + 80);
-  }
-
-  /** Confetti from each winning column's stamp. */
-  private burstOver(winners: number[]): void {
-    const cols = document.querySelectorAll<HTMLElement>('.kp-col');
-    for (const i of winners) {
-      const el = cols[i];
-      if (!el) continue;
-      const r = el.getBoundingClientRect();
-      confetti({
-        x: (r.left + r.width / 2) / window.innerWidth,
-        y: Math.max(0.15, (r.top + r.height * 0.3) / window.innerHeight),
-        count: winners.length > 1 ? 40 : 70,
-        spread: 0.6,
-        power: 0.7,
-      });
-    }
+    if (scored) window.setTimeout(() => burstOver(result.winners), STAMP_MS + 80);
   }
 
   private finish(): void {
@@ -253,6 +254,10 @@ async function boot(): Promise<void> {
     size.value = { w, h };
   });
   await Promise.all([fontsReady(), preloadStage(size.value)]);
+  if (game.isMirror) {
+    bootMirror(game, stage, size);
+    return;
+  }
   const recent = loadRecent();
   const match = new KompakMatch({
     seed: randomSeed(),
@@ -272,6 +277,90 @@ async function boot(): Promise<void> {
   game.ready();
   game.music('kompak');
   driver.start();
+  publishMirror(game, driver);
+}
+
+/** Host's screen: send the display state to far-away screens on every stage change. */
+function publishMirror(game: HoorahGame, driver: KompakDriver): void {
+  const send = () => {
+    if (!game.mirrored) return;
+    game.publish(
+      toMirror(driver.match, game.now(), driver.match.held, {
+        players: game.allPlayers,
+        waiting: driver.waiting.peek(),
+      }),
+    );
+  };
+  effect(() => {
+    void driver.version.value;
+    void driver.waiting.value;
+    send();
+  });
+  game.on('mirrors', (on) => {
+    if (on) send();
+  });
+}
+
+/** Far-away screen: the stage model fed by the Host's published states (no rules, no phones). */
+class MirrorModel implements TvModel {
+  readonly version = signal(0);
+  readonly waiting = signal(false);
+  readonly frame = new FrameBus();
+
+  constructor(readonly match: MirrorScene) {
+    this.waiting.value = match.current.wait;
+  }
+
+  info = (id: number): SeatInfo | undefined => this.match.info(id);
+
+  apply(next: KompakMirror, now: number): void {
+    const prev = this.match.current;
+    this.match.set(next, now);
+    this.waiting.value = next.wait;
+    this.version.value++;
+    if (prev.ph === next.ph && prev.r === next.r) return;
+    // The same flourishes the Host's driver fires on these phase changes.
+    const res = next.res;
+    if (next.ph === 'reveal' && res && res.oc.some(([, , , points]) => points > 0)) {
+      window.setTimeout(() => burstOver(res.w), STAMP_MS + 80);
+    } else if (next.ph === 'final') {
+      window.setTimeout(celebrate, 300);
+    }
+  }
+}
+
+function bootMirror(game: HoorahGame, stage: HTMLElement, size: ReadonlySignal<StageSize>): void {
+  let model: MirrorModel | null = null;
+  game.on('mirror', (raw) => {
+    const state = applyMirror(raw);
+    if (!state) return;
+    const now = game.now();
+    if (model) {
+      model.apply(state, now);
+      return;
+    }
+    const scene = new MirrorScene(state);
+    if (game.paused) scene.setLocalPause(true, now);
+    const created = new MirrorModel(scene);
+    model = created;
+    game.on('pause', (paused) => scene.setLocalPause(paused, game.now()));
+    render(<KompakTv model={created} size={size} />, stage);
+    const loop = () => {
+      created.frame.emit(game.now());
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+    window.setInterval(() => created.frame.emit(game.now()), FALLBACK_TICK_MS);
+  });
+  // Backdrop only until the Host's first state arrives.
+  const { w, h } = size.value;
+  render(
+    <div class="kp-root">
+      <img class="kp-bg" src={backdropUrl(w, h)} alt="" width={w} height={h} draggable={false} />
+    </div>,
+    stage,
+  );
+  game.ready();
 }
 
 void boot();

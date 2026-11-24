@@ -470,6 +470,12 @@ export class CaturMatch {
     return this.history[this.history.length - 1];
   }
 
+  /** "e2e4" -> "e4" in the current position (vote rows); unknown moves come back unchanged. */
+  sanOf(move: string): string {
+    const m = findMove(this.moves, move);
+    return m ? san(this.pos, m, this.moves) : move;
+  }
+
   /** Square name of the king in check, if any. */
   checkSquare(): string | undefined {
     const sq = this.check();

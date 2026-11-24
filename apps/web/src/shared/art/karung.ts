@@ -8,7 +8,8 @@
  * then the fruit head from fruits.ts.
  */
 import type { Fruit } from '@hoorah/protocol';
-import { type Face, fruitMarkup } from './fruits';
+import type { Face } from './fruits';
+import { castHead } from './people';
 import { f1, seeded, svgDoc } from './svg';
 
 export const KARUNG = {
@@ -84,7 +85,7 @@ export function sackRacer(fruit: Fruit, color: string, face: Face = 'effort'): s
   const shirt = sackShirt()
     .replace(/#FFFFFF/g, color)
     .replace(/#D6D6D6|#E6E6E6/g, '#00000033');
-  return `${shirt}${sackBody()}<g transform="translate(${RACER_HEAD.x} ${RACER_HEAD.y}) scale(${RACER_HEAD.scale})">${fruitMarkup(fruit, face)}</g>`;
+  return `${shirt}${sackBody()}<g transform="translate(${RACER_HEAD.x} ${RACER_HEAD.y}) scale(${RACER_HEAD.scale})">${castHead(fruit, face)}</g>`;
 }
 
 function cloud(x: number, y: number, s: number): string {

@@ -28,6 +28,22 @@
   background: var(--yellow);
 }
 
+/* Long-distance play: a game the far-away main screen cannot show yet (it will not start). */
+.pick-card.far-off .pick-art,
+.pick-card.far-off .pick-name {
+  opacity: 0.55;
+}
+
+.pick-far {
+  align-self: flex-start;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
   .picker .picker-tabs {
     display: grid;

@@ -1,3 +1,4 @@
+import { lookAt, lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { planShot, toEdge } from './brain';
 import {
@@ -24,6 +25,7 @@ function players(n: number, cpu = false): PlayerInfo[] {
     id: i + 1,
     name: `P${i + 1}`,
     fruit: FRUITS[i % FRUITS.length]!,
+    look: lookOfFruit(FRUITS[i % FRUITS.length]!),
     color: '#F2453D',
     cpu,
   }));
@@ -116,6 +118,14 @@ describe('brain', () => {
 });
 
 describe('match flow', () => {
+  it('carries each player look and restyles it', () => {
+    const m = new EsMatch({ players: players(2), rounds: 2, seed: 7 });
+    expect(m.player(1)!.look).toEqual(lookOfFruit('semangka'));
+    m.restyle(1, { name: 'P1', color: '#2F8CFF', fruit: 'jeruk', look: lookAt(5) });
+    expect(m.player(1)!.look).toEqual(lookAt(5));
+    expect(m.player(2)!.look).toEqual(lookOfFruit('alpukat'));
+  });
+
   it('starts with an intro, then everyone aims at once', () => {
     const m = new EsMatch({ players: players(3), rounds: 3, seed: 1 });
     expect(m.phase).toBe('intro');
@@ -224,8 +234,9 @@ describe('match flow', () => {
   it('lets a late joiner wait for the next round', () => {
     const m = new EsMatch({ players: players(2), rounds: 2, seed: 7 });
     toAim(m);
-    m.addPlayer({ id: 9, name: 'Late', fruit: 'nanas', color: '#2F8CFF', cpu: false });
+    m.addPlayer({ id: 9, name: 'Late', fruit: 'nanas', look: lookAt(5), color: '#2F8CFF', cpu: false });
     const late = m.player(9)!;
+    expect(late.look).toEqual(lookAt(5));
     expect(late.inRound).toBe(false);
     expect(m.lock(9, { x: 0.5, y: 0 })).toBe(false);
     expect(viewFor({ match: m, id: 9, guests: [], titles: new Map(), deadline: 0 })).toMatchObject({

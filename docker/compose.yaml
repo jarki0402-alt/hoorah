@@ -8,6 +8,8 @@ services:
       target: server
     environment:
       MAX_PLAYERS: ${MAX_PLAYERS:-2}
+      # "Mode uji coba: semua terbuka" until the owner saves settings in /admin/ (owner 2026-11-23).
+      OPEN_ALL: ${OPEN_ALL:-1}
       LOG_LEVEL: info
       # Optional: creates this admin on the very first start only (see docker/.env.example).
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}

@@ -1,5 +1,5 @@
 import type { Fruit } from '@hoorah/protocol';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { svgDoc } from './svg';
 
 /**
@@ -99,7 +99,7 @@ export function nyebrangSvg(): string {
   for (const [f, x, row, lift, face] of fruits) {
     const y = rowY(row) + C;
     out.push(`<ellipse cx="${x}" cy="${y - 4}" rx="14" ry="4" fill="rgba(0,0,0,0.28)"/>`);
-    out.push(`<g transform="translate(${x - 22} ${y - 46 - lift}) scale(0.69)">${fruitMarkup(f, face)}</g>`);
+    out.push(`<g transform="translate(${x - 22} ${y - 46 - lift}) scale(0.69)">${castHead(f, face)}</g>`);
   }
 
   return svgDoc(640, 360, `<g shape-rendering="crispEdges">${out.join('')}</g>`);

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { autoHideCursor } from '../../shared/cursor';
-import { GAMES } from '../../shared/games';
+import { GAMES, playsRemote } from '../../shared/games';
 import { KeyArt } from '../../shared/keyart';
+import { listenForErrors, reportError } from '../../shared/report';
 import { Avatar, Icon, LogoMark } from '../../shared/ui';
 import { FocusButton, InvitePanel } from '../components';
 import { setFocusMap } from '../nav';
@@ -12,11 +13,14 @@ import {
   connected,
   detachGame,
   inviting,
+  isMirror,
   openTutorial,
   players,
+  runSettings,
   togglePause,
   tutorial,
 } from '../store';
+import { REMOTE } from '../strings';
 
 function Loading({ g }: { g: ActiveGame }) {
   const info = GAMES[g.id];
@@ -49,7 +53,7 @@ function Loading({ g }: { g: ActiveGame }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 10 }}>
           {connected.value.map((p) => (
             <div key={p.id} class="chip" style={{ padding: '4px 12px 4px 4px' }}>
-              <Avatar fruit={p.fruit} ring={p.color} size={30} />
+              <Avatar look={p.look} ring={p.color} size={30} />
               <b style={{ color: '#fff' }}>{p.name}</b>
             </div>
           ))}
@@ -119,7 +123,7 @@ function PauseScreen({ g }: { g: ActiveGame }) {
         <div class="pause-hint">
           {host ? (
             <>
-              <Avatar fruit={host.fruit} ring={host.color} size={34} />
+              <Avatar look={host.look} ring={host.color} size={34} />
               <span>
                 <b>{host.name}</b> bisa melanjutkan dari HP
               </span>
@@ -133,6 +137,22 @@ function PauseScreen({ g }: { g: ActiveGame }) {
   );
 }
 
+/**
+ * Far-away main screen, a game it cannot show yet (it started before this screen joined): the
+ * phones there still play; the screen says so instead of running the game on its own.
+ */
+function FarUnsupported({ g }: { g: ActiveGame }) {
+  return (
+    <div class="overlay pause-screen" style={{ background: 'var(--ink)' }}>
+      <div class="pause-card">
+        <KeyArt id={g.id} width={320} radius={16} />
+        <h1 class="display far-title">{REMOTE.farUnsupported}</h1>
+        <div class="far-text">{REMOTE.farUnsupportedText}</div>
+      </div>
+    </div>
+  );
+}
+
 /** "Tambah pemain": the join QR and code over the paused game. */
 export function GamePage() {
   const g = activeGame.value;
@@ -140,14 +160,16 @@ export function GamePage() {
 
   // A first-time game shows its "Cara main" before the iframe even loads.
   const intro = tutorial.value?.mode === 'intro' && tutorial.value.id === g?.id;
+  // A far-away main screen starts its copy only with the Host's settings for this run.
+  const waiting = isMirror && runSettings.value?.run !== g?.run;
 
   // Attach before the iframe loads so its "hello" is answered.
   useEffect(() => {
-    if (!g || intro || !frame.current) return;
+    if (!g || intro || waiting || !frame.current) return;
     const el = frame.current;
     attachGame(el, g);
     return () => detachGame(el);
-  }, [g?.run, intro]);
+  }, [g?.run, intro, waiting]);
 
   // While playing, the only TV control is the menu (pause).
   useEffect(() => {
@@ -159,7 +181,15 @@ export function GamePage() {
   }, [g?.run, g?.paused, intro]);
 
   if (!g) return null;
+  if (isMirror && !playsRemote(g.id)) return <FarUnsupported g={g} />;
   if (intro) return <div class="page" style={{ animation: 'none' }} />;
+  if (waiting) {
+    return (
+      <div class="page" style={{ animation: 'none' }}>
+        <Loading g={g} />
+      </div>
+    );
+  }
   return (
     <div class="page" style={{ animation: 'none' }}>
       <iframe
@@ -172,6 +202,15 @@ export function GamePage() {
         onLoad={(e) => {
           const doc = e.currentTarget.contentDocument;
           if (doc) autoHideCursor(doc);
+          // Same-origin game: its uncaught errors go to the owner's dashboard with the game id.
+          // The listeners go away with the iframe's document (a new run is a new iframe).
+          const win = e.currentTarget.contentWindow;
+          const gameId = g.id;
+          try {
+            if (win) listenForErrors(win, (err) => reportError(err, { page: 'game', gameId }));
+          } catch {
+            // Not reachable (another origin): nothing to listen to.
+          }
         }}
       />
       {!g.ready && <Loading g={g} />}

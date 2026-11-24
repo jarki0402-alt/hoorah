@@ -24,6 +24,10 @@ type Handlers = {
   input: (input: RelayedInput & { atMs: number }) => void;
   pause: (paused: boolean) => void;
   mute: (muted: boolean) => void;
+  /** Mirror game only: the Host's game published a new display state. */
+  mirror: (state: unknown) => void;
+  /** Host's game only: a far-away main screen started or stopped watching. */
+  mirrors: (on: boolean) => void;
 };
 
 /**
@@ -37,13 +41,23 @@ export class HoorahGame {
     input: new Set(),
     pause: new Set(),
     mute: new Set(),
+    mirror: new Set(),
+    mirrors: new Set(),
   };
   private clockOffset: number;
   private _players: PlayerInfo[];
   private _paused = false;
   private _muted: boolean;
+  private _mirrored = false;
+  private _lastState: unknown = undefined;
+  private _lastKey = '';
   readonly gameId: string;
   readonly settings: GameInit['settings'];
+  /**
+   * Long-distance play: this copy runs on a far-away main screen and only draws what the Host's
+   * game publishes (`on('mirror')`). It must not run rules, end the game or talk to phones.
+   */
+  readonly isMirror: boolean;
 
   constructor(init: GameInit) {
     this.gameId = init.gameId;
@@ -51,6 +65,7 @@ export class HoorahGame {
     this._players = init.players;
     this.clockOffset = init.clockOffset;
     this._muted = init.muted;
+    this.isMirror = init.mirror === true;
     window.addEventListener('message', this.onMessage);
   }
 
@@ -69,6 +84,30 @@ export class HoorahGame {
 
   get muted(): boolean {
     return this._muted;
+  }
+
+  /** Host's game: a far-away main screen is watching, so `publish` is worth calling. */
+  get mirrored(): boolean {
+    return this._mirrored;
+  }
+
+  /**
+   * Host's game: the display state far-away main screens draw (plain JSON, as small as possible:
+   * what is on screen, not the rules). Call it whenever that changes; identical states are not
+   * sent twice, and nothing is sent while nobody watches or on a mirror.
+   */
+  publish(state: unknown): void {
+    if (this.isMirror || !this._mirrored) return;
+    const key = JSON.stringify(state);
+    if (key === this._lastKey) return;
+    this._lastKey = key;
+    this._lastState = state;
+    this.post({ tag: BRIDGE_TAG, type: 'publish', state });
+  }
+
+  /** The last state published (mirror games ask for nothing: the shell resends it on connect). */
+  get lastPublished(): unknown {
+    return this._lastState;
   }
 
   player(id: number): PlayerInfo | undefined {
@@ -166,6 +205,15 @@ export class HoorahGame {
       case 'mute':
         this._muted = m.muted;
         for (const fn of this.handlers.mute) fn(m.muted);
+        break;
+      case 'mirror':
+        if (this.isMirror) for (const fn of this.handlers.mirror) fn(m.state);
+        break;
+      case 'mirrors':
+        this._mirrored = m.on;
+        // A screen that just connected needs the current state even if it did not change.
+        if (m.on) this._lastKey = '';
+        for (const fn of this.handlers.mirrors) fn(m.on);
         break;
       case 'init':
         break;

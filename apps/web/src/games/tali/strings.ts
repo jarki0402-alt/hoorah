@@ -16,7 +16,7 @@ const names = (list: readonly string[]): string =>
 
 export const STR = {
   gameTitle: 'SATU TALI',
-  noShell: 'Satu Tali harus dibuka dari aplikasi Hoorah.',
+  noShell: 'Satu Tali harus dibuka dari aplikasi Kacawbalaw.',
   loadFailed: 'Gagal memuat Satu Tali. Periksa koneksi lalu buka lagi.',
 
   routes: {

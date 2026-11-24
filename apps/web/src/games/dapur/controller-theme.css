@@ -85,3 +85,22 @@ html[data-game="dapur"] .pad-stick.on .pad-stick-knob {
     0 0 0 5px rgba(255, 201, 40, 0.22),
     0 3px 0 #0e0f11;
 }
+
+/* Practice (first game): the button to press now (the game sets `pulse` on it). A full ring that
+   pulses outward, no edge stripe. */
+html[data-game="dapur"] .pad-btn.is-pulse {
+  outline: 4px solid #ffc928;
+  outline-offset: 4px;
+  animation: dp-guide-btn 1s ease-out infinite;
+}
+
+@keyframes dp-guide-btn {
+  0% {
+    outline-offset: 2px;
+    outline-color: rgba(255, 201, 40, 1);
+  }
+  100% {
+    outline-offset: 14px;
+    outline-color: rgba(255, 201, 40, 0);
+  }
+}

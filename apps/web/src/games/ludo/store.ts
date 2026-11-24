@@ -3,15 +3,16 @@
  * (the turn timer ring) and pawn animations are written straight to the DOM, so nothing
  * re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
-import type { PawnRef, PlacedPawn } from './geometry';
-import type { ColorId } from './logic';
+import { type BoardGeom, layoutPawns, type PawnRef, type PlacedPawn, pawnPoint } from './geometry';
+import { type ColorId, HOP_MS } from './logic';
 
 export interface PlayerCard {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
 }
@@ -59,6 +60,16 @@ export interface HudModel {
   /** `seat-pawn` keys of pawns the roller can pick right now. */
   legal: string[];
   banner: Banner | null;
+}
+
+/** One move as the board animates it (the Host's logic or a far-away screen's mirror state). */
+export interface ShownMove {
+  seat: number;
+  pawn: number;
+  color: ColorId;
+  /** Progress after each hop. */
+  path: number[];
+  captures: { seat: number; pawn: number }[];
 }
 
 export interface Toast {
@@ -200,6 +211,37 @@ export class LudoStore {
     );
     anim.onfinish = () => el.classList.remove('is-moving');
     anim.oncancel = () => el.classList.remove('is-moving');
+  }
+
+  /**
+   * Animates a move between two pawn lists: the mover hops its path, captured pawns fly home once
+   * it lands. Returns where the mover ends up (for the capture burst).
+   */
+  playMove(
+    g: BoardGeom,
+    before: readonly PawnRef[],
+    after: readonly PawnRef[],
+    perColor: number,
+    m: ShownMove,
+  ): PlacedPawn | undefined {
+    const from0 = layoutPawns(g, before, perColor);
+    const to0 = layoutPawns(g, after, perColor);
+    const find = (list: PlacedPawn[], seat: number, pawn: number) =>
+      list.find((p) => p.seat === seat && p.pawn === pawn);
+    const key = `${m.seat}-${m.pawn}`;
+    const from = find(from0, m.seat, m.pawn);
+    const to = find(to0, m.seat, m.pawn);
+    if (from && to) {
+      const pts = m.path.map((p) => pawnPoint(g, m.color, p, m.pawn, perColor));
+      this.animateMove(key, from, pts, to, HOP_MS);
+    }
+    const walk = m.path.length * HOP_MS;
+    for (const c of m.captures) {
+      const a = find(from0, c.seat, c.pawn);
+      const b = find(to0, c.seat, c.pawn);
+      if (a && b) this.animateHomeward(`${c.seat}-${c.pawn}`, a, b, walk);
+    }
+    return to ?? from;
   }
 
   addBurst(b: Burst): void {

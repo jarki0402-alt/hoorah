@@ -4,7 +4,7 @@
  * call-outs (DUK!, BYUR!, NYARIS!, ES RETAK!), the round intro, the round summary and the final
  * per-round table.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { Avatar } from '../../shared/ui';
 import { STR } from './strings';
@@ -13,6 +13,7 @@ export interface Chip {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -162,6 +163,7 @@ export function Hud({ store }: { store: HudStore }) {
           {store.chips.value.map((c) => (
             <div key={c.id} class={`es-chip is-${c.status} ${c.offline ? 'is-off' : ''}`}>
               <Avatar
+                look={c.look}
                 fruit={c.fruit}
                 ring={c.color}
                 size={34}
@@ -189,7 +191,9 @@ export function Hud({ store }: { store: HudStore }) {
       <div class="es-toasts">
         {store.toasts.value.map((t) => (
           <div key={t.key} class="es-toast">
-            {t.who && <Avatar fruit={t.who.fruit} ring={t.who.color} size={28} face="sad" />}
+            {t.who && (
+              <Avatar look={t.who.look} fruit={t.who.fruit} ring={t.who.color} size={28} face="sad" />
+            )}
             <span>{t.text}</span>
           </div>
         ))}
@@ -219,7 +223,13 @@ export function Hud({ store }: { store: HudStore }) {
           <div class="es-end-rows">
             {end.rows.map((r) => (
               <div key={r.id} class={`es-end ${r.winner ? 'is-win' : ''}`}>
-                <Avatar fruit={r.fruit} ring={r.color} size={44} face={r.winner ? 'happy' : 'sad'} />
+                <Avatar
+                  look={r.look}
+                  fruit={r.fruit}
+                  ring={r.color}
+                  size={44}
+                  face={r.winner ? 'happy' : 'sad'}
+                />
                 <span class="es-end-name">{r.name}</span>
                 <span class="es-end-pts display">{STR.pointsPlus(r.points)}</span>
               </div>
@@ -247,7 +257,7 @@ export function Hud({ store }: { store: HudStore }) {
                 <tr key={r.id} class={r.rank === 1 ? 'is-top' : ''}>
                   <td class="es-t-rank">{r.rank}</td>
                   <td class="es-t-name">
-                    <Avatar fruit={r.fruit} ring={r.color} size={30} />
+                    <Avatar look={r.look} fruit={r.fruit} ring={r.color} size={30} />
                     <span>{r.name}</span>
                   </td>
                   {Array.from({ length: fin.cols }, (_, i) => (

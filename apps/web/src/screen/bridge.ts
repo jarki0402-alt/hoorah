@@ -9,14 +9,22 @@ import {
   type ShellToGame,
 } from '@hoorah/sdk/bridge';
 
+export interface BridgeInit {
+  players: PlayerInfo[];
+  clockOffset: number;
+  settings: Record<string, string | number | boolean>;
+  muted: boolean;
+  /** A far-away main screen's copy of the game (long-distance play): it only draws. */
+  mirror?: boolean;
+}
+
 export interface BridgeHandlers {
-  init: () => {
-    players: PlayerInfo[];
-    clockOffset: number;
-    settings: Record<string, string | number | boolean>;
-    muted: boolean;
-  };
+  init: () => BridgeInit;
+  /** Right after the game got its init (the game now listens for `mirror`/`mirrors`). */
+  inited?: () => void;
   ready: () => void;
+  /** Host's game: its display state for the far-away main screens. */
+  publish?: (state: unknown) => void;
   view: (to: number | 'all', view: ControllerView) => void;
   vibrate: (to: number | 'all', pattern: number | number[]) => void;
   end: (result: GameResult) => void;
@@ -84,6 +92,16 @@ export class GameBridge {
     this.post({ tag: BRIDGE_TAG, type: 'mute', muted });
   }
 
+  /** Far-away main screen: the latest state the Host's game published. */
+  mirror(state: unknown): void {
+    this.post({ tag: BRIDGE_TAG, type: 'mirror', state });
+  }
+
+  /** Host's main screen: whether any far-away main screen watches (the game publishes only then). */
+  mirrors(on: boolean): void {
+    this.post({ tag: BRIDGE_TAG, type: 'mirrors', on });
+  }
+
   private readonly onMessage = (e: MessageEvent): void => {
     if (!this.frame || e.source !== this.frame.contentWindow || e.origin !== window.location.origin) return;
     if (!isBridgeMessage<GameToShell>(e.data) || !this.handlers) return;
@@ -93,6 +111,7 @@ export class GameBridge {
       case 'hello': {
         const init = h.init();
         this.post({ tag: BRIDGE_TAG, type: 'init', init: { gameId: this.gameId, ...init } });
+        h.inited?.();
         return;
       }
       case 'ready':
@@ -121,6 +140,9 @@ export class GameBridge {
         return;
       case 'quit':
         h.quit();
+        return;
+      case 'publish':
+        h.publish?.(m.state);
         return;
     }
   };

@@ -4,7 +4,7 @@
  * texts. Slow state goes through signals (~10 Hz); per-frame things (tags, floaters) are written
  * straight to pooled elements so Preact never re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
 import { memo } from 'preact/compat';
@@ -15,7 +15,7 @@ import { STR } from './strings';
 export interface BoardRow {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   len: number;
   kos: number;
@@ -29,7 +29,7 @@ export interface BoardRow {
 export interface PodiumPlace {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   rank: number;
   len: number;
@@ -255,7 +255,7 @@ function Panel({ hud }: { hud: Hud }) {
             style={{ transform: `translateY(${i * ROW_H}px)`, '--c': r.color }}
           >
             <div class="ua-rank">{i + 1}</div>
-            <Avatar fruit={r.fruit} ring={r.color} size={36} face={r.alive ? 'happy' : 'sad'} />
+            <Avatar look={r.look} ring={r.color} size={36} face={r.alive ? 'happy' : 'sad'} />
             <div class="ua-row-main">
               <div class="ua-row-name">
                 {r.leader && <Icon name="crown" size={14} color="#FFC928" stroke={2.6} />}
@@ -385,7 +385,7 @@ function Podium({
               class="ua-step"
               style={{ '--c': p.color, animationDelay: `${0.2 + (2 - i) * 0.15}s` }}
             >
-              <Avatar fruit={p.fruit} ring={p.color} size={sizes[i]!} face={p.rank === 1 ? 'happy' : 'wow'} />
+              <Avatar look={p.look} ring={p.color} size={sizes[i]!} face={p.rank === 1 ? 'happy' : 'wow'} />
               <div class="ua-step-name">{p.name}</div>
               <div class="ua-step-len">{p.len > 0 ? STR.podiumLength(p.len) : STR.podiumOut}</div>
               <div class="ua-block" style={{ height: heights[i] }}>

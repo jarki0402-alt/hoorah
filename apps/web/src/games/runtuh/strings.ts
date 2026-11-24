@@ -30,7 +30,7 @@ export const sumText = (s: Sum) => `${s.a} ${s.op === '+' ? '+' : '−'} ${s.b}`
 
 export const STR = {
   gameTitle: 'LANTAI RUNTUH',
-  noShell: 'Lantai Runtuh harus dibuka dari aplikasi Hoorah.',
+  noShell: 'Lantai Runtuh harus dibuka dari aplikasi Kacawbalaw.',
   loadFailed: 'Gagal memuat Lantai Runtuh. Periksa koneksi lalu buka lagi.',
 
   rules: {

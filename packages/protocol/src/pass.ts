@@ -45,4 +45,16 @@ export interface RoomPass {
 }
 
 /** Why a pass code did not open the room. */
-export type PassReject = 'invalid' | 'expired' | 'busy' | 'rate_limited';
+export type PassReject = 'invalid' | 'expired' | 'busy' | 'rate_limited' | 'used';
+
+/**
+ * Kinds of Pass code (owner 2026-11-23):
+ * - `shared`: the trial-stage code, any room until it ends (as before);
+ * - `single`: one buyer's code: runs `durationMs` from its first use, stays with that main screen
+ *   (entering it on another screen moves it, at most once per `PASS_MOVE_GAP_MS`);
+ * - `promo`: one code for many screens (`maxUses`), each gets `durationMs` from its own first use,
+ *   redeemable until the code's end time.
+ */
+export type PassKind = 'shared' | 'single' | 'promo';
+
+export const PASS_MOVE_GAP_MS = 6 * 60 * 60_000;

@@ -1,4 +1,4 @@
-# CLAUDE.md — Hoorah
+# CLAUDE.md — Kacawbalaw (dulu Hoorah)
 
 Panduan wajib untuk Claude (dan siapa pun) yang bekerja di repo ini. Baca seluruh file ini, `PLAN.md` (serah terima: selesai, rencana, belum terealisasi, skema), dan `PROGRESS.md` di awal setiap sesi.
 
@@ -18,7 +18,7 @@ Panduan wajib untuk Claude (dan siapa pun) yang bekerja di repo ini. Baca seluru
 
 ## Tentang proyek
 
-- **Hoorah** adalah platform game party berbasis browser. **Layar utama bisa perangkat apa pun**: PC, laptop, tablet, atau Smart TV. Layar utama jadi konsol, HP pemain jadi kontroler lewat scan QR, tanpa install.
+- **Kacawbalaw** (dulu bernama Hoorah, ganti nama 2026-11-24) adalah platform game party berbasis browser. Nama internal (package `@hoorah/*`, repo, image, folder VM, subdomain, kunci `hoorah.*`) tetap. **Layar utama bisa perangkat apa pun**: PC, laptop, tablet, atau Smart TV. Layar utama jadi konsol, HP pemain jadi kontroler lewat scan QR, tanpa install.
 - Acuan produk: [PRD-Hoorah.md](PRD-Hoorah.md). Jika kode dan PRD bertentangan, PRD yang benar, kecuali pemilik proyek memutuskan lain. Keputusan baru dicatat di PRD dan `PROGRESS.md`.
 - Dikerjakan dan dikelola **sendirian oleh pemilik proyek**. Pilih solusi yang sederhana dan murah dirawat oleh satu orang, bukan yang "enterprise".
 
@@ -27,7 +27,8 @@ Panduan wajib untuk Claude (dan siapa pun) yang bekerja di repo ini. Baca seluru
 | Topik | Keputusan |
 | --- | --- |
 | Pasar | Indonesia saja |
-| Batas pemain gratis | 2 pemain; Hoorah Pass 16 pemain |
+| Nama | **Kacawbalaw** (keputusan pemilik 2026-11-24). Pass: **Kacaw Pass**. Logo final: `apps/web/src/shared/art/brand.ts` (aturan di PRD bagian atas). Domain baru ditunda |
+| Batas pemain gratis | 2 pemain; Kacaw Pass 16 pemain |
 | Bagi hasil developer | Tidak ada |
 | Mode anak | Tidak dibuat |
 | Domain | Ditunda; placeholder `hoorah.gg` |
@@ -37,8 +38,8 @@ Panduan wajib untuk Claude (dan siapa pun) yang bekerja di repo ini. Baca seluru
 | Main sendiri | Semua game bisa dimainkan 1 orang (kecuali Kompak Gak?, Kampung Siluman, Penyusup). Lawan komputer otomatis hanya saat 1 orang, tampil seperti pemain biasa tanpa label BOT, tingkat menyesuaikan diri diam-diam. Detail di PRD 6.4 |
 | Room code | **6 angka** (keputusan pemilik 2026-11-14), ditampilkan "482 917", label "Kode". HP: keyboard angka. Server: maks 20 kode salah per menit per alamat. HP di Wi-Fi yang sama ditawari layar terdekat (`GET /api/nearby`, alamat publik sama). |
 | Bahasa aplikasi | Bahasa Indonesia saja (MVP) |
-| Desain | Tanpa violet, tanpa gaya "AI" (blob, gradien berlebihan, **garis warna di tepi kartu**: dilarang pemilik 2026-11-22, tandai keadaan dengan cincin penuh, isi berwarna, chip, atau sorot avatar), ringkas, avatar buah Nusantara. Sumber: `design/` |
-| Hoorah Pass (uji coba) | **Sementara** (keputusan pemilik 2026-11-16): kode Pass bersama dibuat pemilik di `/admin/`, ada waktu berakhir, bisa dipakai di perangkat mana pun, tanpa akun/pembayaran. Ditinjau ulang setelah uji coba. Detail PRD 3.4.1 |
+| Desain | Tanpa violet, tanpa gaya "AI" (blob, gradien berlebihan, **garis warna di tepi kartu**: dilarang pemilik 2026-11-22, tandai keadaan dengan cincin penuh, isi berwarna, chip, atau sorot avatar), ringkas. Avatar: 24 tokoh orisinal + kustomisasi (kulit, rambut, warna; keputusan 2026-11-24), buah hanya karakter 3D Bajaj Rush dan Lari Terus. Sumber: `design/` |
+| Kacaw Pass (uji coba) | **Sementara** (keputusan pemilik 2026-11-16): kode Pass bersama dibuat pemilik di `/admin/`, ada waktu berakhir, bisa dipakai di perangkat mana pun, tanpa akun/pembayaran. Ditinjau ulang setelah uji coba. Detail PRD 3.4.1 |
 | Database | SQLite bawaan Node (`node:sqlite`), satu file (`DB_FILE`, Docker `/data/hoorah.db`) untuk admin dan Pass. Room tetap di memori. Postgres baru dipertimbangkan jika server lebih dari satu proses atau ada pembayaran otomatis |
 
 Region produksi (Oregon vs Jakarta) belum final. Tanyakan sebelum mengubah.
@@ -62,7 +63,7 @@ WebRTC (keputusan pemilik, 2026-11-14): HP dan layar utama di Wi-Fi yang sama te
 
 ```
 apps/server/        server WebSocket (rooms.ts = logika murni, index.ts = lapisan uWS, db.ts + passes.ts = SQLite, admin/ = API + CLI admin)
-apps/web/           index.html (satu alamat; src/main.ts memilih peran) · games/<id>/ (game) · sim/ (simulator) · admin/ (dashboard)
+apps/web/           index.html (satu alamat; src/main.ts memilih peran: `/` landing page, `/main` layar utama/HP, `/R/<kode>` gabung) · games/<id>/ (game) · sim/ (simulator) · admin/ (dashboard)
   src/controller/   aplikasi HP
   src/screen/       aplikasi layar utama (store, nav, bridge iframe, pages)
   src/games/<id>/   kuis · rusun · tarik (logic.ts murni + tes, renderer terpisah)
@@ -164,7 +165,7 @@ Perubahan yang hanya mengedit dokumen (PRD, CLAUDE.md) juga dicatat, cukup singk
 | Tujuan | Perintah |
 | --- | --- |
 | Pasang dependency | `npm install` |
-| Jalankan dev (server + web, IP LAN otomatis di QR) | `npm run dev` lalu buka `http://<IP>:5173` di perangkat mana pun |
+| Jalankan dev (server + web, IP LAN otomatis di QR) | `npm run dev` lalu buka `http://<IP>:5173` (landing page) atau `http://<IP>:5173/main` (layar utama/HP) di perangkat mana pun. `/` selalu landing page; perangkat yang pernah jadi layar utama mendapat tombol "Lanjutkan sebagai layar utama" |
 | Simulator 1 layar utama + beberapa HP | buka `/sim/` |
 | Uji dengan lebih dari 2 pemain | `MAX_PLAYERS=8 npm run dev` |
 | Lint + format | `npm run lint` / `npm run format` |

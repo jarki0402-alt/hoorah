@@ -51,7 +51,7 @@ export function countdownView(match: KarungMatch, r: Racer): ControllerView {
     guests: match
       .field()
       .filter((o) => isCpu(o.id))
-      .map((o) => ({ id: o.id, name: o.name, fruit: o.fruit, color: o.color })),
+      .map((o) => ({ id: o.id, name: o.name, fruit: o.fruit, look: o.look, color: o.color })),
   };
 }
 

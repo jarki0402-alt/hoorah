@@ -11,7 +11,7 @@
  *
  * Time is babak time in seconds (pause-aware, starts at 0 when a babak's play begins).
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 
 export type Dir = 'up' | 'down' | 'left' | 'right';
 export const DIRS: readonly Dir[] = ['up', 'right', 'down', 'left'];
@@ -81,6 +81,7 @@ export interface PlayerInfo {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   cpu: boolean;
 }
@@ -382,7 +383,7 @@ export class LangkahMatch {
     this.cpuPlans.delete(id);
   }
 
-  restyle(id: number, look: Pick<PlayerInfo, 'name' | 'color' | 'fruit'>): void {
+  restyle(id: number, look: Pick<PlayerInfo, 'name' | 'color' | 'fruit' | 'look'>): void {
     const p = this.player(id);
     if (p) Object.assign(p, look);
   }

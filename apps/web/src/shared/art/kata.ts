@@ -1,4 +1,4 @@
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { f1, svgDoc } from './svg';
 
 /**
@@ -80,9 +80,9 @@ export function kataSvg(): string {
     x: number,
     y: number,
     s: number,
-    f: Parameters<typeof fruitMarkup>[0],
+    f: Parameters<typeof castHead>[0],
     face: 'wow' | 'effort',
-  ) => `<g transform="translate(${x} ${y}) scale(${s})">${fruitMarkup(f, face)}</g>`;
+  ) => `<g transform="translate(${x} ${y}) scale(${s})">${castHead(f, face)}</g>`;
   const bubble = [
     `<circle cx="96" cy="226" r="4" fill="#FFFFFF" stroke="${INK}" stroke-width="2"/>`,
     `<circle cx="106" cy="212" r="6" fill="#FFFFFF" stroke="${INK}" stroke-width="2"/>`,

@@ -3,7 +3,13 @@
  * (frozen while paused), plays the computer seats, and turns logic events into pawn hops, dice,
  * coins, buildings, sounds, toasts and phone views.
  */
-import type { ControllerToGame, ControllerView, PlayerInfo } from '@hoorah/protocol';
+import {
+  type ControllerToGame,
+  type ControllerView,
+  type Look,
+  lookOfFruit,
+  type PlayerInfo,
+} from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import type { Sfx } from '../../shared/audio';
 import { celebrate, confetti } from '../../shared/confetti';
@@ -73,6 +79,8 @@ import * as V from './views';
 
 /** The logic keeps ticking even if rAF is throttled. */
 const FALLBACK_TICK_MS = 250;
+/** Look of a seat that has left the room (its pawn and HUD row stay). */
+const UNKNOWN_LOOK: Look = lookOfFruit('semangka');
 const TOAST_GAP_MS = 1500;
 const TOAST_LIFE_MS = 2400;
 const DELTA_LIFE_MS = 1800;
@@ -198,7 +206,7 @@ export class JuraganDriver {
     this.view.setPawns(
       L.players.map((p) => {
         const info = this.info(p.id);
-        return { id: p.id, fruit: info?.fruit ?? 'semangka', color: info?.color ?? '#C4C7CC' };
+        return { id: p.id, look: info?.look ?? UNKNOWN_LOOK, color: info?.color ?? '#C4C7CC' };
       }),
     );
     this.view.place(this.places(), true);
@@ -779,7 +787,7 @@ export class JuraganDriver {
       title: w ? STR.finaleTitle(w.name.toUpperCase()) : STR.roundsUp,
       sub: reason === 'rounds' ? STR.roundsUp : STR.finaleLast,
       line: w ? STR.finaleSub(rp(worth)) : null,
-      winner: w ? { name: w.name, fruit: w.fruit, color: w.color } : null,
+      winner: w ? { name: w.name, look: w.look, color: w.color } : null,
     };
     this.view.setActive(null);
     this.view.focusOn(null);
@@ -865,7 +873,7 @@ export class JuraganDriver {
     const t = TILES[i]!;
     const s = L.tiles[i]!;
     const ownerInfo = s.owner === null ? null : this.info(s.owner);
-    const owner = ownerInfo ? { name: ownerInfo.name, fruit: ownerInfo.fruit, color: ownerInfo.color } : null;
+    const owner = ownerInfo ? { name: ownerInfo.name, look: ownerInfo.look, color: ownerInfo.color } : null;
     const forSale = L.phase === 'buy' && L.offerTile === i;
     const base: TileCardModel = {
       tile: i,
@@ -958,7 +966,7 @@ export class JuraganDriver {
       return {
         id: p.id,
         name: info?.name ?? STR.unknownPlayer,
-        fruit: info?.fruit ?? 'semangka',
+        look: info?.look ?? UNKNOWN_LOOK,
         color: info?.color ?? '#C4C7CC',
         cash: p.cash,
         worth: p.bankrupt ? 0 : L.worth(p),
@@ -989,7 +997,7 @@ export class JuraganDriver {
           ? {
               id: cur.id,
               name: info.name,
-              fruit: info.fruit,
+              look: info.look,
               color: info.color,
               hint: this.hint,
               bonus: this.bonus,
@@ -1155,7 +1163,7 @@ export class JuraganDriver {
     if ('avatarOf' in view && view.avatarOf !== undefined) ids.add(view.avatarOf);
     const guests = this.cpus
       .filter((c) => ids.has(c.id))
-      .map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color }));
+      .map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color }));
     return guests.length ? { ...view, guests } : view;
   }
 

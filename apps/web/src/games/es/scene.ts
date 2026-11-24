@@ -5,6 +5,7 @@
  * the feet. The rim that breaks after this shot is tinted and cracked; when it breaks, sector
  * chunks drift away and sink while the floe shrinks. Splashes leave ripples on the water.
  */
+import { sameLook } from '@hoorah/protocol';
 import * as THREE from 'three';
 import { BlockAvatar } from '../../shared/kotak/render/avatar';
 import { KotakFx } from '../../shared/kotak/render/fx';
@@ -190,6 +191,7 @@ interface Look {
   color: string;
   name: string;
   fruit: string;
+  look: Skater['look'];
 }
 
 export class EsScene {
@@ -310,7 +312,15 @@ export class EsScene {
 
   /* ------------------------------------------------------------------ lineup */
 
-  setPlayers(list: readonly { id: number; name: string; fruit: Skater['fruit']; color: string }[]): void {
+  setPlayers(
+    list: readonly {
+      id: number;
+      name: string;
+      fruit: Skater['fruit'];
+      look: Skater['look'];
+      color: string;
+    }[],
+  ): void {
     const keep = new Set(list.map((p) => p.id));
     for (const [id, l] of this.looks) {
       if (keep.has(id)) continue;
@@ -319,7 +329,7 @@ export class EsScene {
     }
     for (const p of list) {
       const l = this.looks.get(p.id);
-      if (l && l.fruit === p.fruit) {
+      if (l && l.fruit === p.fruit && sameLook(l.look, p.look)) {
         if (l.color !== p.color) {
           l.avatar.setColor(p.color);
           l.arcMat.color.set(p.color);
@@ -336,7 +346,7 @@ export class EsScene {
         this.dropLook(l);
         this.looks.delete(p.id);
       }
-      const avatar = new BlockAvatar(this.stage, p.fruit, p.color);
+      const avatar = new BlockAvatar(this.stage, p.look, p.color);
       for (const o of avatar.objects) this.world.add(o);
       const arcGeo = new THREE.RingGeometry(0.66, 0.84, 40, 1, Math.PI / 2, Math.PI * 2);
       arcGeo.rotateX(-Math.PI / 2);
@@ -364,6 +374,7 @@ export class EsScene {
         color: p.color,
         name: p.name,
         fruit: p.fruit,
+        look: p.look,
       });
     }
   }

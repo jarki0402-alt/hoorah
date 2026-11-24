@@ -1,5 +1,5 @@
 import type { Fruit } from '@hoorah/protocol';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { svgDoc } from './svg';
 
 /** Bunting, fence posts and the crowd are generated once (deterministic). */
@@ -77,7 +77,8 @@ export interface TeamLook {
 }
 
 /** One puller facing right, feet at (0,0). Mirror with scale(-1 1) for the other side. */
-export function tarikCharacter(t: TeamLook): string {
+/** One puller; `headless` leaves the head out (the game draws each player's own head on top). */
+export function tarikCharacter(t: TeamLook, headless = false): string {
   return [
     `<path d="M-8 -90 Q18 -88 44 -76" fill="none" stroke="${t.dark}" stroke-width="11" stroke-linecap="round"/>`,
     '<path d="M-4 -48 Q-14 -24 -26 -4" fill="none" stroke="#2B3A55" stroke-width="13" stroke-linecap="round"/>',
@@ -87,7 +88,7 @@ export function tarikCharacter(t: TeamLook): string {
     '<rect x="-20" y="-84" width="40" height="7" fill="#fff"/>',
     `<path d="M8 -90 Q32 -84 50 -68" fill="none" stroke="${t.shirt}" stroke-width="11" stroke-linecap="round"/>`,
     '<circle cx="44" cy="-76" r="7" fill="#fff" stroke="#111214" stroke-width="1.5"/><circle cx="50" cy="-68" r="7" fill="#fff" stroke="#111214" stroke-width="1.5"/>',
-    `<g transform="translate(-30.4 -158) scale(0.95)">${fruitMarkup(t.fruit, 'effort')}</g>`,
+    headless ? '' : `<g transform="translate(-30.4 -158) scale(0.95)">${castHead(t.fruit, 'effort')}</g>`,
   ].join('');
 }
 

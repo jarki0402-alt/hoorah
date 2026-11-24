@@ -3,28 +3,25 @@
  * (frozen while paused), animates tokens and dice from the logic's move plans, turns logic
  * events into sounds, phone views and HUD state.
  */
-import type { ControllerToGame, ControllerView, PlayerInfo, RelayedInput } from '@hoorah/protocol';
+import {
+  type ControllerToGame,
+  type ControllerView,
+  lookOfFruit,
+  type PlayerInfo,
+  type RelayedInput,
+} from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import type { Sfx } from '../../shared/audio';
 import { celebrate } from '../../shared/confetti';
 import { cpuSkill, isCpu, reportSoloResult } from '../common/cpu';
 import { FRAME } from './art';
-import { cellCenter, crowdOffset, jumpPoint, type Pt, parseSize } from './board';
+import { cellCenter, type Pt, parseSize } from './board';
 import { DuelTapper, rollDelay, soloOutcome, ularOpponents } from './brain';
-import type { Banner, HudModel, HudPlayer, HudStore, PlayerCard } from './hud';
+import type { Banner, HudModel, HudPlayer, HudStore, PlayerCard, TokenFrame } from './hud';
 import type { Layout } from './layout';
-import {
-  DUEL_BACK,
-  DUEL_INTRO_MS,
-  DUEL_MS,
-  GameClock,
-  HOP_MS,
-  jumpMs,
-  type MovePlan,
-  ROLL_MS,
-  type UlarEvent,
-  UlarLogic,
-} from './logic';
+import { DUEL_BACK, GameClock, HOP_MS, type MovePlan, ROLL_MS, type UlarEvent, UlarLogic } from './logic';
+import { toMirror } from './mirror';
+import { type DuelStage, dieAt, duelClock, duelCount, type Pose, planPose } from './motion';
 import { buildResult } from './results';
 import { STR } from './strings';
 import * as V from './views';
@@ -37,20 +34,6 @@ const LAST_BANNER_MS = 2600;
 /** Duelists' tap views refresh at most this often. */
 const DUEL_VIEW_MS = 250;
 const PULL_SFX_MS = 120;
-
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-const easeInOut = (k: number) => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
-const easeIn = (k: number) => k * k * (1.6 - 0.6 * k);
-
-interface TokenState {
-  /** Smoothed crowd offset (cell units). */
-  ox: number;
-  oy: number;
-  /** Last written transform, to skip identical writes. */
-  css: string;
-  z: number;
-  active: boolean | null;
-}
 
 interface PlanFx {
   hop: number;
@@ -78,7 +61,6 @@ export class UlarDriver {
   private readonly plans = new Map<number, MovePlan>();
   private readonly planFx = new Map<number, PlanFx>();
   private lastDicePlan: MovePlan | null = null;
-  private readonly tokens = new Map<number, TokenState>();
   private readonly reactAt = new Map<number, number>();
   private connected = new Set<number>();
   private seq = 0;
@@ -116,7 +98,7 @@ export class UlarDriver {
   setLayout(layout: Layout): void {
     this.layout = layout;
     this.hud.layout.value = layout;
-    for (const t of this.tokens.values()) t.css = '';
+    this.hud.resetTokens();
   }
 
   start(): void {
@@ -135,6 +117,9 @@ export class UlarDriver {
     this.game.on('action', (from, a) => this.onAction(from, a));
     this.game.on('input', (input) => this.onInput(input));
     this.game.on('pause', (p) => this.setPaused(p));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publish();
+    });
     if (this.game.paused) this.setPaused(true);
     this.flush();
     this.refreshHud();
@@ -266,6 +251,7 @@ export class UlarDriver {
     this.onPause(paused);
     // Deadlines go to the phones in server time, which shifted while paused.
     if (!paused) this.syncViews();
+    this.publish();
   }
 
   private react(from: number, kind: 'cheer' | 'boo' | 'rematch'): void {
@@ -315,11 +301,43 @@ export class UlarDriver {
       this.lastDuelSync = now;
       this.syncViews();
     }
+    this.publish();
+  }
+
+  /**
+   * Long-distance play: what this screen shows, for far-away main screens (only while watched).
+   * Moves go out as their plans, so the far screen hops tokens by itself; called every tick and
+   * on events, identical states are not resent.
+   */
+  private publish(): void {
+    if (!this.L || !this.layout || !this.game.mirrored) return;
+    const L = this.L;
+    const now = this.clock.now();
+    const d = L.duel;
+    const dp = this.lastDicePlan;
+    this.game.publish(
+      toMirror({
+        board: L.board,
+        model: this.hud.model.value,
+        banner: this.hud.banner.value,
+        card: this.hud.card.value,
+        duel: this.hud.duel.value,
+        duelTimes: d ? { start: d.start, end: d.end } : null,
+        shouts: this.hud.shouts.value,
+        bubbles: this.hud.bubbles.value,
+        cell: this.layout.cell,
+        rest: new Map(L.order.map((id) => [id, L.player(id)!.pos])),
+        plans: [...this.plans.values()].filter((p) => p.end > now),
+        dice: dp && { hopStart: dp.hopStart, face: dp.dice },
+        roll: L.phase === 'roll' ? { active: L.current, deadline: L.deadline } : null,
+        frozenAt: this.clock.paused ? now : null,
+        toServer: (t) => this.clock.toServer(t),
+      }),
+    );
   }
 
   private duelCountValue(now: number): number {
-    const d = this.L.duel!;
-    return Math.max(1, Math.ceil((d.start - now) / (DUEL_INTRO_MS / 3)));
+    return duelCount(this.L.duel!.start, now);
   }
 
   /* ---------------------------------------------------------------- events */
@@ -330,6 +348,7 @@ export class UlarDriver {
     for (const e of events) this.handle(e);
     this.refreshHud();
     this.syncViews();
+    this.publish();
   }
 
   private handle(e: UlarEvent): void {
@@ -495,7 +514,7 @@ export class UlarDriver {
   private updateDuelHud(): void {
     const d = this.L.duel;
     if (!d) return;
-    const stage = this.L.phase === 'duelIntro' ? 'intro' : this.L.phase === 'duel' ? 'live' : 'result';
+    const stage = this.duelStage() ?? 'result';
     const prev = this.hud.duel.value;
     this.hud.duel.value = {
       key: prev && prev.a.id === d.a && prev.b.id === d.b ? prev.key : ++this.seq,
@@ -516,50 +535,28 @@ export class UlarDriver {
     return { x: FRAME + c.x * cell, y: FRAME + c.y * cell };
   }
 
-  /** Token position in cell units and its hop height, for game time `now`. */
-  private tokenAt(id: number, now: number): { p: Pt; lift: number; moving: boolean } {
+  /** Token position in cell units and its hop height, for game time `now`; fires the move's sounds. */
+  private tokenAt(id: number, now: number): Pose {
     const L = this.L;
     const plan = this.plans.get(id);
     if (!plan || now >= plan.end)
-      return { p: cellCenter(L.board, L.player(id)!.pos), lift: 0, moving: false };
+      return { p: cellCenter(L.board, L.player(id)!.pos), lift: 0, moving: false, hops: 0, jumping: false };
     const fx = this.planFx.get(plan.id)!;
-    if (now < plan.hopStart) return { p: cellCenter(L.board, plan.from), lift: 0, moving: true };
-    if (!fx.settled) {
+    const pose = planPose(L.board, plan, now);
+    if (now >= plan.hopStart && !fx.settled) {
       fx.settled = true;
       this.sfx('drop');
     }
-    const k = (now - plan.hopStart) / HOP_MS;
-    if (k < plan.path.length) {
-      const i = Math.floor(k);
-      const u = k - i;
-      if (i + 1 > fx.hop) {
-        fx.hop = i + 1;
-        this.sfx('jump');
-        const sq = plan.path[i]!;
-        if (plan.bounced && sq === L.last) this.bounceShout();
-      }
-      const a = cellCenter(L.board, i === 0 ? plan.from : plan.path[i - 1]!);
-      const b = cellCenter(L.board, plan.path[i]!);
-      const e = easeInOut(u);
-      return {
-        p: { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e },
-        lift: Math.sin(Math.PI * u) * 0.42,
-        moving: true,
-      };
+    if (pose.hops > fx.hop && now - plan.hopStart < plan.path.length * HOP_MS) {
+      fx.hop = pose.hops;
+      this.sfx('jump');
+      if (plan.bounced && plan.path[pose.hops - 1] === L.last) this.bounceShout();
     }
-    const j = plan.jump;
-    if (now >= plan.jumpStart && !fx.jumped && (j || plan.blocked)) {
+    if (pose.jumping && !fx.jumped && (plan.jump || plan.blocked)) {
       fx.jumped = true;
       this.jumpFx(plan);
     }
-    if (!j || now < plan.jumpStart) return { p: cellCenter(L.board, plan.landed), lift: 0, moving: true };
-    const u = clamp01((now - plan.jumpStart) / jumpMs(L.board, j));
-    const t = j.kind === 'snake' ? easeIn(u) : easeInOut(u);
-    return {
-      p: jumpPoint(L.board, j, t),
-      lift: j.kind === 'ladder' ? Math.sin(Math.PI * u) * 0.12 : 0,
-      moving: true,
-    };
+    return pose;
   }
 
   private jumpFx(plan: MovePlan): void {
@@ -577,6 +574,7 @@ export class UlarDriver {
         tone: 'good',
         until: now + SHOUT_MS,
       });
+      this.publish();
       return;
     }
     const j = plan.jump!;
@@ -592,6 +590,7 @@ export class UlarDriver {
       tone: ladder ? 'good' : 'bad',
       until: now + SHOUT_MS,
     });
+    this.publish();
   }
 
   private bounceShout(): void {
@@ -607,84 +606,39 @@ export class UlarDriver {
       tone: 'info',
       until: now + SHOUT_MS,
     });
+    this.publish();
   }
 
   frame(): void {
     if (!this.L || !this.layout) return;
     const now = this.clock.now();
     const L = this.L;
-    const cell = this.layout.cell;
-    const size = Math.round(cell * 0.66);
-    // Group resting tokens by square so they can share it.
-    const resting = new Map<number, number[]>();
-    const where = new Map<number, ReturnType<UlarDriver['tokenAt']>>();
-    for (const id of L.order) {
-      const w = this.tokenAt(id, now);
-      where.set(id, w);
-      if (!w.moving) {
-        const sq = L.player(id)!.pos;
-        const list = resting.get(sq);
-        if (list) list.push(id);
-        else resting.set(sq, [id]);
-      }
-    }
-    const active = L.phase === 'roll' ? L.current : null;
-    for (const id of L.order) {
-      const el = this.hud.tokens.get(id);
-      if (!el) continue;
-      let st = this.tokens.get(id);
-      if (!st) {
-        st = { ox: 0, oy: 0, css: '', z: 0, active: null };
-        this.tokens.set(id, st);
-      }
-      const w = where.get(id)!;
-      let tx = 0;
-      let ty = 0;
-      if (!w.moving) {
-        const list = resting.get(L.player(id)!.pos)!;
-        const o = crowdOffset(list.indexOf(id), list.length);
-        tx = o.x;
-        ty = o.y;
-      }
-      st.ox += (tx - st.ox) * 0.2;
-      st.oy += (ty - st.oy) * 0.2;
-      const crowd = w.moving ? 1 : (resting.get(L.player(id)!.pos)?.length ?? 1);
-      const scale = w.moving ? 1.12 : crowd >= 4 ? 0.64 : crowd > 1 ? 0.78 : 1;
-      const x = FRAME + (w.p.x + st.ox) * cell - size / 2;
-      const y = FRAME + (w.p.y + st.oy - w.lift) * cell - size / 2;
-      const css = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale})`;
-      if (css !== st.css) {
-        st.css = css;
-        el.style.transform = css;
-      }
-      const z = w.moving ? 1000 : Math.round(y);
-      if (z !== st.z) {
-        st.z = z;
-        el.style.zIndex = String(z);
-      }
-      const isActive = id === active;
-      if (isActive !== st.active) {
-        st.active = isActive;
-        el.classList.toggle('is-active', isActive);
-      }
-    }
+    const frames: TokenFrame[] = L.order.map((id) => ({
+      id,
+      ...this.tokenAt(id, now),
+      sq: L.player(id)!.pos,
+    }));
+    this.hud.paintTokens(this.layout.cell, frames, L.phase === 'roll' ? L.current : null);
     // Dice: tumble until the plan's hops start, then show the face.
     const dp = this.lastDicePlan;
-    if (L.phase === 'roll' || !dp) this.hud.setDie(0, false);
-    else if (now < dp.hopStart) this.hud.setDie(1 + ((Math.floor(now / 85) * 5 + 3) % 6), true);
-    else this.hud.setDie(dp.dice ?? 0, false);
+    const die = dieAt(L.phase === 'roll', dp && { hopStart: dp.hopStart, face: dp.dice }, now);
+    this.hud.setDie(die.face, die.rolling);
     // Auto-roll ring.
     if (L.phase === 'roll') {
       const rem = Math.max(0, L.deadline - now);
       this.hud.setRing(rem / ROLL_MS, Math.ceil(rem / 1000));
     }
     // Duel clock.
-    const d = L.duel;
-    if (d && (L.phase === 'duelIntro' || L.phase === 'duel' || L.phase === 'duelResult')) {
-      if (L.phase === 'duelIntro') this.hud.setDuelClock(1, String(this.duelCountValue(now)));
-      else if (L.phase === 'duel') this.hud.setDuelClock(clamp01((d.end - now) / DUEL_MS), STR.duelGo);
-      else this.hud.setDuelClock(0, 'VS');
+    const stage = this.duelStage();
+    if (L.duel && stage) {
+      const c = duelClock(stage, L.duel.start, L.duel.end, now);
+      this.hud.setDuelClock(c.frac, c.text);
     }
+  }
+
+  private duelStage(): DuelStage | null {
+    const p = this.L.phase;
+    return p === 'duelIntro' ? 'intro' : p === 'duel' ? 'live' : p === 'duelResult' ? 'result' : null;
   }
 
   /* ---------------------------------------------------------------- HUD + views */
@@ -703,6 +657,7 @@ export class UlarDriver {
       id,
       name: p?.name ?? STR.unknownPlayer,
       fruit: p?.fruit ?? 'semangka',
+      look: p?.look ?? lookOfFruit('semangka'),
       color: p?.color ?? '#C4C7CC',
     };
   }
@@ -887,7 +842,7 @@ export class UlarDriver {
     if ('opponents' in view && view.opponents) for (const id of view.opponents) ids.add(id);
     const guests = this.cpus
       .filter((c) => ids.has(c.id))
-      .map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color }));
+      .map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color }));
     return guests.length ? { ...view, guests } : view;
   }
 

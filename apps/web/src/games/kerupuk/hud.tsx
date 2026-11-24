@@ -3,7 +3,7 @@
  * words come from a small pool of elements animated with CSS, so Preact never re-renders at
  * 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
 import { memo } from 'preact/compat';
@@ -15,7 +15,7 @@ import { num, STR } from './strings';
 export interface PlateModel {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   bites: number;
   score: number;
@@ -31,7 +31,7 @@ export interface PlateModel {
 export interface ResultRow {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   /** 0 hides the rank (solo: there is nobody to rank against). */
   rank: number;
@@ -151,7 +151,7 @@ function Rows({ rows }: { rows: ResultRow[] }) {
       {rows.map((r) => (
         <div key={r.id} class={`kp-row ${r.rank <= 1 ? 'first' : ''}`}>
           {r.rank > 0 && <span class="kp-rank">{r.rank}</span>}
-          <Avatar fruit={r.fruit} ring={r.color} size={40} face={r.rank <= 1 ? 'happy' : 'effort'} />
+          <Avatar look={r.look} ring={r.color} size={40} face={r.rank <= 1 ? 'happy' : 'effort'} />
           <span class="kp-row-name">{r.name}</span>
           <span class="kp-row-detail">{r.detail}</span>
           <span class="kp-row-pts">{r.points}</span>

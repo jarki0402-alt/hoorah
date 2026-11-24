@@ -3,7 +3,7 @@
  * through signals (~10 Hz); per-frame things (rope bar, ring sync, floaters) are written
  * straight to elements through stable refs so Preact never re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
 import { memo } from 'preact/compat';
@@ -16,7 +16,7 @@ import { TEAM_COLOR } from './views';
 export interface HudMember {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   connected: boolean;
 }
 
@@ -262,7 +262,7 @@ function Avatars({ t }: { t: TeamHud }) {
   return (
     <div class="tk-avatars">
       {items.map((m) => (
-        <Avatar key={m.id} fruit={m.fruit} ring={ring} size={m === list[0] ? 46 : 34} dim={!m.connected} />
+        <Avatar key={m.id} look={m.look} ring={ring} size={m === list[0] ? 46 : 34} dim={!m.connected} />
       ))}
     </div>
   );
@@ -412,7 +412,7 @@ function BoardTeam({ t, need }: { t: TeamHud; need: number }) {
     <div class="tk-board-team">
       <div class="tk-avatars">
         {list.map((m, i) => (
-          <Avatar key={m.id} fruit={m.fruit} ring={TEAM_COLOR[t.team]} size={i === 0 ? 72 : 52} />
+          <Avatar key={m.id} look={m.look} ring={TEAM_COLOR[t.team]} size={i === 0 ? 72 : 52} />
         ))}
       </div>
       <div class="tk-board-label" style={{ color: ACCENT[t.team] }}>
@@ -439,7 +439,7 @@ function OverlayView({ hud }: { hud: Hud }) {
                 {o.players.map((m, i) => (
                   <Avatar
                     key={m.id}
-                    fruit={m.fruit}
+                    look={m.look}
                     ring={i % 2 ? TEAM_COLOR.blue : TEAM_COLOR.red}
                     size={64}
                   />
@@ -524,7 +524,7 @@ function OverlayView({ hud }: { hud: Hud }) {
             {shownMembers(team)
               .slice(0, 4)
               .map((m) => (
-                <Avatar key={m.id} fruit={m.fruit} ring={TEAM_COLOR[o.winner]} size={84} />
+                <Avatar key={m.id} look={m.look} ring={TEAM_COLOR[o.winner]} size={84} />
               ))}
           </div>
         </div>

@@ -1,6 +1,6 @@
 /**
- * Hantu Tak Terlihat entry: connect to the shell, rasterize the fruit faces, start Phaser (canvas
- * 1.5x the stage) under a Preact HUD, then hand control to the driver.
+ * Hantu Tak Terlihat entry: connect to the shell, start Phaser (canvas 1.5x the stage) under a
+ * Preact HUD, then hand control to the driver. The scene rasterizes player faces as looks show up.
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -10,7 +10,7 @@ import { Driver } from './driver';
 import { Hud } from './hud';
 import { HantuScene } from './scene';
 import { STR } from './strings';
-import { loadFaces, RENDER_SCALE } from './textures';
+import { RENDER_SCALE } from './textures';
 
 /** Rounds when the shell does not say (`settings.rounds`). */
 const DEFAULT_ROUNDS = 2;
@@ -40,7 +40,6 @@ async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) return;
   const { stage, width: stageWidth, height: stageHeight, onResize } = mountStage(root);
-  const faces = loadFaces();
   const fonts = fontsReady();
   let game: HoorahGame;
   try {
@@ -49,12 +48,11 @@ async function boot(): Promise<void> {
     showError(stage);
     return;
   }
-  const images = await faces;
   await fonts;
 
   const world = layer(stage, 'ht-world');
   const hudHost = layer(stage, 'ht-hud-host');
-  const scene = new HantuScene(images);
+  const scene = new HantuScene();
   const width = stageWidth() * RENDER_SCALE;
   const height = stageHeight() * RENDER_SCALE;
   const phaser = new Phaser.Game({

@@ -3,7 +3,7 @@
  * The drawing helpers work in pixels and are shared by the poster and the game's board.
  */
 import type { Fruit } from '@hoorah/protocol';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { f1, svgDoc } from './svg';
 
 export interface P {
@@ -207,7 +207,7 @@ function token(x: number, y: number, r: number, fruit: Fruit, ring: string): str
   return [
     `<ellipse cx="${x}" cy="${y + r * 0.95}" rx="${r * 0.9}" ry="${r * 0.28}" fill="#000" opacity="0.25"/>`,
     `<circle cx="${x}" cy="${y}" r="${r}" fill="#FFF7EA" stroke="${ring}" stroke-width="${r * 0.16}"/>`,
-    `<g transform="translate(${f1(x - r * 0.8)} ${f1(y - r * 0.8)}) scale(${f1(s * 100) / 100})">${fruitMarkup(fruit, 'happy')}</g>`,
+    `<g transform="translate(${f1(x - r * 0.8)} ${f1(y - r * 0.8)}) scale(${f1(s * 100) / 100})">${castHead(fruit, 'happy')}</g>`,
   ].join('');
 }
 

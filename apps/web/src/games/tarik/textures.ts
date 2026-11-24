@@ -2,13 +2,18 @@
  * SVG art rasterized into Phaser textures. Everything is rendered at the canvas resolution
  * (1.5x the 1280x720 world) or better, so nothing is upscaled on a 1080p screen.
  */
-import { FRUITS, type Fruit } from '@hoorah/protocol';
-import { type Face, fruitMarkup } from '../../shared/art/fruits';
+import type { Look } from '@hoorah/protocol';
+import type * as Phaser from 'phaser';
+import type { Face } from '../../shared/art/fruits';
+import { avatarMarkup } from '../../shared/art/people';
 import { svgDoc, svgUrl } from '../../shared/art/svg';
 import { TEAM_BLUE, TEAM_RED, tarikBackground, tarikCharacter } from '../../shared/art/tarik';
+import { BLANK_KEY, HeadBank as LookHeads, lookId } from '../common/heads';
 import { loadImage } from '../common/stage';
 import type { Team } from './logic';
 import { tarikWing, WING_ART } from './wings';
+
+export { BLANK_KEY, lookId };
 
 /** Canvas pixels per world pixel. */
 export const RENDER_SCALE = 1.5;
@@ -17,18 +22,27 @@ export const RENDER_SCALE = 1.5;
 export const CHAR_BOX = { x: -62, y: -166, w: 124, h: 178 } as const;
 /** Texture pixels per character unit: front pullers draw 2 world px per unit, x1.5 canvas = 3. */
 export const CHAR_PX = 3;
-/** Fruit head inside tarikCharacter: translate(-30.4 -158) scale(0.95) of a 64x64 grid. */
+/** Head inside tarikCharacter: translate(-30.4 -158) scale(0.95) of a 64x64 grid. */
 export const HEAD = { x: -30.4, y: -158, size: 64 * 0.95 } as const;
 const HEAD_PX = Math.ceil(HEAD.size * CHAR_PX);
 
-export const FACES: readonly Face[] = ['happy', 'sad', 'wow'];
+/** 'effort' is the pulling face; the others show on stumbles and cheers. */
+export const FACES: readonly Face[] = ['effort', 'happy', 'sad', 'wow'];
 
 export const BG_KEY = 'tarik-bg';
 /** Field extensions left and right of the main art, seen on stages wider than 16:9. */
 export const WING_KEY = { left: 'tarik-wing-left', right: 'tarik-wing-right' } as const;
 export const FLAG_KEY = 'tarik-flag';
-export const charKey = (team: Team, fruit: Fruit): string => `tarik-${team}-${fruit}`;
-export const headKey = (fruit: Fruit, face: Face): string => `tarik-head-${fruit}-${face}`;
+/** A puller's body without a head (the player's head is its own image on top). */
+export const charKey = (team: Team): string => `tarik-${team}`;
+/** Stable text id of a look, for texture keys. */
+export const headKey = (look: Look, face: Face): string => `tarik-head-${lookId(look)}-${face}`;
+/** Transparent built-in texture shown until a head has been rasterized. */
+
+/** A puller without the head (the player's own head is drawn over it). */
+function headlessBody(team: Team): string {
+  return tarikCharacter(team === 'red' ? TEAM_RED : TEAM_BLUE, true);
+}
 
 /** Merah putih pennant tied to the rope center; the knot sits at (0,0). */
 function flagMarkup(): string {
@@ -76,29 +90,13 @@ function jobs(): Job[] {
   const ch = CHAR_BOX.h * CHAR_PX;
   const vb = `${CHAR_BOX.x} ${CHAR_BOX.y} ${CHAR_BOX.w} ${CHAR_BOX.h}`;
   for (const team of ['red', 'blue'] as const) {
-    const look = team === 'red' ? TEAM_RED : TEAM_BLUE;
-    for (const fruit of FRUITS) {
-      const key = charKey(team, fruit);
-      list.push({
-        key,
-        url: svgUrl(`${key}-${CHAR_PX}`, () => svgDoc(cw, ch, tarikCharacter({ ...look, fruit }), vb)),
-        w: cw,
-        h: ch,
-      });
-    }
-  }
-  for (const fruit of FRUITS) {
-    for (const face of FACES) {
-      const key = headKey(fruit, face);
-      list.push({
-        key,
-        url: svgUrl(`${key}-${HEAD_PX}`, () =>
-          svgDoc(HEAD_PX, HEAD_PX, fruitMarkup(fruit, face), '0 0 64 64'),
-        ),
-        w: HEAD_PX,
-        h: HEAD_PX,
-      });
-    }
+    const key = charKey(team);
+    list.push({
+      key,
+      url: svgUrl(`${key}-${CHAR_PX}`, () => svgDoc(cw, ch, headlessBody(team), vb)),
+      w: cw,
+      h: ch,
+    });
   }
   const fw = FLAG_BOX.w * FLAG_PX;
   const fh = FLAG_BOX.h * FLAG_PX;
@@ -120,4 +118,32 @@ export async function loadTextures(): Promise<Map<string, HTMLImageElement>> {
   const out = new Map<string, HTMLImageElement>();
   for (let i = 0; i < list.length; i++) out.set(list[i]!.key, images[i]!);
   return out;
+}
+
+/** Rasterizes one look's head in every face. */
+async function loadHeads(look: Look): Promise<Map<string, HTMLImageElement>> {
+  const keys = FACES.map((face) => headKey(look, face));
+  const images = await Promise.all(
+    FACES.map((face, i) =>
+      loadImage(
+        svgUrl(`${keys[i]}-${HEAD_PX}`, () =>
+          svgDoc(HEAD_PX, HEAD_PX, avatarMarkup(look, face), '0 0 64 64'),
+        ),
+        HEAD_PX,
+        HEAD_PX,
+      ),
+    ),
+  );
+  const out = new Map<string, HTMLImageElement>();
+  keys.forEach((k, i) => {
+    out.set(k, images[i]!);
+  });
+  return out;
+}
+
+/** Player heads as Phaser textures, rasterized the first time a look shows up. */
+export class HeadBank extends LookHeads<Face> {
+  constructor(textures: Phaser.Textures.TextureManager, onReady: (look: Look) => void) {
+    super(textures, headKey, loadHeads, onReady);
+  }
 }

@@ -219,7 +219,54 @@ export function rankScores(entries: readonly { playerId: number; score: number }
   });
 }
 
-export class KuisMatch {
+/* ------------------------------------------------------------------ Scene */
+
+/** What the main-screen stage reads of a question (a mirror only learns the answer on reveal). */
+export interface SceneQuestion {
+  readonly id: string;
+  readonly category: string;
+  readonly topic?: string;
+  readonly q: string;
+  readonly options: readonly string[];
+  /** Correct option index; -1 while a mirror must not know it yet. */
+  readonly answer: number;
+  readonly fact: string;
+}
+
+export type SceneRecord = Pick<
+  PlayerRecord,
+  'id' | 'connected' | 'joinedRound' | 'score' | 'prevScore' | 'correct' | 'asked'
+>;
+
+export interface SceneOutcome {
+  readonly playerId: number;
+  readonly option: number | null;
+  readonly timeMs: number | null;
+  readonly score: Pick<ScoreBreakdown, 'correct' | 'total' | 'doubled'>;
+}
+
+/**
+ * Everything the main-screen stage reads. `KuisMatch` is one; a far-away mirror screen builds
+ * another from the published state (see mirror.ts), so both draw through the same components.
+ */
+export interface KuisScene {
+  readonly phase: Phase;
+  readonly round: number;
+  readonly total: number;
+  readonly solo: boolean;
+  readonly questions: readonly { readonly id: string }[];
+  readonly question: SceneQuestion;
+  readonly roster: readonly SceneRecord[];
+  readonly outcomes: readonly SceneOutcome[];
+  readonly fastestCorrect: number | null;
+  readonly allAnsweredAt: number | null;
+  readonly answers: { has(id: number): boolean };
+  timeLeft(now: number): number;
+  isParticipant(id: number): boolean;
+  ranking(): RankEntry[];
+}
+
+export class KuisMatch implements KuisScene {
   readonly questions: PreparedQuestion[];
   readonly clock: PauseClock;
   phase: Phase = 'start';

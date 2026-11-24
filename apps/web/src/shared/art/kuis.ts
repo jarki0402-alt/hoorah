@@ -1,4 +1,4 @@
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { svgDoc } from './svg';
 
 const KAWUNG = (id: string, size: number, color: string) => {
@@ -30,9 +30,9 @@ export function kuisKeyArtSvg(): string {
     '<path d="M296 98 a24 24 0 1 1 34 22 c-6 3 -8 7 -8 13 v6 h-16 v-8 c0 -10 4 -16 12 -21 a9 9 0 1 0 -9 -10Z M306 152 h16 v16 h-16Z" fill="#FFC928" stroke="#111214" stroke-width="4" paint-order="stroke"/>',
     '<rect x="0" y="280" width="640" height="80" fill="#1C2A2E"/><rect x="0" y="278" width="640" height="4" fill="#FFC928"/>',
     '<g fill="#FFF2C2" opacity="0.14"><ellipse cx="182" cy="300" rx="90" ry="14"/><ellipse cx="458" cy="300" rx="90" ry="14"/></g>',
-    `<g transform="translate(174.4 192) scale(0.8)">${fruitMarkup('jeruk', 'happy')}</g>`,
-    `<g transform="translate(294.4 184) scale(0.8)">${fruitMarkup('nanas', 'wow')}</g>`,
-    `<g transform="translate(414.4 192) scale(0.8)">${fruitMarkup('stroberi', 'happy')}</g>`,
+    `<g transform="translate(174.4 192) scale(0.8)">${castHead('jeruk', 'happy')}</g>`,
+    `<g transform="translate(294.4 184) scale(0.8)">${castHead('nanas', 'wow')}</g>`,
+    `<g transform="translate(414.4 192) scale(0.8)">${castHead('stroberi', 'happy')}</g>`,
     podium(200, '#FF5A1F', '1.200'),
     podium(320, '#2F8CFF', '900'),
     podium(440, '#22B35E', '1.450'),

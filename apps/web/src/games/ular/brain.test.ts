@@ -1,4 +1,5 @@
 import type { PlayerInfo } from '@hoorah/protocol';
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { isCpu } from '../common/cpu';
 import { DuelTapper, duelRate, rollDelay, soloOutcome, ularOpponents } from './brain';
@@ -8,6 +9,7 @@ const human = (id: number): PlayerInfo => ({
   id,
   name: `P${id}`,
   fruit: id === 1 ? 'semangka' : 'mangga',
+  look: lookOfFruit(id === 1 ? 'semangka' : 'mangga'),
   color: id === 1 ? '#F2453D' : '#2F80ED',
   connected: true,
   isHost: id === 1,

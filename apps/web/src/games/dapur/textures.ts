@@ -3,8 +3,8 @@
  * canvas-drawn labels in the brand font), chef parts, stains, and per kitchen the static backdrop.
  * Textures are drawn at TEX x world size so they stay sharp under the 1.5x camera zoom.
  */
-import { FRUITS } from '@hoorah/protocol';
-import type { Face } from '../../shared/art/fruits';
+import type { Look } from '@hoorah/protocol';
+import type { GameFace } from '../../shared/art/people';
 import { svgDoc } from '../../shared/art/svg';
 import { deviceScale, loadImage, STAGE_H, STAGE_W } from '../common/stage';
 import {
@@ -20,6 +20,7 @@ import {
   type Drawing,
   ICON_IDS,
   iconMarkup,
+  lookId,
   STAIN,
   type StationLabels,
   stationDrawing,
@@ -88,14 +89,16 @@ export function pickResolution(): void {
   updateRenderScale();
 }
 
-export const CHEF_FACES: readonly Face[] = ['happy', 'effort', 'wow'];
+export const CHEF_FACES: readonly GameFace[] = ['happy', 'effort', 'wow'];
 /** Backdrops get this much room around them for the frame stroke. */
 export const BACKDROP_PAD = 8;
 
 export const iconKey = (id: string): string => `dp-i-${id}`;
 export const stationKey = (kind: StationKind, source: string | null): string =>
   `dp-st-${kind}${source ? `-${source}` : ''}`;
-export const headKey = (fruit: string, face: Face): string => `dp-head-${fruit}-${face}`;
+export const headKey = (look: Look, face: GameFace): string => `dp-head-${lookId(look)}-${face}`;
+/** Built-in transparent texture shown while a head is still rasterizing. */
+export const BLANK_KEY = '__DEFAULT';
 export const stainKey = (k: StainKind): string => `dp-stain-${k}`;
 export const backdropKey = (k: KitchenId): string => `dp-bg-${k}`;
 export const cartKey = (k: KitchenId, side: 0 | 1): string => `dp-cart-${k}-${side}`;
@@ -215,15 +218,22 @@ export async function loadCommonTextures(): Promise<Map<string, HTMLCanvasElemen
   jobs.push({ key: 'dp-apron', d: sprite(64, 84, CHEF_APRON) });
   jobs.push({ key: 'dp-hat', d: sprite(64, 84, CHEF_HAT) });
   jobs.push({ key: 'dp-hand', d: sprite(12, 12, CHEF_HAND) });
-  for (const fruit of FRUITS)
-    for (const face of CHEF_FACES)
-      jobs.push({ key: headKey(fruit, face), d: sprite(64, 84, chefHead(fruit, face)) });
   for (const k of Object.keys(STAIN) as StainKind[])
     jobs.push({ key: stainKey(k), d: sprite(24, 20, STAIN[k]) });
   const canvases = await Promise.all(jobs.map((j) => raster(j.d)));
   const out = new Map<string, HTMLCanvasElement>();
   jobs.forEach((j, i) => {
     out.set(j.key, canvases[i]!);
+  });
+  return out;
+}
+
+/** One player's chef head in every face, rasterized when their look first shows up. */
+export async function loadHeads(look: Look): Promise<Map<string, HTMLCanvasElement>> {
+  const canvases = await Promise.all(CHEF_FACES.map((face) => raster(sprite(64, 84, chefHead(look, face)))));
+  const out = new Map<string, HTMLCanvasElement>();
+  CHEF_FACES.forEach((face, i) => {
+    out.set(headKey(look, face), canvases[i]!);
   });
   return out;
 }

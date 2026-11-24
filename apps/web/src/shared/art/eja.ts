@@ -1,5 +1,5 @@
 import type { Fruit } from '@hoorah/protocol';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { svgDoc } from './svg';
 
 /**
@@ -20,7 +20,7 @@ export function ejaSvg(): string {
   const heads = fruits
     .map(
       ([f, x, y, face]) =>
-        `<g transform="translate(${x - 36} ${y - 36}) scale(1.12)">${fruitMarkup(f, face)}</g>` +
+        `<g transform="translate(${x - 36} ${y - 36}) scale(1.12)">${castHead(f, face)}</g>` +
         `<g transform="translate(${x + 14} ${y + 14}) rotate(-12)"><rect x="-13" y="-22" width="26" height="44" rx="5" fill="#2A2B30"/><rect x="-10" y="-17" width="20" height="30" rx="2" fill="#FBF6EC"/><rect x="-6" y="-11" width="5" height="6" fill="#1C1A17"/><rect x="1" y="-11" width="5" height="6" fill="#1C1A17"/></g>`,
     )
     .join('');

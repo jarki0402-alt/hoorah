@@ -3,7 +3,7 @@
  * (frozen while paused) and turns logic events into sounds, pawn animations, phone views and
  * HUD state.
  */
-import type { ControllerToGame, ControllerView, PlayerInfo } from '@hoorah/protocol';
+import { type ControllerToGame, type ControllerView, lookOfFruit, type PlayerInfo } from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import type { Sfx } from '../../shared/audio';
 import { celebrate, confetti } from '../../shared/confetti';
@@ -11,7 +11,7 @@ import { cpuSkill, isCpu, reportSoloResult } from '../common/cpu';
 import { actDelay, choosePawn, ludoOpponents } from './brain';
 import { GameClock } from './clock';
 import { SWATCH } from './colors';
-import { type BoardGeom, geometryFor, layoutPawns, type PawnRef, pawnPoint } from './geometry';
+import { type BoardGeom, geometryFor, type PawnRef } from './geometry';
 import {
   BASE,
   clampPawns,
@@ -24,8 +24,9 @@ import {
   ROLL_MS,
   standings,
 } from './logic';
+import { type MirrorMove, toMirror } from './mirror';
 import { buildResult, headline, seatTitle } from './results';
-import type { Banner, LudoStore, PlayerCard, SeatCard } from './store';
+import type { Banner, LudoStore, PlayerCard, SeatCard, ShownMove } from './store';
 import { joinNames, STR } from './strings';
 import * as V from './views';
 
@@ -60,6 +61,8 @@ export class LudoDriver {
   private skill = 0;
   /** The computer's next action for the current roll/pick, keyed by phase, roller and phase start. */
   private brainPlan: { key: string; at: number } | null = null;
+  /** The last move, for far-away main screens (long-distance play) to animate. */
+  private lastMove: MirrorMove | null = null;
 
   constructor(
     private readonly game: HoorahGame,
@@ -94,6 +97,9 @@ export class LudoDriver {
     this.game.on('players', () => this.onPlayers());
     this.game.on('action', (from, a) => this.onAction(from, a));
     this.game.on('pause', (p) => this.setPaused(p));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publish();
+    });
     if (this.game.paused) this.setPaused(true);
     this.flush();
     this.refreshHud();
@@ -225,6 +231,7 @@ export class LudoDriver {
       this.sent.clear();
       this.syncViews();
     }
+    this.publish();
   }
 
   /* ---------------------------------------------------------------- events */
@@ -306,21 +313,19 @@ export class LudoDriver {
   private onMove(m: MoveInfo): void {
     const L = this.logic;
     const prev = this.store.pawns.value;
-    const g = this.geom;
-    const before = layoutPawns(g, prev, L.pawnCount);
     const next = this.pawnRefs();
-    const after = layoutPawns(g, next, L.pawnCount);
     this.store.pawns.value = next;
     const t = L.seats[m.seat]!;
-    const key = `${m.seat}-${m.pawn}`;
-    const find = (list: typeof before, k: string) => list.find((p) => `${p.seat}-${p.pawn}` === k);
-    const from = find(before, key);
-    const to = find(after, key);
+    const shown: ShownMove = {
+      seat: m.seat,
+      pawn: m.pawn,
+      color: t.color,
+      path: [...m.path],
+      captures: m.captures.map((c) => ({ seat: c.seat, pawn: c.pawn })),
+    };
+    this.lastMove = { ...shown, n: (this.lastMove?.n ?? 0) + 1, at: this.clock.now() };
+    const end = this.store.playMove(this.geom, prev, next, L.pawnCount, shown);
     const walk = m.path.length * HOP_MS;
-    if (from && to) {
-      const pts = m.path.map((p) => pawnPoint(g, t.color, p, m.pawn, L.pawnCount));
-      this.store.animateMove(key, from, pts, to, HOP_MS);
-    }
     // Footsteps: a soft tick per square.
     for (let i = 0; i < m.path.length; i++) {
       window.setTimeout(
@@ -334,13 +339,6 @@ export class LudoDriver {
     if (m.captures.length) {
       const victims = m.captures.map((c) => seatTitle(L, c.seat, (id) => this.name(id)));
       const uniq = [...new Set(victims)];
-      for (const c of m.captures) {
-        const k = `${c.seat}-${c.pawn}`;
-        const a = find(before, k);
-        const b = find(after, k);
-        if (a && b) this.store.animateHomeward(k, a, b, walk);
-      }
-      const end = to ?? from;
       window.setTimeout(() => {
         if (this.ended) return;
         this.sfx('hit');
@@ -430,6 +428,25 @@ export class LudoDriver {
     tone: 'six' | 'capture' | 'home' | 'bad' | 'exit',
   ): void {
     this.store.toast.value = { id: ++this.seq, text, sub, tone, until: this.clock.now() + TOAST_MS };
+    this.publish();
+  }
+
+  /** Long-distance play: what this screen shows, for far-away main screens (only while watched). */
+  private publish(): void {
+    const L = this.logicRef;
+    if (!L || !this.game.mirrored) return;
+    const timed = (L.phase === 'roll' || L.phase === 'pick') && L.isConnected(L.roller);
+    this.game.publish(
+      toMirror({
+        model: this.store.model.value,
+        move: this.lastMove,
+        toast: this.store.toast.value,
+        bursts: this.store.bursts.value,
+        ring: timed ? { deadline: L.deadline, total: L.phase === 'pick' ? PICK_MS : ROLL_MS } : null,
+        frozenAt: this.clock.paused ? this.clock.now() : null,
+        toServer: (t) => this.clock.toServer(t),
+      }),
+    );
   }
 
   /* ---------------------------------------------------------------- HUD + views */
@@ -455,6 +472,7 @@ export class LudoDriver {
       id,
       name: p?.name ?? STR.unknownPlayer,
       fruit: p?.fruit ?? 'semangka',
+      look: p?.look ?? lookOfFruit('semangka'),
       color: p?.color ?? '#C4C7CC',
       connected: p?.connected ?? false,
     };
@@ -512,6 +530,7 @@ export class LudoDriver {
       legal: L.phase === 'pick' ? this.legalKeys(t.index, L.options) : [],
       banner: this.banner,
     };
+    this.publish();
   }
 
   /** Every pawn the roller may move (pawns sharing a square all bounce). */
@@ -585,7 +604,7 @@ export class LudoDriver {
     if ('opponents' in view && view.opponents) for (const id of view.opponents) ids.add(id);
     const guests = this.cpus
       .filter((c) => ids.has(c.id))
-      .map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color }));
+      .map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color }));
     return guests.length ? { ...view, guests } : view;
   }
 

@@ -1,4 +1,4 @@
-import { FRUITS, type PlayerInfo } from '@hoorah/protocol';
+import { FRUITS, lookOfFruit, type PlayerInfo } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { fieldSkills, styleFor, TAKEOVER_STYLE, TerritoryBrain } from './brain';
 import { type Arena, arenaFor, type OutCause, type Runner, WilayahMatch } from './logic';
@@ -10,6 +10,7 @@ function players(n: number): PlayerInfo[] {
     id: -(i + 1),
     name: `C${i + 1}`,
     fruit: FRUITS[i % FRUITS.length]!,
+    look: lookOfFruit(FRUITS[i % FRUITS.length]!),
     color: COLORS[i % COLORS.length]!,
     connected: true,
     isHost: false,

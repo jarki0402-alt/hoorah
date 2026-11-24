@@ -1,22 +1,28 @@
 /**
  * Canvas-drawn textures for Hantu Tak Terlihat: the floor plan of each map (Rumah Tua: plank
  * floors, rugs, furniture; Kampung Malam: grass, dirt paths, wooden houses, trees, rice field),
- * the six cute-creepy ghosts in pale teal, fruit faces, keys, fuse box, glow and film grain.
+ * the six cute-creepy ghosts in pale teal, player faces, keys, fuse box, glow and film grain.
  * Drawn at RENDER_SCALE so they stay crisp on the 1.5x canvas.
  */
-import { FRUITS, type Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import type * as Phaser from 'phaser';
-import { type Face, fruitMarkup } from '../../shared/art/fruits';
+import type { Face } from '../../shared/art/fruits';
+import { avatarMarkup } from '../../shared/art/people';
 import { seeded, svgDoc, svgUrl } from '../../shared/art/svg';
+import { BLANK_KEY, HeadBank as LookHeads, lookId } from '../common/heads';
 import { loadImage } from '../common/stage';
 import { COLS, type HauntMap, ROWS, Tile, tileAt } from './maps';
 import type { Skin } from './world';
+
+export { BLANK_KEY, lookId };
 
 export const RENDER_SCALE = 1.5;
 export const TILE = 40;
 export const FACES: readonly Face[] = ['happy', 'wow', 'sad'];
 
-export const faceKey = (fruit: Fruit, face: Face) => `hf:${fruit}:${face}`;
+/** Stable text id of a look, for texture keys. */
+export const faceKey = (look: Look, face: Face) => `hf:${lookId(look)}:${face}`;
+/** Transparent built-in texture shown until a face has been rasterized. */
 export const skinKey = (skin: Skin) => `hs:${skin}`;
 export const GLOW = 'h-glow';
 export const KEY = 'h-key';
@@ -28,18 +34,32 @@ const PALE_HI = '#DFFFF9';
 const PALE_DARK = '#5FB8AA';
 const INK = '#101214';
 
-export async function loadFaces(): Promise<Map<string, HTMLImageElement>> {
-  const jobs: Promise<[string, HTMLImageElement]>[] = [];
-  for (const fruit of FRUITS) {
-    for (const face of FACES) {
-      const key = faceKey(fruit, face);
-      const url = svgUrl(`hantu-${key}`, () =>
-        svgDoc(FACE_PX, FACE_PX, fruitMarkup(fruit, face), '0 0 64 64'),
-      );
-      jobs.push(loadImage(url, FACE_PX, FACE_PX).then((img) => [key, img] as [string, HTMLImageElement]));
-    }
+/** Rasterizes one look's head in every face. */
+async function loadHeads(look: Look): Promise<Map<string, HTMLImageElement>> {
+  const keys = FACES.map((face) => faceKey(look, face));
+  const images = await Promise.all(
+    FACES.map((face, i) =>
+      loadImage(
+        svgUrl(`${keys[i]}-${FACE_PX}`, () =>
+          svgDoc(FACE_PX, FACE_PX, avatarMarkup(look, face), '0 0 64 64'),
+        ),
+        FACE_PX,
+        FACE_PX,
+      ),
+    ),
+  );
+  const out = new Map<string, HTMLImageElement>();
+  keys.forEach((k, i) => {
+    out.set(k, images[i]!);
+  });
+  return out;
+}
+
+/** Player heads as Phaser textures, rasterized the first time a look shows up. */
+export class HeadBank extends LookHeads<Face> {
+  constructor(textures: Phaser.Textures.TextureManager, onReady: (look: Look) => void) {
+    super(textures, faceKey, loadHeads, onReady);
   }
-  return new Map(await Promise.all(jobs));
 }
 
 function canvas(textures: Phaser.Textures.TextureManager, key: string, w: number, h: number) {
@@ -264,12 +284,8 @@ function drawSkin(c: CanvasRenderingContext2D, skin: Skin): void {
   }
 }
 
-export function makeSprites(
-  textures: Phaser.Textures.TextureManager,
-  faces: Map<string, HTMLImageElement>,
-): void {
+export function makeSprites(textures: Phaser.Textures.TextureManager): void {
   const S = RENDER_SCALE;
-  for (const [key, img] of faces) if (!textures.exists(key)) textures.addImage(key, img);
   const glow = canvas(textures, GLOW, 128, 128);
   {
     const g = glow.context.createRadialGradient(64, 64, 0, 64, 64, 64);

@@ -6,6 +6,7 @@ const racers = [1, 2].map((id) => ({
   id,
   name: `P${id}`,
   fruit: 'jeruk' as const,
+  look: { c: 'tara' as const },
   color: '#2F8CFF',
   cpu: false,
 }));

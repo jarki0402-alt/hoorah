@@ -51,7 +51,7 @@ export const STR = {
   finalRow: (correct: number, asked: number) => `${correct}/${asked} benar`,
   waitingTitle: 'Menunggu pemain…',
   waitingText: 'Kuis lanjut otomatis begitu ada pemain yang tersambung lagi.',
-  noShell: 'Buka Kuis Nusantara dari aplikasi Hoorah di layar utama.',
+  noShell: 'Buka Kuis Nusantara dari aplikasi Kacawbalaw di layar utama.',
   winnerCaption: 'JUARA',
 
   /* Solo: score attack against your own record (PRD 6.4) */

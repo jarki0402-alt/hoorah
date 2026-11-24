@@ -2,7 +2,7 @@
  * Petualangan Warna's Phaser world: the backdrop of the stage's world with two silhouette bands
  * drifting at different speeds (depth), light shafts, falling leaves or floating spores and
  * fireflies; the stage layer; and everything that moves (pools, gates, doors, plates, levers,
- * wires from switches to what they open, lifts, mushrooms, helper planks, boxes, gems, fruit
+ * wires from switches to what they open, lifts, mushrooms, helper planks, boxes, gems, player
  * characters with their colour aura and symbol badge, the goal pulse on the exits, the hint
  * pointer and path, effects). Ambient motion halves itself on a device that keeps dropping
  * frames. It only renders: rules live in world.ts.
@@ -10,7 +10,7 @@
  * Coordinates: stage px. The 32×18 stage (1280×720) sits centred in the stage; taller or wider
  * screens see more cave around it. The camera zooms by RENDER_SCALE for a crisp 1.5x canvas.
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Look, lookOfFruit, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
 import { type BiomeId, Cell, COLS, foldSlot, ROWS, type Slot } from './levels';
@@ -25,9 +25,9 @@ import {
   drawBackdrop,
   drawBand,
   drawStage,
-  faceKey,
   GLOW,
   gemKey,
+  HeadBank,
   LEAF,
   makeSprites,
   RENDER_SCALE,
@@ -52,7 +52,7 @@ const BAND_PAD = 80;
 
 export interface CharLook {
   name: string;
-  fruit: Fruit;
+  look: Look;
   /** Solo: the character the person is not steering right now. */
   idle: boolean;
 }
@@ -65,7 +65,7 @@ interface CharView {
   tag: Phaser.GameObjects.Text;
   arrow: Phaser.GameObjects.Image;
   face: Face;
-  fruit: Fruit;
+  look: Look;
   sx: number;
   sy: number;
   wasDead: boolean;
@@ -127,7 +127,7 @@ export class WarnaScene extends Phaser.Scene {
   ox = 0;
   oy = 0;
   private resolveReady!: () => void;
-  private readonly faces: Map<string, HTMLImageElement>;
+  private heads!: HeadBank;
   private stageW = 1280;
   private stageH = 720;
   private bg: Phaser.GameObjects.Image | null = null;
@@ -141,7 +141,7 @@ export class WarnaScene extends Phaser.Scene {
   private charLayer!: Phaser.GameObjects.Container;
   private fxLayer!: Phaser.GameObjects.Container;
   private world: World | null = null;
-  private look: (key: number) => CharLook = () => ({ name: '', fruit: 'jeruk', idle: false });
+  private look: (key: number) => CharLook = () => ({ name: '', look: lookOfFruit('jeruk'), idle: false });
   private chars: CharView[] = [];
   private boxes: Phaser.GameObjects.Image[] = [];
   private gems: Phaser.GameObjects.Image[] = [];
@@ -166,16 +166,16 @@ export class WarnaScene extends Phaser.Scene {
   /** Helper plank cell index -> scene time it appeared. */
   private readonly assistAt = new Map<number, number>();
 
-  constructor(faces: Map<string, HTMLImageElement>) {
+  constructor() {
     super('warna');
-    this.faces = faces;
     this.ready = new Promise((r) => {
       this.resolveReady = r;
     });
   }
 
   create(): void {
-    makeSprites(this.textures, this.faces);
+    makeSprites(this.textures);
+    this.heads = new HeadBank(this.textures, (look) => this.headsReady(look));
     const cam = this.cameras.main;
     cam.setOrigin(0, 0);
     cam.setZoom(RENDER_SCALE);
@@ -359,11 +359,21 @@ export class WarnaScene extends Phaser.Scene {
     this.buildRuns(world);
   }
 
+  private showFace(v: CharView): void {
+    v.body.setTexture(this.heads.key(v.look, v.face));
+    v.body.setDisplaySize(48, 48);
+  }
+
+  /** A look's faces finished rasterizing: swap them in for its characters. */
+  private headsReady(look: Look): void {
+    for (const v of this.chars) if (sameLook(v.look, look)) this.showFace(v);
+  }
+
   private makeChar(key: number, slot: Slot): CharView {
     const look = this.look(key);
     const aura = this.add.image(0, -18, GLOW).setTint(SLOT_COLOR[slot]).setBlendMode(Phaser.BlendModes.ADD);
     aura.setDisplaySize(96, 96).setAlpha(0.55);
-    const body = this.add.image(0, 2, faceKey(look.fruit, 'happy')).setOrigin(0.5, 1);
+    const body = this.add.image(0, 2, this.heads.key(look.look, 'happy')).setOrigin(0.5, 1);
     body.setDisplaySize(48, 48);
     const badge = this.add.image(15, -40, badgeKey(slot)).setScale(1 / RENDER_SCALE);
     const tag = this.add
@@ -392,7 +402,7 @@ export class WarnaScene extends Phaser.Scene {
       tag,
       arrow,
       face: 'happy',
-      fruit: look.fruit,
+      look: look.look,
       sx: 1,
       sy: 1,
       wasDead: false,
@@ -673,11 +683,10 @@ export class WarnaScene extends Phaser.Scene {
     v.cont.setAlpha(look.idle ? 0.62 : c.active ? 1 : 0.45);
     if (v.tag.text !== look.name) v.tag.setText(look.name);
     const face: Face = !c.grounded ? 'wow' : c.inX !== 0 && Math.abs(c.vx) < 1.6 ? 'effort' : 'happy';
-    if (face !== v.face || look.fruit !== v.fruit) {
+    if (face !== v.face || !sameLook(look.look, v.look)) {
       v.face = face;
-      v.fruit = look.fruit;
-      v.body.setTexture(faceKey(look.fruit, face));
-      v.body.setDisplaySize(48, 48);
+      v.look = look.look;
+      this.showFace(v);
     }
     v.sx += (1 - v.sx) * 0.2;
     v.sy += (1 - v.sy) * 0.2;

@@ -15,7 +15,7 @@
  * The model packs (public/models/lari) load in parallel with the shell connection; the shell
  * keeps its loading screen up until `ready()`.
  */
-import { FRUITS, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
+import { FRUITS, lookOfFruit, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
 import { connect, type GameResult } from '@hoorah/sdk';
 import { render } from 'preact';
 import * as THREE from 'three';
@@ -65,6 +65,7 @@ class DemoGame implements GameLike {
       id: i + 1,
       name: names[i]!,
       fruit: FRUITS[i % FRUITS.length]!,
+      look: lookOfFruit(FRUITS[i % FRUITS.length]!),
       color: PLAYER_COLORS[i % PLAYER_COLORS.length]!,
       connected: true,
       isHost: i === 0,

@@ -1,4 +1,12 @@
-import { PAD_ACTION, PAD_DOWN, PAD_LEFT, PAD_RIGHT, PAD_UP, type PlayerInfo } from '@hoorah/protocol';
+import {
+  lookOfFruit,
+  PAD_ACTION,
+  PAD_DOWN,
+  PAD_LEFT,
+  PAD_RIGHT,
+  PAD_UP,
+  type PlayerInfo,
+} from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { fieldSkills, RunnerBrain } from './brain';
 import {
@@ -699,6 +707,7 @@ describe('results', () => {
       id: -1,
       name: 'Joko',
       fruit: 'durian',
+      look: lookOfFruit('durian'),
       color: '#22B35E',
       connected: true,
       isHost: false,

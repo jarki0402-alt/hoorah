@@ -13,6 +13,7 @@ import {
   type PlayerInfo,
   type RelayedInput,
   STICK_OP,
+  sameLook,
   unpackStick,
 } from '@hoorah/protocol';
 import type { GameAward, GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
@@ -118,21 +119,27 @@ export class Director {
   }
 
   private info(p: PlayerInfo): RacerInfo {
-    return { id: p.id, name: p.name, fruit: p.fruit, color: p.color, cpu: isCpu(p.id) };
+    return { id: p.id, name: p.name, fruit: p.fruit, look: p.look, color: p.color, cpu: isCpu(p.id) };
   }
 
   private chip(id: number): RunnerChip | null {
     const r = this.match.racer(id);
-    return r ? { id, name: r.name, fruit: r.fruit, color: r.color } : null;
+    return r ? { id, name: r.name, fruit: r.fruit, look: r.look, color: r.color } : null;
   }
 
   private guests(): GuestPlayer[] {
-    return this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color }));
+    return this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color }));
   }
 
   private syncLooks(): void {
     this.scene.setPlayers(
-      this.match.racers.map((r) => ({ id: r.id, name: r.name, fruit: r.fruit, color: r.color })),
+      this.match.racers.map((r) => ({
+        id: r.id,
+        name: r.name,
+        fruit: r.fruit,
+        look: r.look,
+        color: r.color,
+      })),
     );
   }
 
@@ -171,8 +178,8 @@ export class Director {
         this.takeover.add(p.id);
         m.setPilot(p.id, new RunnerBrain(TAKEOVER_SKILL));
       }
-      if (r.name !== p.name || r.color !== p.color || r.fruit !== p.fruit)
-        m.restyle(p.id, { name: p.name, color: p.color, fruit: p.fruit });
+      if (r.name !== p.name || r.color !== p.color || r.fruit !== p.fruit || !sameLook(r.look, p.look))
+        m.restyle(p.id, { name: p.name, color: p.color, fruit: p.fruit, look: p.look });
     }
     this.syncLooks();
     this.lastHud = Number.NEGATIVE_INFINITY;
@@ -490,6 +497,7 @@ export class Director {
       id: r.id,
       name: r.name,
       fruit: r.fruit,
+      look: r.look,
       color: r.color,
       place: i + 1,
       finished: r.finishedAt !== null,
@@ -497,6 +505,13 @@ export class Director {
       progress: m.progress(r),
     }));
     h.standings.value = rows;
+    const panes = m.views.map((v) => ({
+      key: v.id === null ? 'pack' : String(v.id),
+      ...v.rect,
+      who: v.id === null ? null : this.chip(v.id),
+    }));
+    if (panes.length !== h.split.value.length || panes.some((p, i) => p.key !== h.split.value[i]?.key))
+      h.split.value = panes;
     h.off.value =
       m.phase === 'race'
         ? m.racers
@@ -505,6 +520,7 @@ export class Director {
               id: r.id,
               name: r.name,
               fruit: r.fruit,
+              look: r.look,
               color: r.color,
               k: Math.min(1, r.offFor / TIMING.offscreen),
               left: TIMING.offscreen - r.offFor,

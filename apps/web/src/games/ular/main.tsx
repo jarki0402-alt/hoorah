@@ -8,6 +8,7 @@ import { makeBoard, parseSize } from './board';
 import { UlarDriver } from './driver';
 import { Hud, HudStore } from './hud';
 import { computeLayout } from './layout';
+import { UlarReplica } from './replica';
 import { STR } from './strings';
 import './ular.css';
 
@@ -28,6 +29,16 @@ async function boot(): Promise<void> {
 
   const size = parseSize(game.settings.rounds);
   const hud = new HudStore(makeBoard(size));
+  if (game.isMirror) {
+    // Long-distance play: draw the Host's game from its published state, run nothing of our own.
+    const replica = new UlarReplica(game, hud);
+    replica.setLayout(computeLayout(size, width(), height()));
+    render(<Hud store={hud} />, stage);
+    onResize((h, w) => replica.setLayout(computeLayout(size, w, h)));
+    replica.start();
+    game.ready();
+    return;
+  }
   const driver = new UlarDriver(game, hud);
   driver.setLayout(computeLayout(size, width(), height()));
   render(<Hud store={hud} />, stage);

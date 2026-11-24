@@ -7,7 +7,7 @@
  * performance tests; `window.__juraganStats()` reports the renderer state.
  * Graphics level: the device profile (`?gfx=low|medium|high` forces one), `?q=1|2|3` overrides it.
  */
-import { FRUITS, type Fruit, PLAYER_COLORS } from '@hoorah/protocol';
+import { FRUITS, type Look, lookAt, lookOfFruit, PLAYER_COLORS } from '@hoorah/protocol';
 import { connect, HoorahGame } from '@hoorah/sdk';
 import { render } from 'preact';
 import { ensureGfxProfile, type GfxTier, isGfxTier } from '../common/gfx';
@@ -103,6 +103,7 @@ function demoGame(n: number): HoorahGame {
       id: i + 1,
       name: STR.demoNames[i % STR.demoNames.length] ?? STR.unknownPlayer,
       fruit: FRUITS[i % FRUITS.length]!,
+      look: lookOfFruit(FRUITS[i % FRUITS.length]!),
       color: PLAYER_COLORS[i % PLAYER_COLORS.length]!,
       connected: true,
       isHost: i === 0,
@@ -117,16 +118,16 @@ function demoGame(n: number): HoorahGame {
 
 interface PosterPawn {
   id: number;
-  fruit: Fruit;
+  look: Look;
   color: string;
   tile: number;
 }
 
 const POSTER_PAWNS: PosterPawn[] = [
-  { id: 1, fruit: 'mangga', color: '#F2453D', tile: 1 },
-  { id: 2, fruit: 'semangka', color: '#2F8CFF', tile: 3 },
-  { id: 3, fruit: 'nanas', color: '#22B35E', tile: 23 },
-  { id: 4, fruit: 'rambutan', color: '#FFC928', tile: 5 },
+  { id: 1, look: lookAt(0), color: '#F2453D', tile: 1 },
+  { id: 2, look: lookAt(5), color: '#2F8CFF', tile: 3 },
+  { id: 3, look: lookAt(10), color: '#22B35E', tile: 23 },
+  { id: 4, look: lookAt(15), color: '#FFC928', tile: 5 },
 ];
 
 async function poster(root: HTMLElement, params: URLSearchParams): Promise<void> {
@@ -148,7 +149,7 @@ async function poster(root: HTMLElement, params: URLSearchParams): Promise<void>
   window.__juraganStats = () => view.stats();
   const cam = params.get('cam');
   view.posterCam = cam ? cam.split(',').map(Number) : [-5.2, 3.4, 7.6, -0.6, 0.1, 1.6, 30];
-  view.setPawns(POSTER_PAWNS.map((p) => ({ id: p.id, fruit: p.fruit, color: p.color })));
+  view.setPawns(POSTER_PAWNS.map((p) => ({ id: p.id, look: p.look, color: p.color })));
   view.place(
     POSTER_PAWNS.map((p) => ({ id: p.id, tile: p.tile, jailed: false, out: false })),
     true,

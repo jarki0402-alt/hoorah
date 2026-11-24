@@ -2,8 +2,6 @@
  * Where the contestants stand on the 1280x720 world, shared by the Phaser scene and the HUD
  * (name plates, floating words). Pure.
  */
-import type { Fruit } from '@hoorah/protocol';
-import { FRUIT_ART } from '../../shared/art/fruits';
 import { HEAD, KERUPUK_R, ropeY } from '../../shared/art/kerupuk';
 
 export const WORLD_W = 1280;
@@ -45,13 +43,15 @@ export function headCenterY(unit: number): number {
   return FEET_Y + (HEAD.y + HEAD.size / 2) * unit;
 }
 
-/** World y of the mouth at rest for a fruit head. */
-export function mouthY(fruit: Fruit, unit: number): number {
-  const faceY = FRUIT_ART[fruit].face[1] + 6;
-  return FEET_Y + (HEAD.y + HEAD.scale * faceY) * unit;
+/** Mouth height on the 64 grid of a player's head (every cast face puts it 38 to 40 down). */
+const MOUTH_Y = 39;
+
+/** World y of the mouth at rest. */
+export function mouthY(unit: number): number {
+  return FEET_Y + (HEAD.y + HEAD.scale * MOUTH_Y) * unit;
 }
 
 /** Where the kerupuk centre hangs at rest: its lower part right in front of the mouth. */
-export function kerupukRestY(fruit: Fruit, unit: number): number {
-  return mouthY(fruit, unit) - KERUPUK_R * unit * 0.55;
+export function kerupukRestY(unit: number): number {
+  return mouthY(unit) - KERUPUK_R * unit * 0.55;
 }

@@ -1,10 +1,17 @@
+import type { AppConfig, RoomAccess, TrialReject } from './access';
 import type { Fruit } from './constants';
+import type { Look } from './look';
 import type { PassReject, RoomPass } from './pass';
 
 export interface PlayerInfo {
   id: number;
   name: string;
+  /** Handed out by the server per seat; only the 3D racers (Bajaj Rush, Lari Terus) still draw it. */
   fruit: Fruit;
+  /** The avatar the player made on the phone. */
+  look: Look;
+  /** Still choosing an avatar on the phone right after joining (main screen: "memilih tokoh..."). */
+  picking?: boolean;
   color: string;
   connected: boolean;
   isHost: boolean;
@@ -15,24 +22,48 @@ export interface PlayerInfo {
  * main screen and one phone (see RtcSignal).
  */
 export type Channel = 'p' | 'g' | 'r';
-export type RelayTarget = number | 'all' | 'screen';
+/** `mirror`: every far-away main screen watching the room (sent by the main screen only). */
+export type RelayTarget = number | 'all' | 'screen' | 'mirror';
 
 export type ClientMsg =
-  | { t: 'hello'; role: 'screen'; v: number; resume?: { code: string; token: string } }
+  | {
+      t: 'hello';
+      role: 'screen';
+      v: number;
+      resume?: { code: string; token: string };
+      /** The main screen's own id (random, kept in its browser): Pass codes and the trial stay with it. */
+      screen?: string;
+    }
   | {
       t: 'hello';
       role: 'controller';
       v: number;
       code: string;
       name: string;
-      fruit: Fruit;
+      /** Old phones only: the server now hands out fruits itself. */
+      fruit?: Fruit;
+      /** The avatar; old phones without one get a character matching their fruit or seat. */
+      look?: Look;
       token?: string;
       /** A Hoorah Pass code this phone remembers: opens the room's seats on the way in. */
       pass?: string;
     }
+  | {
+      /**
+       * Long-distance play (owner 2026-11-24): a far-away main screen watches the room with the
+       * secret from the main screen's link. It only listens; it never controls anything.
+       */
+      t: 'hello';
+      role: 'mirror';
+      v: number;
+      code: string;
+      key: string;
+    }
   | { t: 'relay'; ch: Channel; to: RelayTarget; data: unknown }
   /** Enter a Hoorah Pass code for the room (any phone in it, or the main screen). */
   | { t: 'pass'; code: string }
+  /** Start the free trial for the room's main screen (the screen or any phone in the room). */
+  | { t: 'trial' }
   /**
    * Main screen only: what it shows now, for the admin dashboard (page traffic itself may go direct).
    * `direct`: phones linked to the screen over WebRTC right now (sent again whenever it changes).
@@ -46,8 +77,15 @@ export type ClientMsg =
   | { t: 'hostOfferCancel' }
   /** The asked phone only: answer the pending offer. */
   | { t: 'hostReply'; accept: boolean }
+  /**
+   * A phone in the room changes its name or avatar: live while choosing after joining (`picking`
+   * true, then false on "Siap") and from the lobby "Ubah".
+   */
+  | { t: 'profile'; name: string; look: Look; picking?: boolean }
   | { t: 'kick'; id: number }
-  | { t: 'leave' };
+  | { t: 'leave' }
+  /** Main screen only: disconnect every far-away main screen and make a new link secret. */
+  | { t: 'mirrorsOff' };
 
 export type ErrorCode =
   | 'version'
@@ -61,7 +99,9 @@ export type ErrorCode =
   /** The room is full and the pass code given on the way in did not open it. */
   | 'pass_invalid'
   | 'pass_expired'
-  | 'pass_busy';
+  | 'pass_busy'
+  /** Far-away main screen: the main screen stopped long-distance play (its link changed). */
+  | 'mirror_stopped';
 
 export type ServerMsg =
   | {
@@ -72,7 +112,25 @@ export type ServerMsg =
       players: PlayerInfo[];
       maxPlayers: number;
       pass: RoomPass | null;
+      access: RoomAccess;
+      config: AppConfig;
       resumed: boolean;
+      /** Secret for the far-away main screen link (`/J/<code>-<key>`); only this screen hears it. */
+      mirrorKey: string;
+      /** Far-away main screens watching right now. */
+      mirrors: number;
+    }
+  | {
+      t: 'welcome';
+      role: 'mirror';
+      code: string;
+      players: PlayerInfo[];
+      maxPlayers: number;
+      pass: RoomPass | null;
+      access: RoomAccess;
+      config: AppConfig;
+      /** The main screen this one follows is connected. */
+      screenOnline: boolean;
     }
   | {
       t: 'welcome';
@@ -83,18 +141,28 @@ export type ServerMsg =
       players: PlayerInfo[];
       maxPlayers: number;
       pass: RoomPass | null;
+      access: RoomAccess;
+      config: AppConfig;
       screenOnline: boolean;
       resumed: boolean;
     }
   | { t: 'players'; players: PlayerInfo[] }
-  /** Seats or pass of the room changed (pass entered, extended, ended). */
-  | { t: 'room'; maxPlayers: number; pass: RoomPass | null }
+  /** Seats, pass or access of the room changed (pass entered, trial started, either ended). */
+  | { t: 'room'; maxPlayers: number; pass: RoomPass | null; access: RoomAccess }
+  /** The owner changed the settings in the admin dashboard (sent to every screen and phone). */
+  | { t: 'config'; config: AppConfig }
+  /** Main screen only: a phone was turned away because the room is full (the screen offers the Pass). */
+  | { t: 'turnedAway' }
+  /** Answer to the sender's trial request when it did not start (a `room` message says when it did). */
+  | { t: 'trial'; ok: false; reason: TrialReject }
   /** Answer to the sender's pass code (also sent after joining when a remembered code failed). */
   | { t: 'pass'; ok: true; pass: RoomPass }
   | { t: 'pass'; ok: false; reason: PassReject }
   | { t: 'relay'; ch: Channel; from: number; data: unknown }
   | { t: 'pong'; id: number; ct: number; st: number }
   | { t: 'screen'; online: boolean }
+  /** Main screen only: far-away main screens watching now, and the current link secret. */
+  | { t: 'mirrors'; count: number; key: string }
   | { t: 'error'; code: ErrorCode; fatal: boolean }
   | { t: 'kicked' }
   /** A Host offer is pending (sent to the Host who made it and to the asked player). */
@@ -118,7 +186,7 @@ export type HostOfferResult = 'accepted' | 'declined' | 'expired' | 'cancelled';
  */
 export interface NearbyRoom {
   code: string;
-  players: { name: string; fruit: Fruit; color: string }[];
+  players: { name: string; fruit: Fruit; look?: Look; color: string }[];
   seatsLeft: number;
 }
 
@@ -175,6 +243,11 @@ export type PlatformToController =
       tab?: string;
       /** The main screen shows the game's "Cara main" before its first round: who pressed "Paham!". */
       tutorial?: { ready: number[] };
+      /**
+       * A far-away main screen watches (long-distance play): only games marked for it can start,
+       * the Host's picker marks the others.
+       */
+      remote?: boolean;
     }
   | { k: 'reaction'; from: number; r: Reaction }
   | { k: 'vibrate'; pattern: number | number[] };
@@ -548,6 +621,8 @@ export interface GuestPlayer {
   id: number;
   name: string;
   fruit: Fruit;
+  /** Its avatar; a character matching the fruit when left out. */
+  look?: Look;
   color: string;
 }
 
@@ -734,6 +809,8 @@ type ControllerViewBody =
       color: string;
       /** Avatar when the phone steers a character other than the player's own (solo: the second one). */
       fruit?: Fruit;
+      /** The same as a look (wins over `fruit`). */
+      look?: Look;
       /** Short status line, e.g. "Panjang 42" or "Wilayah 18%". */
       title: string;
       eyebrow?: string;

@@ -11,7 +11,7 @@ const up = (s: string) => s.toUpperCase();
 
 export const STR = {
   logo: 'SAMBUNG KATA',
-  noShell: 'Buka Sambung Kata dari layar utama Hoorah.',
+  noShell: 'Buka Sambung Kata dari layar utama Kacawbalaw.',
 
   /* Header chips */
   roundChip: (n: number) => `PUTARAN ${n}`,

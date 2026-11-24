@@ -2,16 +2,20 @@
  * Canvas-drawn textures for Petualangan Warna: the backdrop of each world (sky, glows and two
  * silhouette bands that the scene drifts apart for depth), the static stage layer (rock or soil
  * with a lip of moss or grass, planks, mushroom stems, exit arches, rails), and small sprites
- * (fruit faces, colour badges, gems, boxes, glow, leaves, light shafts). Everything is drawn at
+ * (player faces, colour badges, gems, boxes, glow, leaves, light shafts). Everything is drawn at
  * RENDER_SCALE so it stays crisp on the 1.5x canvas.
  */
-import { FRUITS, type Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import type * as Phaser from 'phaser';
-import { type Face, fruitMarkup } from '../../shared/art/fruits';
+import type { Face } from '../../shared/art/fruits';
+import { avatarMarkup } from '../../shared/art/people';
 import { seeded, svgDoc, svgUrl } from '../../shared/art/svg';
+import { BLANK_KEY, HeadBank as LookHeads, lookId } from '../common/heads';
 import { loadImage } from '../common/stage';
 import { type BiomeId, Cell, COLS, cellAt, foldSlot, type Level, ROWS, type Slot } from './levels';
 import { PALETTE } from './palette';
+
+export { BLANK_KEY, lookId };
 
 export const RENDER_SCALE = 1.5;
 /** Stage px per tile. */
@@ -26,7 +30,9 @@ export const SLOT_LIGHT: Record<Slot, string> = { 0: '#FF9A8E', 1: '#9CC2FF', 2:
 export const CHANNEL_COLOR: Record<number, number> = { 1: 0xffe27a, 2: 0x9ff3e6, 3: 0xffc2a8 };
 export const CHANNEL_CSS: Record<number, string> = { 1: '#FFE27A', 2: '#9FF3E6', 3: '#FFC2A8' };
 
-export const faceKey = (fruit: Fruit, face: Face) => `wf:${fruit}:${face}`;
+/** Stable text id of a look, for texture keys. */
+export const faceKey = (look: Look, face: Face) => `wf:${lookId(look)}:${face}`;
+/** Transparent built-in texture shown until a face has been rasterized. */
 export const badgeKey = (slot: Slot) => `wb:${slot}`;
 export const gemKey = (slot: Slot) => `wg:${slot}`;
 export const GLOW = 'w-glow';
@@ -39,19 +45,32 @@ export const SHAFT = 'w-shaft';
 
 const FACE_PX = 96;
 
-/** Fruit faces rasterized once (SVG → image) before Phaser starts. */
-export async function loadFaces(): Promise<Map<string, HTMLImageElement>> {
-  const jobs: Promise<[string, HTMLImageElement]>[] = [];
-  for (const fruit of FRUITS) {
-    for (const face of FACES) {
-      const key = faceKey(fruit, face);
-      const url = svgUrl(`warna-${key}`, () =>
-        svgDoc(FACE_PX, FACE_PX, fruitMarkup(fruit, face), '0 0 64 64'),
-      );
-      jobs.push(loadImage(url, FACE_PX, FACE_PX).then((img) => [key, img] as [string, HTMLImageElement]));
-    }
+/** Rasterizes one look's head in every face. */
+async function loadHeads(look: Look): Promise<Map<string, HTMLImageElement>> {
+  const keys = FACES.map((face) => faceKey(look, face));
+  const images = await Promise.all(
+    FACES.map((face, i) =>
+      loadImage(
+        svgUrl(`${keys[i]}-${FACE_PX}`, () =>
+          svgDoc(FACE_PX, FACE_PX, avatarMarkup(look, face), '0 0 64 64'),
+        ),
+        FACE_PX,
+        FACE_PX,
+      ),
+    ),
+  );
+  const out = new Map<string, HTMLImageElement>();
+  keys.forEach((k, i) => {
+    out.set(k, images[i]!);
+  });
+  return out;
+}
+
+/** Player heads as Phaser textures, rasterized the first time a look shows up. */
+export class HeadBank extends LookHeads<Face> {
+  constructor(textures: Phaser.Textures.TextureManager, onReady: (look: Look) => void) {
+    super(textures, faceKey, loadHeads, onReady);
   }
-  return new Map(await Promise.all(jobs));
 }
 
 function canvas(textures: Phaser.Textures.TextureManager, key: string, w: number, h: number) {
@@ -83,13 +102,8 @@ export function symbolPath(ctx: CanvasRenderingContext2D, slot: Slot, x: number,
   }
 }
 
-export function makeSprites(
-  textures: Phaser.Textures.TextureManager,
-  faces: Map<string, HTMLImageElement>,
-): void {
+export function makeSprites(textures: Phaser.Textures.TextureManager): void {
   const S = RENDER_SCALE;
-  for (const [key, img] of faces) if (!textures.exists(key)) textures.addImage(key, img);
-
   const glow = canvas(textures, GLOW, 128, 128);
   {
     const g = glow.context.createRadialGradient(64, 64, 0, 64, 64, 64);

@@ -24,8 +24,10 @@ export function formatGap(seconds: number): string {
 const TRACK_NAMES = ['Pulau Mainan', 'Teluk Balok', 'Puncak Pegas', 'Dermaga Kotak', 'Menara Mainan'];
 
 export const STR = {
+  /** The part of a split screen that shows the whole pack (three players). */
+  packView: 'Semua pelari',
   gameTitle: 'OBBY',
-  noShell: 'Obby harus dibuka dari aplikasi Hoorah.',
+  noShell: 'Obby harus dibuka dari aplikasi Kacawbalaw.',
   loadFailed: 'Gagal memuat Obby. Periksa koneksi lalu buka lagi.',
 
   trackName: (no: number) => TRACK_NAMES[no % TRACK_NAMES.length]!,
@@ -78,7 +80,7 @@ export const STR = {
   finished: 'FINIS',
   offline: 'Terputus',
   offIn: (s: number) => `${Math.max(0, s).toFixed(1).replace('.', ',')} dtk`,
-  help: 'Joystick kiri untuk lari, LOMPAT di kanan. Keluar layar lebih dari 2 detik: dipindah dekat rombongan.',
+  help: 'Joystick kiri untuk lari (dorong ke atas = maju), LOMPAT di kanan.',
 
   /* Podium between tracks and at the end */
   podiumTitle: (no: number, total: number) =>

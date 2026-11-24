@@ -71,6 +71,13 @@ export interface GameInfo {
   badge?: 'BARU' | 'FAVORIT' | 'SEGERA';
   /** Release wave; games of the newest wave (3) carry the "Baru" label on the home screen. */
   wave?: number;
+  /** A long game (15 minutes or more): left out of Mode Pesta so a party stays near half an hour. */
+  long?: boolean;
+  /**
+   * Long-distance play (owner 2026-11-24): the game can be watched on a far-away main screen.
+   * While one watches, only these games start (staged rollout).
+   */
+  remote?: boolean;
   logoColor: string;
   howTo: { t: string; d: string }[];
   track?: Track;
@@ -117,6 +124,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'kuis',
     mood: 'otak',
     available: true,
+    remote: true,
     badge: 'FAVORIT',
     logoColor: '#FFFFFF',
     howTo: [
@@ -218,6 +226,8 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'papan',
     mood: 'santai',
     available: true,
+    remote: true,
+    long: true,
     badge: 'BARU',
     logoColor: '#FFC928',
     howTo: [
@@ -241,6 +251,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'papan',
     mood: 'otak',
     available: true,
+    remote: true,
     badge: 'BARU',
     logoColor: '#FFFFFF',
     howTo: [
@@ -319,6 +330,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'kuis',
     mood: 'ramai',
     available: true,
+    remote: true,
     badge: 'BARU',
     logoColor: '#FFFFFF',
     howTo: [
@@ -345,6 +357,8 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'papan',
     mood: 'santai',
     available: true,
+    remote: true,
+    long: true,
     badge: 'BARU',
     logoColor: '#FFC928',
     howTo: [
@@ -371,6 +385,8 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'papan',
     mood: 'otak',
     available: true,
+    remote: true,
+    long: true,
     badge: 'BARU',
     logoColor: '#FFFFFF',
     howTo: [
@@ -386,7 +402,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     title: 'Ular Arena',
     tagline: 'Makan, memanjang, jebak lawan!',
     description:
-      'Ular-ular buah berebut makanan di arena. Arahkan ularmu dengan joystick di HP, makan biji supaya makin panjang, ngebut untuk memotong jalan lawan, dan jangan sampai kepalamu menabrak badan ular lain. Yang terpanjang saat waktu habis jadi juara.',
+      'Ular-ular berkepala tokoh berebut makanan di arena. Arahkan ularmu dengan joystick di HP, makan biji supaya makin panjang, ngebut untuk memotong jalan lawan, dan jangan sampai kepalamu menabrak badan ular lain. Yang terpanjang saat waktu habis jadi juara.',
     minPlayers: 1,
     maxPlayers: 8,
     control: 'Joystick & ngebut',
@@ -478,6 +494,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'kuis',
     mood: 'otak',
     available: true,
+    remote: true,
     badge: 'BARU',
     logoColor: '#FFFFFF',
     howTo: [
@@ -501,6 +518,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'papan',
     mood: 'santai',
     available: true,
+    long: true,
     badge: 'BARU',
     logoColor: '#FFC928',
     howTo: [
@@ -565,7 +583,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     title: 'Obby',
     tagline: 'Balapan rintangan. Siapa duluan ke bendera?',
     description:
-      'Balapan di lintasan rintangan dari balok mainan: palang berputar, lantai yang hilang, ban berjalan, dan pegas lompat. Joystick untuk lari, tombol LOMPAT untuk melompat. Injak lantai kotak-kotak untuk menyimpan; jatuh berarti kembali ke titik simpan terakhirmu. Kamera mengikuti rombongan, jadi yang tertinggal dipindah ke dekat mereka. Tiga lintasan pendek, total poin menentukan juara.',
+      'Balapan di lintasan rintangan dari balok mainan: palang berputar, lantai yang hilang, ban berjalan, dan pegas lompat. Joystick untuk lari, tombol LOMPAT untuk melompat. Injak lantai kotak-kotak untuk menyimpan; jatuh berarti kembali ke titik simpan terakhirmu. Kamera ada di belakangmu dan menghadap ke depan. Sampai 4 orang, layar dibagi: tiap orang punya bagian sendiri. 5 orang atau lebih berbagi satu kamera, jadi yang tertinggal dipindah ke dekat rombongan. Tiga lintasan pendek, total poin menentukan juara.',
     minPlayers: 1,
     maxPlayers: 8,
     control: 'Joystick + LOMPAT',
@@ -580,7 +598,7 @@ export const GAMES: Record<GameId, GameInfo> = {
       { t: 'Titik simpan', d: 'Injak lantai kotak-kotak. Jatuh? Muncul lagi di titik simpan terakhirmu.' },
       {
         t: 'Jangan tertinggal',
-        d: 'Keluar layar lebih dari 2 detik: dipindah ke titik simpan dekat rombongan.',
+        d: 'Main 5 orang atau lebih: keluar layar lebih dari 2 detik berarti dipindah ke titik simpan dekat rombongan.',
       },
     ],
     track: 'obby',
@@ -693,7 +711,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     howTo: [
       {
         t: 'Tarik ke belakang',
-        d: 'Tarik dari buahmu di HP. Arah luncur kebalikan dari tarikan, makin jauh makin kuat.',
+        d: 'Tarik dari tokohmu di HP. Arah luncur kebalikan dari tarikan, makin jauh makin kuat.',
       },
       { t: 'Lepas untuk mengunci', d: 'Masih boleh bidik ulang sebelum hitung mundur habis.' },
       {
@@ -790,7 +808,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     tips: [
       'Kamu bisa saja penyusup tanpa sadar. Dengarkan dulu petunjuk yang lain.',
       'Si Kosong yang tertangkap masih bisa menang dengan menebak kata warga.',
-      'Butuh 3 pemain atau lebih, jadi perlu Hoorah Pass.',
+      'Butuh 3 pemain atau lebih, jadi perlu Kacaw Pass.',
     ],
   },
   eja: {
@@ -806,6 +824,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     category: 'kuis',
     mood: 'otak',
     available: true,
+    remote: true,
     wave: 3,
     badge: 'BARU',
     logoColor: '#1C1A17',
@@ -852,13 +871,13 @@ export const GAMES: Record<GameId, GameInfo> = {
     tips: [
       'Hafalkan bunyinya: geraman Siluman, lonceng Dukun, seruling Tabib.',
       'Arwah tetap ikut: tebak siluman saat voting untuk poin.',
-      'Butuh 5 pemain atau lebih, jadi perlu Hoorah Pass.',
+      'Butuh 5 pemain atau lebih, jadi perlu Kacaw Pass.',
     ],
   },
   warna: {
     id: 'warna',
     title: 'Petualangan Warna',
-    tagline: 'Tiap buah punya warna. Hanya bersama semua bisa keluar.',
+    tagline: 'Tiap tokoh punya warna. Hanya bersama semua bisa keluar.',
     description:
       'Teka-teki platform kerja sama di gua bercahaya. Tiap pemain dapat warna dan simbol sendiri. Kolam, gerbang, dan permata hanya untuk warna yang sama. Injak tombol, dorong kotak berat berdua, tarik tuas, naik lift, dan berdiri di pundak teman sampai semua masuk pintu warnanya.',
     minPlayers: 1,
@@ -880,7 +899,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     tips: [
       'Tiap warna punya simbol, jadi tetap jelas bagi yang buta warna.',
       'Main sendiri: kamu memegang dua karakter, tekan TUKAR untuk pindah.',
-      'Macet? Tekan ULANG bersama untuk mengulang tahap.',
+      'Macet? Tekan ULANG bersama untuk mengulang level.',
     ],
   },
   hantu: {
@@ -907,6 +926,7 @@ export const GAMES: Record<GameId, GameInfo> = {
     track: 'hantu',
     tips: [
       'Disorot senter sebentar membuat hantu silau dan melambat.',
+      'Titik merah berkedip di layar menunjukkan posisi hantu. Seram Ringan: sering. Seram Beneran: jarang, atau saat hantu mendekat.',
       'Yang tertangkap jadi kunang-kunang dan tetap menerangi jalan teman.',
       'Main sendiri: lawan hantu komputer.',
     ],
@@ -945,6 +965,11 @@ export const CATALOG: GameId[] = [
   'warna',
   'hantu',
 ];
+/** Whether a far-away main screen can watch this game (long-distance play). */
+export function playsRemote(id: GameId): boolean {
+  return GAMES[id].remote === true;
+}
+
 export const FEATURED: GameId[] = ['bajaj', 'masak', 'tarik', 'kuis', 'rusun'];
 
 /** Tabs of the game list, the same on the main screen's home and in the Host's phone picker. */

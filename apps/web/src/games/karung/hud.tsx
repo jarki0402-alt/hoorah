@@ -3,7 +3,7 @@
  * things (ring sync, floaters) are written straight to elements through stable refs so Preact
  * never re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
 import { memo } from 'preact/compat';
@@ -14,7 +14,7 @@ import { STR } from './strings';
 export interface Plate {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
   /** Live place, 0 = none yet. */
@@ -31,7 +31,7 @@ export interface Plate {
 export interface BoardRow {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   rank: number;
   racePlace: number | null;
@@ -41,12 +41,12 @@ export interface BoardRow {
 
 export type Overlay =
   | { kind: 'none' }
-  | { kind: 'waiting'; players: { id: number; fruit: Fruit; color: string }[] }
+  | { kind: 'waiting'; players: { id: number; look: Look; color: string }[] }
   | { kind: 'count'; value: number; label: string }
   | { kind: 'go' }
-  | { kind: 'raceEnd'; title: string; sub: string; fruit: Fruit | null; color: string; photo: boolean }
+  | { kind: 'raceEnd'; title: string; sub: string; look: Look | null; color: string; photo: boolean }
   | { kind: 'standings'; eyebrow: string; rows: BoardRow[]; next: string }
-  | { kind: 'matchEnd'; title: string; sub: string; winners: { id: number; fruit: Fruit; color: string }[] };
+  | { kind: 'matchEnd'; title: string; sub: string; winners: { id: number; look: Look; color: string }[] };
 
 export interface HudState {
   /** Race HUD (top panel, ticker, plates) visible. */
@@ -263,7 +263,7 @@ function Plates({ hud }: { hud: Hud }) {
             style={{ left: p.x, top: p.y, height: p.h, '--c': p.color }}
           >
             <div class={`kr-place${p.place === 1 ? ' first' : ''}`}>{p.place > 0 ? p.place : '-'}</div>
-            <Avatar fruit={p.fruit} ring={p.color} size={small ? Math.max(26, p.h - 10) : 40} />
+            <Avatar look={p.look} ring={p.color} size={small ? Math.max(26, p.h - 10) : 40} />
             <div class="kr-plate-name">{p.connected ? p.name : STR.disconnected}</div>
             {p.stumble ? (
               <div class="kr-tag bad">!</div>
@@ -301,7 +301,7 @@ function OverlayView({ hud }: { hud: Hud }) {
             {o.players.length > 0 && (
               <div class="kr-avatars">
                 {o.players.map((p) => (
-                  <Avatar key={p.id} fruit={p.fruit} ring={p.color} size={64} />
+                  <Avatar key={p.id} look={p.look} ring={p.color} size={64} />
                 ))}
               </div>
             )}
@@ -335,7 +335,7 @@ function OverlayView({ hud }: { hud: Hud }) {
         <div class="kr-overlay kr-high">
           {o.photo && <div class="kr-photo">{STR.photoFinish}</div>}
           <div class="kr-banner-row">
-            {o.fruit && <Avatar fruit={o.fruit} ring={o.color} size={92} class="kr-pop" />}
+            {o.look && <Avatar look={o.look} ring={o.color} size={92} class="kr-pop" />}
             <div class="display outline-text kr-banner">{o.title}</div>
           </div>
           <div class="kr-pill">{o.sub}</div>
@@ -350,7 +350,7 @@ function OverlayView({ hud }: { hud: Hud }) {
               {o.rows.map((r, i) => (
                 <div key={r.id} class="kr-row" style={{ animationDelay: `${i * 0.05}s` }}>
                   <div class={`kr-rank${r.rank === 1 ? ' first' : ''}`}>{r.rank}</div>
-                  <Avatar fruit={r.fruit} ring={r.color} size={o.rows.length > 6 ? 36 : 44} />
+                  <Avatar look={r.look} ring={r.color} size={o.rows.length > 6 ? 36 : 44} />
                   <div class="kr-row-name">{r.name}</div>
                   <div class="kr-row-race">
                     {r.racePlace !== null ? STR.boardPlace(r.racePlace) : ''}
@@ -375,7 +375,7 @@ function OverlayView({ hud }: { hud: Hud }) {
           <div class="kr-pill">{o.sub}</div>
           <div class="kr-avatars" style={{ marginTop: 6 }}>
             {o.winners.map((w) => (
-              <Avatar key={w.id} fruit={w.fruit} ring={w.color} size={96} />
+              <Avatar key={w.id} look={w.look} ring={w.color} size={96} />
             ))}
           </div>
         </div>

@@ -26,6 +26,11 @@ export const config = {
   hostSysPath: process.env.HOST_SYS_PATH || '/host/sys',
   /** Network card to measure; empty picks the busiest one that is not loopback or Docker's. */
   netIface: process.env.NET_IFACE || undefined,
+  /**
+   * "Mode uji coba: semua terbuka" until the owner saves settings in the dashboard (OPEN_ALL=1):
+   * test servers (e2e) and a fresh trial install start with everything open.
+   */
+  openAllDefault: process.env.OPEN_ALL === '1',
   /** Testing only: delay every client message by this many ms to mimic a far-away server. */
   relayDelayMs: Math.max(0, intEnv('RELAY_DELAY_MS', 0)),
 };

@@ -1,4 +1,4 @@
-import { FRUITS } from '@hoorah/protocol';
+import { FRUITS, lookAt, lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { rng, v3 } from '../../shared/kotak/math';
 import { ARENAS, buildArena, isArenaId } from './arena';
@@ -8,7 +8,13 @@ import { type BomEvent, BomMatch, RULES, type RunnerInfo } from './logic';
 const STEP = 1 / 60;
 
 const people = (n: number): RunnerInfo[] =>
-  FRUITS.slice(0, n).map((fruit, i) => ({ id: i + 1, name: `P${i + 1}`, fruit, color: '#2F8CFF' }));
+  FRUITS.slice(0, n).map((fruit, i) => ({
+    id: i + 1,
+    name: `P${i + 1}`,
+    fruit,
+    look: lookOfFruit(fruit),
+    color: '#2F8CFF',
+  }));
 
 function run(m: BomMatch, seconds: number, each?: () => void): BomEvent[] {
   const out: BomEvent[] = [];
@@ -53,6 +59,14 @@ describe('Bom Oper arenas', () => {
 });
 
 describe('Bom Oper match', () => {
+  it('carries each runner look and restyles it', () => {
+    const m = new BomMatch({ runners: people(2), arena: 'halaman', rounds: 5, seed: 1 });
+    expect(m.runner(1)!.look).toEqual(lookOfFruit(FRUITS[0]!));
+    m.restyle(1, { look: lookAt(5) });
+    expect(m.runner(1)!.look).toEqual(lookAt(5));
+    expect(m.runner(2)!.look).toEqual(lookOfFruit(FRUITS[1]!));
+  });
+
   it('drops the bomb on someone, lights a secret fuse and blows up the holder', () => {
     const m = new BomMatch({ runners: people(3), arena: 'halaman', rounds: 5, seed: 1 });
     const ev = toPlay(m);

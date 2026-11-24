@@ -1,76 +1,357 @@
-/* Mode Pesta table on the results page: one strip above the buttons (1280×720 stage). */
+/* Mode Pesta screen between games (PartyPage.tsx), on the 1280×720 stage. One centred column, so
+   16:10 and 4:3 (taller stages) only add air above and below. */
 
-.party-table {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 128px;
-  width: fit-content;
-  margin: 0 auto;
+.party-page {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  max-width: 1180px;
-  animation: rise-in 0.5s var(--ease-out) both;
+  justify-content: center;
+  gap: 26px;
+  padding: 28px 48px;
+  background: var(--ink);
 }
 
-.party-table-head {
+.party-head {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.party-eyebrow {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--yellow);
+}
+
+.party-title {
+  margin: 0;
+  font-size: 52px;
+  line-height: 1.05;
+  color: #fff;
+  text-shadow: 0 3px 0 #000;
+}
+
+.party-sub {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text-2);
+}
+
+.party-overtake {
+  margin-top: 4px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--yellow);
+  animation: pop-in 0.4s var(--ease-pop) 0.5s both;
+}
+
+/* ------------------------------------------------------------ lineup slots */
+
+.party-slots {
+  display: flex;
+  gap: 24px;
+}
+
+.party-slot {
+  width: 196px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.party-slot-art {
+  position: relative;
+  width: 196px;
+  height: 110px;
+  border-radius: 14px;
+  transition:
+    transform 0.25s var(--ease-pop),
+    box-shadow 0.25s ease,
+    opacity 0.25s ease;
+}
+
+.party-slot-blank {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font-size: 54px;
+  color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.party-slot.is-final .party-slot-blank {
+  background: var(--yellow);
+}
+
+.party-slot.is-done .party-slot-art {
+  opacity: 0.45;
+}
+
+.party-slot-check {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: #fff;
+}
+
+/* The slot being drawn: a full ring, bigger once the game is known. */
+.party-slot.is-here .party-slot-art {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 6px var(--orange);
+}
+
+.party-slot.is-ready .party-slot-art {
+  transform: scale(1.08);
+  box-shadow:
+    0 0 0 3px var(--ink),
+    0 0 0 6px #fff,
+    0 18px 30px rgba(0, 0, 0, 0.5);
+  animation: party-land 0.45s var(--ease-pop);
+}
+
+@keyframes party-land {
+  0% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1.08);
+  }
+}
+
+.party-slot-label {
+  margin-top: 12px;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
   color: var(--text-3);
-  white-space: nowrap;
 }
 
-.party-champion {
-  font-family: var(--font-display);
-  font-size: 26px;
-  letter-spacing: 0;
+.party-slot.is-final .party-slot-label {
   color: var(--yellow);
 }
 
-.party-table-rows {
+.party-slot-title {
+  min-height: 22px;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-slot.is-done .party-slot-title {
+  color: var(--text-3);
+}
+
+/* ------------------------------------------------------------ players and table */
+
+.party-lineup {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 1100px;
+}
+
+.party-lineup-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 4px 4px;
+  border-radius: 999px;
+  font-size: 15px;
+  background: rgba(255, 255, 255, 0.08);
+  animation: rise-in 0.4s var(--ease-out) both;
+}
+
+.party-lineup-chip span {
+  color: var(--text-3);
+}
+
+.party-board {
+  display: grid;
+  grid-template-columns: 560px;
+  gap: 8px;
+}
+
+.party-board.two-cols {
+  grid-template-columns: repeat(2, 520px);
+  column-gap: 20px;
+}
+
+.party-board-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 14px 0 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  animation: rise-in 0.4s var(--ease-out) both;
+}
+
+.party-board-row.is-top {
+  background: rgba(255, 201, 40, 0.16);
+}
+
+.party-board-rank {
+  width: 22px;
+  text-align: center;
+  font-size: 17px;
+}
+
+.party-board-name {
+  width: 120px;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-board-bar {
+  flex: 1;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.party-board-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.8s var(--ease-out);
+}
+
+.party-board-gain {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--green, #22b35e);
+}
+
+.party-board-points {
+  min-width: 30px;
+  text-align: right;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+/* ------------------------------------------------------------ footer */
+
+.party-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.party-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.party-play {
+  font-size: 17px;
+  padding: 10px 20px 10px 12px;
+}
+
+.party-count {
+  position: relative;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+}
+
+.party-count span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.party-hint {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+/* ------------------------------------------------------------ champion */
+
+.party-podium {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+}
+
+.party-podium-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: rise-in 0.5s var(--ease-out) both;
+}
+
+.party-podium-name {
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.party-podium-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 160px;
+  height: 90px;
+  border-radius: 14px 14px 0 0;
+  color: var(--ink);
+  font-weight: 800;
+  background: #5aa9ff;
+}
+
+.party-podium-block b {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.party-podium-col.is-first .party-podium-block {
+  width: 190px;
+  height: 140px;
+  background: var(--orange);
+}
+
+.party-podium-col:last-child:not(.is-first) .party-podium-block {
+  height: 70px;
+  background: var(--yellow);
+}
+
+.party-rest {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-}
-
-.party-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 14px 4px 10px;
-  border-radius: 999px;
-  font-size: 14px;
-  white-space: nowrap;
-  background: rgba(30, 31, 35, 0.92);
-}
-
-.party-row.top {
-  color: var(--ink);
-  background: var(--yellow);
-}
-
-.party-name {
-  font-weight: 800;
-}
-
-.party-points {
-  font-weight: 700;
-  opacity: 0.8;
-}
-
-/* The final: the table is the news, so it moves up a little and grows. */
-.party-table.is-final {
-  bottom: 136px;
-}
-
-.party-table.is-final .party-row {
-  font-size: 16px;
-  padding: 6px 16px 6px 10px;
 }

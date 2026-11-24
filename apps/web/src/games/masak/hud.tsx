@@ -3,7 +3,7 @@
  * values (timer ring, progress bars, hold needles) are written straight to the DOM so nothing
  * re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import type { Face } from '../../shared/art/fruits';
@@ -16,7 +16,7 @@ import { STR } from './strings';
 export interface HudPlayer {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
   score: number;
@@ -297,7 +297,7 @@ function Station({
       )}
       {!s.connected && <div class="mk-off">{STR.offline}</div>}
       <div class="mk-plate">
-        <Avatar fruit={s.fruit} ring={s.color} size={density === 'compact' ? 30 : 40} face={face} />
+        <Avatar look={s.look} ring={s.color} size={density === 'compact' ? 30 : 40} face={face} />
         <div class="mk-plate-main">
           <div class="mk-plate-row">
             <span class="mk-name">{s.name}</span>
@@ -405,7 +405,7 @@ function IntroPanel({ m }: { m: HudModel }) {
         <div class="mk-intro-foot">
           {m.players.map((p) => (
             <span key={p.id} class={`mk-chip ${p.connected ? '' : 'is-off'}`}>
-              <Avatar fruit={p.fruit} ring={p.color} size={26} />
+              <Avatar look={p.look} ring={p.color} size={26} />
               {p.name}
             </span>
           ))}
@@ -439,7 +439,7 @@ function FinalPanel({ m }: { m: HudModel }) {
               style={{ animationDelay: `${0.2 + i * 0.1}s` }}
             >
               {!f.solo && <span class="mk-final-rank display">{r.rank}</span>}
-              <Avatar fruit={r.fruit} ring={r.color} size={34} face={r.rank === 1 ? 'wow' : 'happy'} />
+              <Avatar look={r.look} ring={r.color} size={34} face={r.rank === 1 ? 'wow' : 'happy'} />
               <span class="mk-final-name">{r.name}</span>
               <span class="mk-final-stars">
                 <Icon name="star" size={16} color="#FFC928" />

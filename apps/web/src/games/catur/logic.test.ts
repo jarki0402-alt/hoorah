@@ -1,3 +1,4 @@
+import { lookAt } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import {
   type CaturEvent,
@@ -9,6 +10,7 @@ import {
   VOTE_MS,
   VOTE_SETTLE_MS,
 } from './logic';
+import { boardView } from './views';
 
 const T0 = 1_000_000;
 
@@ -374,6 +376,17 @@ describe('computer seats', () => {
     const late = d.m.autoMove('e7e5', [d.black], d.t + 2000 + 61_000);
     expect(types(late)).toEqual(['over']);
     expect(d.m.outcome).toEqual({ winner: 'w', reason: 'timeout' });
+  });
+
+  it('the board view tells phones how a computer opponent looks', () => {
+    const d = duel();
+    const look = lookAt(3);
+    const view = boardView(d.m, 1, (id) => `P${id}`, [
+      { id: 2, name: 'Komputer', fruit: 'mangga', look, color: '#2F8CFF' },
+    ]);
+    expect('guests' in view && view.guests).toEqual([
+      { id: 2, name: 'Komputer', fruit: 'mangga', look, color: '#2F8CFF' },
+    ]);
   });
 
   it('counts repeated positions', () => {

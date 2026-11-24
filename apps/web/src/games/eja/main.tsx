@@ -5,15 +5,16 @@
  */
 import type { ControllerToGame } from '@hoorah/protocol';
 import { connect, type HoorahGame, type MusicIntensity } from '@hoorah/sdk';
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { render } from 'preact';
 import { celebrate } from '../../shared/confetti';
 import { submitRecord } from '../common/records';
 import { fontsReady, mountStage } from '../common/stage';
 import { loadJson, saveJson } from '../common/store';
 import { DEFAULT_WORDS, type EjaEvent, EjaMatch, type Phase } from './logic';
+import { applyMirror, type EjaMirror, MirrorScene, toMirror } from './mirror';
 import { buildResult } from './results';
-import { EjaScreen, type FinalRecord, FrameBus, type ScreenModel } from './screen';
+import { EjaScreen, type FinalRecord, FrameBus, type ScreenModel, type SeatInfo } from './screen';
 import { Speaker } from './speech';
 import { STR } from './strings';
 import { viewFor } from './views';
@@ -52,6 +53,8 @@ class EjaDriver implements ScreenModel {
   readonly hint = signal(false);
   readonly speaking = signal(false);
   readonly record = signal<FinalRecord | null>(null);
+  /** Times the word was read aloud: far-away screens read it with their own voice too. */
+  readonly reads = signal(0);
   private readonly sent = new Map<number, string>();
   private readonly speaker = new Speaker();
   private shellPaused: boolean;
@@ -107,6 +110,7 @@ class EjaDriver implements ScreenModel {
   private read(): void {
     const word = this.match.word;
     if (!word) return;
+    this.reads.value++;
     const id = ++this.readId;
     if (!this.speaker.hasVoice(this.match.lang)) {
       this.hint.value = true;
@@ -348,6 +352,10 @@ async function boot(): Promise<void> {
   }
   const { stage } = mountStage(root);
   await fontsReady();
+  if (game.isMirror) {
+    bootMirror(game, stage);
+    return;
+  }
   const recent = loadRecent();
   const match = new EjaMatch({
     words: wordsFrom(game.settings),
@@ -370,6 +378,156 @@ async function boot(): Promise<void> {
   game.music('eja');
   driver.start();
   window.setInterval(() => driver.refresh(), 500);
+  publishMirror(game, driver);
+}
+
+/** Host's screen: send the display state to far-away screens on every page change. */
+function publishMirror(game: HoorahGame, driver: EjaDriver): void {
+  const send = () => {
+    if (!game.mirrored) return;
+    game.publish(
+      toMirror({
+        scene: driver.match,
+        now: game.now(),
+        held: driver.match.held,
+        reads: driver.reads.peek(),
+        hostId: driver.hostId(),
+        record: driver.record.peek(),
+        info: driver.info,
+      }),
+    );
+  };
+  effect(() => {
+    void driver.version.value;
+    void driver.reads.value;
+    void driver.record.value;
+    send();
+  });
+  game.on('mirrors', (on) => {
+    if (on) send();
+  });
+}
+
+/**
+ * Far-away screen: the page model fed by the Host's published states. No rules and no phones;
+ * the word is read aloud here with this device's own voice whenever the Host's screen reads it.
+ */
+class MirrorModel implements ScreenModel {
+  readonly version = signal(0);
+  readonly frame = new FrameBus();
+  readonly hint = signal(false);
+  readonly speaking = signal(false);
+  readonly record = signal<FinalRecord | null>(null);
+  private readonly speaker = new Speaker();
+  private readId = 0;
+
+  constructor(readonly match: MirrorScene) {
+    this.record.value = match.mirror.rec;
+    this.hint.value = this.needsHint();
+  }
+
+  hostId = (): number | null => this.match.mirror.host;
+  info = (id: number): SeatInfo | undefined => this.match.info(id);
+
+  /** The screen's own "Dengar lagi" button: read it here only. */
+  replay = (): void => {
+    if (this.match.phase === 'intro' || this.match.phase === 'spell') this.read();
+  };
+
+  private needsHint(): boolean {
+    const phase = this.match.phase;
+    return (phase === 'intro' || phase === 'spell') && !this.speaker.hasVoice(this.match.lang);
+  }
+
+  private read(): void {
+    const word = this.match.word;
+    if (!word) return;
+    const id = ++this.readId;
+    if (!this.speaker.hasVoice(this.match.lang)) {
+      this.hint.value = true;
+      return;
+    }
+    this.speaking.value = true;
+    void this.speaker.speak(word.word, this.match.lang).then((ok) => {
+      if (id !== this.readId) return;
+      if (!ok) this.hint.value = true;
+      window.setTimeout(
+        () => {
+          if (id === this.readId) this.speaking.value = false;
+        },
+        ok ? 1_400 : 0,
+      );
+    });
+  }
+
+  private silence(): void {
+    this.speaker.stop();
+    this.readId++;
+    this.speaking.value = false;
+  }
+
+  apply(next: EjaMirror): void {
+    const prev = this.match.mirror;
+    this.match.set(next);
+    this.record.value = next.rec;
+    const newWord = prev.i !== next.i || prev.ph !== next.ph;
+    if (newWord && next.ph === 'intro') this.hint.value = this.needsHint();
+    if (prev.ph !== next.ph) this.onPhase(next);
+    // Read after the page shows the new word, the same moments as on the Host's screen.
+    if (next.reads > prev.reads && (next.ph === 'intro' || next.ph === 'spell')) this.read();
+    this.version.value++;
+  }
+
+  private onPhase(next: EjaMirror): void {
+    if (next.ph === 'reveal') {
+      this.silence();
+      const table = next.se.filter((s) => s.iw);
+      const right = table.filter((s) => s.vd === 'correct').length;
+      if (right === table.length && right > 0) window.setTimeout(celebrate, VERDICT_MS);
+    } else if (next.ph === 'final') {
+      this.silence();
+      window.setTimeout(celebrate, 300);
+    } else if (next.ph === 'ended') {
+      this.silence();
+    }
+  }
+
+  pause(paused: boolean): void {
+    this.match.setLocalPause(paused);
+    if (paused) this.silence();
+  }
+}
+
+function bootMirror(game: HoorahGame, stage: HTMLElement): void {
+  let model: MirrorModel | null = null;
+  game.on('mirror', (raw) => {
+    const state = applyMirror(raw);
+    if (!state) return;
+    if (model) {
+      model.apply(state);
+      return;
+    }
+    const scene = new MirrorScene(state, () => game.now());
+    const created = new MirrorModel(scene);
+    model = created;
+    if (game.paused) created.pause(true);
+    game.on('pause', (paused) => created.pause(paused));
+    render(<EjaScreen model={created} />, stage);
+    const loop = () => {
+      created.frame.emit();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+    window.setInterval(() => created.frame.emit(), FALLBACK_TICK_MS);
+  });
+  // Blank paper until the Host's first state arrives.
+  render(
+    <div class="ej-root is-setup">
+      <div class="ej-paper" aria-hidden="true" />
+    </div>,
+    stage,
+  );
+  game.ready();
 }
 
 void boot();

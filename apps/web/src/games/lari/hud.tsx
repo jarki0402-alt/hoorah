@@ -4,7 +4,7 @@
  * through signals a few times per second; the name tags move every frame through direct style
  * writes (`HudStore.placeTag`), so nothing re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { Avatar, Icon, type IconName } from '../../shared/ui';
 import type { Mode } from './logic';
@@ -16,6 +16,7 @@ export interface RunnerCard {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -168,6 +169,7 @@ function Board({ store }: { store: HudStore }) {
           >
             <span class="lr-row-rank">{r.rank}</span>
             <Avatar
+              look={c.look}
               fruit={c.fruit}
               ring={c.color}
               size={compact ? 28 : 34}
@@ -305,7 +307,13 @@ export function Hud({ store }: { store: HudStore }) {
               return (
                 <div class={`lr-finish-row rank-${r.rank}`} key={r.id} style={{ '--c': c.color }}>
                   <span class="lr-finish-rank display">{r.rank}</span>
-                  <Avatar fruit={c.fruit} ring={c.color} size={44} face={r.rank === 1 ? 'happy' : 'effort'} />
+                  <Avatar
+                    look={c.look}
+                    fruit={c.fruit}
+                    ring={c.color}
+                    size={44}
+                    face={r.rank === 1 ? 'happy' : 'effort'}
+                  />
                   <span class="lr-finish-name">{c.name}</span>
                   <span class="lr-finish-value">{r.value}</span>
                 </div>

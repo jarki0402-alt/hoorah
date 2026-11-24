@@ -97,5 +97,5 @@ export const STR = {
   awardHelper: 'Pemain Setia',
   awardHelperDesc: (n: number) => `Memilih ${n} lubang`,
 
-  noShell: 'Buka Congklak dari aplikasi Hoorah di layar utama.',
+  noShell: 'Buka Congklak dari aplikasi Kacawbalaw di layar utama.',
 } as const;

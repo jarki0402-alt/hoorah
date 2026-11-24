@@ -5,7 +5,7 @@
  * the goal and the colour legend, stage clear with stars). State arrives through a signal at
  * ~10 Hz; floating texts are short-lived elements.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
 import { THUMBS } from '../../controller/thumbs/warna';
@@ -23,7 +23,7 @@ export interface ColorChip {
 
 export interface LegendRow {
   slot: Slot;
-  people: { name: string; fruit: Fruit; color: string }[];
+  people: { name: string; look: Look; color: string }[];
 }
 
 export interface StarLine {
@@ -36,6 +36,8 @@ export interface WorldCard {
   name: string;
   sub: string;
   ready: boolean;
+  /** Behind Hoorah Pass on a free main screen. */
+  pass: boolean;
   got: number;
   of: number;
 }
@@ -47,11 +49,13 @@ export interface JourneyNode {
   stars: number;
   done: boolean;
   open: boolean;
+  /** Behind Hoorah Pass on a free main screen. */
+  pass: boolean;
 }
 
 export type Overlay =
   | { kind: 'none' }
-  | { kind: 'worlds'; selected: BiomeId; worlds: WorldCard[]; host: string; stages: number }
+  | { kind: 'worlds'; selected: BiomeId; worlds: WorldCard[]; host: string }
   | { kind: 'journey'; world: BiomeId; title: string; selected: string; nodes: JourneyNode[]; host: string }
   | {
       kind: 'intro';
@@ -140,7 +144,7 @@ function Journey({ o }: { o: Extract<Overlay, { kind: 'journey' }> }) {
         return (
           <g
             key={n.id}
-            class={`wa-node ${n.done ? 'done' : ''} ${n.open ? 'open' : 'locked'} ${on ? 'on' : ''}`}
+            class={`wa-node ${n.done ? 'done' : ''} ${n.open ? 'open' : 'locked'} ${n.pass ? 'pass' : ''} ${on ? 'on' : ''}`}
           >
             {on && <circle cx={p.x} cy={p.y} r={34} class="wa-node-ring" />}
             <circle cx={p.x} cy={p.y} r={24} class="wa-node-disc" />
@@ -153,6 +157,14 @@ function Journey({ o }: { o: Extract<Overlay, { kind: 'journey' }> }) {
                 class="wa-node-lock"
                 d={`M${p.x - 8} ${p.y - 1}h16v12h-16Z M${p.x - 5} ${p.y - 1}v-4a5 5 0 0 1 10 0v4`}
               />
+            )}
+            {n.pass && (
+              <g class="wa-node-pass">
+                <rect x={p.x - 26} y={p.y - 50} width={52} height={20} rx={6} />
+                <text x={p.x} y={p.y - 35}>
+                  {STR.passBadge}
+                </text>
+              </g>
             )}
             {n.done && (
               <text x={p.x} y={p.y + 46} class="wa-node-stars">
@@ -190,16 +202,20 @@ function OverlayView({ o }: { o: Overlay }) {
         <div class="wa-pick-head">
           <div class="wa-eyebrow">{STR.pickEyebrow}</div>
           <h1 class="wa-pick-title">{STR.screenPickTitle}</h1>
-          <div class="wa-pick-sub">{STR.pickHint(o.stages)}</div>
+          <div class="wa-pick-sub">{STR.pickHint}</div>
         </div>
         <div class="wa-worlds">
           {o.worlds.map((w) => (
-            <div key={w.id} class={`wa-wcard ${o.selected === w.id ? 'on' : ''} ${w.ready ? '' : 'soon'}`}>
+            <div
+              key={w.id}
+              class={`wa-wcard ${o.selected === w.id ? 'on' : ''} ${w.ready && !w.pass ? '' : 'soon'}`}
+            >
               <Thumb thumb={`biome-${w.id}`} />
+              {w.pass && <span class="wa-wcard-pass">{STR.passBadge}</span>}
               <div class="wa-wcard-text">
                 <span class="wa-wcard-name">{w.name}</span>
                 <span class="wa-wcard-sub">{w.sub}</span>
-                {w.ready && (
+                {w.ready && !w.pass && (
                   <span class="wa-wcard-stars">
                     ★ {w.got}/{w.of}
                   </span>
@@ -246,7 +262,7 @@ function OverlayView({ o }: { o: Overlay }) {
                 <span class="wa-legend-people">
                   {row.people.map((p) => (
                     <span key={p.name} class="wa-legend-person">
-                      <Avatar fruit={p.fruit} ring={p.color} size={28} />
+                      <Avatar look={p.look} ring={p.color} size={28} />
                       {p.name}
                     </span>
                   ))}

@@ -15,6 +15,9 @@ const LOCAL_ICONS = {
   ticket:
     'M3 8 a2 2 0 0 0 0 4 a2 2 0 0 1 0 4 V18 H21 V16 a2 2 0 0 1 0 -4 a2 2 0 0 0 0 -4 V6 H3 Z M14 6 V8 M14 11 V13 M14 16 V18',
   minus: 'M5 12 H19',
+  download: 'M12 4 V15 M7.5 10.5 L12 15 L16.5 10.5 M5 19.5 H19',
+  chat: 'M4 5 H20 V16 H10 L5.5 20 V16 H4 Z M8 9.5 H16 M8 12.5 H13',
+  alert: 'M12 3.5 L21.5 20 H2.5 Z M12 10 V14 M12 17 V17.01',
 } as const;
 
 export type AdminIconName = keyof typeof LOCAL_ICONS | IconName;
@@ -272,9 +275,23 @@ interface StepperProps {
   max: number;
   onChange: (value: number) => void;
   help?: string;
+  /** Screen reader names of the minus and plus buttons (default: players). */
+  lessLabel?: string;
+  moreLabel?: string;
+  disabled?: boolean;
 }
 
-export function Stepper({ label, value, min, max, onChange, help }: StepperProps) {
+export function Stepper({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+  help,
+  lessLabel = STR.fewerPlayers,
+  moreLabel = STR.morePlayers,
+  disabled = false,
+}: StepperProps) {
   const id = useId();
   const helpId = useId();
   const clamp = (n: number) => Math.min(max, Math.max(min, Math.round(n)));
@@ -291,9 +308,9 @@ export function Stepper({ label, value, min, max, onChange, help }: StepperProps
         <button
           type="button"
           class="ad-step"
-          aria-label={STR.fewerPlayers}
+          aria-label={lessLabel}
           aria-controls={id}
-          disabled={value <= min}
+          disabled={disabled || value <= min}
           onClick={() => onChange(clamp(value - 1))}
         >
           <AdminIcon name="minus" size={20} />
@@ -307,6 +324,7 @@ export function Stepper({ label, value, min, max, onChange, help }: StepperProps
           max={max}
           step={1}
           value={value}
+          disabled={disabled}
           aria-describedby={help ? helpId : undefined}
           onChange={onInput}
           onBlur={(e) => {
@@ -316,9 +334,9 @@ export function Stepper({ label, value, min, max, onChange, help }: StepperProps
         <button
           type="button"
           class="ad-step"
-          aria-label={STR.morePlayers}
+          aria-label={moreLabel}
           aria-controls={id}
-          disabled={value >= max}
+          disabled={disabled || value >= max}
           onClick={() => onChange(clamp(value + 1))}
         >
           <AdminIcon name="plus" size={20} />
@@ -329,6 +347,52 @@ export function Stepper({ label, value, min, max, onChange, help }: StepperProps
           {help}
         </p>
       )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Switch */
+
+interface SwitchProps {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  help?: string;
+  disabled?: boolean;
+}
+
+/** An on/off setting: a native checkbox with the switch role, drawn as a pill that fills when on. */
+export function Switch({ label, checked, onChange, help, disabled = false }: SwitchProps) {
+  const id = useId();
+  const helpId = useId();
+  return (
+    <div class={`ad-switch-row${checked ? ' is-on' : ''}`}>
+      <div class="ad-switch-text">
+        <label class="ad-switch-label" for={id}>
+          {label}
+        </label>
+        {help && (
+          <p id={helpId} class="ad-help">
+            {help}
+          </p>
+        )}
+      </div>
+      <span class="ad-switch">
+        <input
+          id={id}
+          type="checkbox"
+          role="switch"
+          aria-checked={checked}
+          class="ad-switch-input"
+          checked={checked}
+          disabled={disabled}
+          aria-describedby={help ? helpId : undefined}
+          onChange={(e) => onChange(e.currentTarget.checked)}
+        />
+        <span class="ad-switch-track" aria-hidden="true">
+          <span class="ad-switch-thumb" />
+        </span>
+      </span>
     </div>
   );
 }

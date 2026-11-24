@@ -4,7 +4,7 @@
  * pop-ups are written straight to pooled elements so Preact never re-renders at 60 fps.
  * Everything is laid out in world coordinates (1280x720) inside a root shifted by `origin`.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
 import { Avatar, Icon } from '../../shared/ui';
@@ -14,7 +14,7 @@ import { STR } from './strings';
 export interface BoardRow {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   /** Formatted share, e.g. "18,4". */
   pct: string;
@@ -34,7 +34,7 @@ export interface BoardRow {
 
 export interface Winner {
   id: number;
-  fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -207,7 +207,7 @@ function Board({ hud }: { hud: Hud }) {
             style={{ transform: `translateY(${r.order * ROW_H}px)`, '--c': r.color }}
           >
             <div class="wl-rank display">{r.rank}</div>
-            <Avatar fruit={r.fruit} ring={r.color} size={38} face={r.alive ? 'happy' : 'sad'} dim={r.away} />
+            <Avatar look={r.look} ring={r.color} size={38} face={r.alive ? 'happy' : 'sad'} dim={r.away} />
             <div class="wl-row-main">
               <div class="wl-row-name">{r.name}</div>
               <div class="wl-row-sub">
@@ -295,7 +295,7 @@ function OverlayView({ hud }: { hud: Hud }) {
             {o.winners.length > 0 && (
               <div class="wl-winners">
                 {o.winners.map((w) => (
-                  <Avatar key={w.id} fruit={w.fruit} ring={w.color} size={104} />
+                  <Avatar key={w.id} look={w.look} ring={w.color} size={104} />
                 ))}
               </div>
             )}

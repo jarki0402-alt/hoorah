@@ -4,8 +4,9 @@
  * in logic.ts and lanes.ts. Everything is pooled: lane strips, vehicles, props and effects are
  * reused every frame, and hot paths never allocate.
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Look, lookOfFruit, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
+import type { Face } from '../../shared/art/fruits';
 import {
   COLS,
   type ItemPos,
@@ -19,7 +20,7 @@ import {
   X_MIN,
 } from './lanes';
 import type { NyebrangMatch, Runner } from './logic';
-import { buildTextures, CELL, fruitKey, laneKey, propKey, textureFor } from './textures';
+import { AvatarBank, buildTextures, CELL, laneKey, propKey, textureFor } from './textures';
 
 const colorNumber = (hex: string): number => Number.parseInt(hex.replace('#', ''), 16) || 0xffc928;
 
@@ -34,8 +35,9 @@ const OUTSIDE_ALPHA = 0.32;
 interface RunnerView {
   shadow: Phaser.GameObjects.Image;
   ring: Phaser.GameObjects.Image;
-  fruit: Phaser.GameObjects.Image;
-  fruitName: Fruit;
+  avatar: Phaser.GameObjects.Image;
+  look: Look;
+  face: Face;
   landAt: number;
   respawnAt: number;
   flip: boolean;
@@ -47,9 +49,12 @@ interface LaneSlot {
 }
 
 export interface RunnerLook {
-  fruit: Fruit;
+  look: Look;
   color: string;
 }
+
+/** Shown for a runner whose player info is not known yet. */
+const FALLBACK_LOOK: Look = lookOfFruit('jeruk');
 
 const height = (k: LaneKind): number => (isLand(k) ? 2 : k === 'river' ? 0 : 1);
 
@@ -65,7 +70,7 @@ export class NyebrangScene extends Phaser.Scene {
   onFrame: ((deltaMs: number) => void) | null = null;
   readonly ready: Promise<void>;
   private resolveReady!: () => void;
-  private readonly fruits: Map<string, HTMLImageElement>;
+  private avatars!: AvatarBank;
   private model: NyebrangMatch | null = null;
   private looks = new Map<number, RunnerLook>();
   private stageW = 1280;
@@ -93,16 +98,16 @@ export class NyebrangScene extends Phaser.Scene {
   private camRow = 0;
   private hornFlash = { row: -1, until: 0 };
 
-  constructor(fruits: Map<string, HTMLImageElement>) {
+  constructor() {
     super({ key: 'nyebrang' });
-    this.fruits = fruits;
     this.ready = new Promise((resolve) => {
       this.resolveReady = resolve;
     });
   }
 
   create(): void {
-    buildTextures(this.textures, this.fruits);
+    buildTextures(this.textures);
+    this.avatars = new AvatarBank(this.textures, (look) => this.avatarsReady(look));
     const cam = this.cameras.main;
     cam.setRoundPixels(true);
     this.sideL = this.add.rectangle(0, 0, 10, 10, 0x0a0f1e, OUTSIDE_ALPHA).setOrigin(1, 0).setDepth(9000);
@@ -441,8 +446,11 @@ export class NyebrangScene extends Phaser.Scene {
       v = {
         shadow: this.add.image(0, 0, 'ny-shadow').setOrigin(0.5, 0.5),
         ring: this.add.image(0, 0, 'ny-ring').setOrigin(0.5, 0.5),
-        fruit: this.add.image(0, 0, fruitKey(look?.fruit ?? 'jeruk', 'happy')).setOrigin(0.5, 1),
-        fruitName: look?.fruit ?? 'jeruk',
+        avatar: this.add
+          .image(0, 0, this.avatars.key(look?.look ?? FALLBACK_LOOK, 'happy'))
+          .setOrigin(0.5, 1),
+        look: look?.look ?? FALLBACK_LOOK,
+        face: 'happy',
         landAt: 0,
         respawnAt: 0,
         flip: false,
@@ -453,6 +461,13 @@ export class NyebrangScene extends Phaser.Scene {
     return v;
   }
 
+  /** A look's avatars finished rasterizing: swap them in for its runners. */
+  private avatarsReady(look: Look): void {
+    for (const v of this.runners.values()) {
+      if (sameLook(v.look, look)) v.avatar.setTexture(this.avatars.key(v.look, v.face));
+    }
+  }
+
   private drawRunners(m: NyebrangMatch): void {
     const now = this.time.now;
     const seen = new Set<number>();
@@ -460,8 +475,8 @@ export class NyebrangScene extends Phaser.Scene {
       seen.add(r.id);
       const v = this.viewFor(r);
       const look = this.looks.get(r.id);
-      if (look && look.fruit !== v.fruitName) {
-        v.fruitName = look.fruit;
+      if (look && !sameLook(look.look, v.look)) {
+        v.look = look.look;
         v.ring.setTint(colorNumber(look.color));
       }
       const hidden =
@@ -471,7 +486,7 @@ export class NyebrangScene extends Phaser.Scene {
       if (hidden) {
         v.shadow.setVisible(false);
         v.ring.setVisible(false);
-        v.fruit.setVisible(false);
+        v.avatar.setVisible(false);
         continue;
       }
       const dying = r.state === 'dead' || r.state === 'out';
@@ -479,11 +494,12 @@ export class NyebrangScene extends Phaser.Scene {
       const wx = pose.x * CELL;
       const wy = -pose.row * CELL;
       if (r.hop) v.flip = r.hop.dir === 'left' ? true : r.hop.dir === 'right' ? false : v.flip;
-      let face: 'happy' | 'wow' | 'effort' | 'sad' = 'happy';
+      let face: Face = 'happy';
       if (r.hop) face = 'effort';
       if (r.state === 'done') face = 'wow';
       if (dying) face = 'sad';
-      v.fruit.setTexture(fruitKey(v.fruitName, face));
+      v.face = face;
+      v.avatar.setTexture(this.avatars.key(v.look, face));
       const since = (now - v.landAt) / 1000;
       const squash = !r.hop && since < 0.12 ? 1 - Math.sin((since / 0.12) * Math.PI) * 0.18 : 1;
       let sy = squash;
@@ -517,7 +533,7 @@ export class NyebrangScene extends Phaser.Scene {
         .setPosition(wx, wy + 5)
         .setDepth(depth - 0.2)
         .setAlpha(blink ? 0.3 : 0.9);
-      v.fruit
+      v.avatar
         .setVisible(true)
         .setPosition(wx, wy + 6 - lift + riverSink)
         .setScale(sx * (v.flip ? -1 : 1), sy)
@@ -528,7 +544,7 @@ export class NyebrangScene extends Phaser.Scene {
       if (seen.has(id)) continue;
       v.shadow.destroy();
       v.ring.destroy();
-      v.fruit.destroy();
+      v.avatar.destroy();
       this.runners.delete(id);
     }
   }

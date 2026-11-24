@@ -9,17 +9,25 @@
  *
  * Computer cooks (PRD 6.4): exactly one person gets one helper on Sisi Masak; it looks like a
  * normal player. A dropped phone's cook is kept working by the same brain until it reconnects.
+ *
+ * Practice (owner 2026-11-24): the first game on a main screen starts with a guided practice in
+ * the real kitchen (guide.ts) right after the countdown: an arrow over the next station, a step
+ * card on the screen, the button to press marked on the phones, no clock and no score. It ends
+ * after the last step (or Lewati on any phone, tapped twice) with the real countdown.
  */
 import {
   type ControllerToGame,
   FRUITS,
   type GuestPlayer,
   INPUT_OP,
+  lookOfFruit,
   PAD_ACTION,
+  PERSON_IDS,
   PLAYER_COLORS,
   type PlayerInfo,
   type RelayedInput,
   STICK_OP,
+  sameLook,
   unpackStick,
 } from '@hoorah/protocol';
 import type { GameAward, GameResult, HoorahGame } from '@hoorah/sdk';
@@ -30,7 +38,8 @@ import { loadJson, saveJson } from '../common/store';
 import { kitchenThumb } from './art';
 import { CookBrain, styleFor, TAKEOVER_STYLE } from './brain';
 import { GameClock } from './clock';
-import type { CookChip, Hud, Overlay, PlayState, ResultState, SetupState } from './hud';
+import { Guide } from './guide';
+import type { CookChip, GuideState, Hud, Overlay, PlayState, ResultState, SetupState } from './hud';
 import {
   DIFFICULTIES,
   type Difficulty,
@@ -47,7 +56,7 @@ import type { DapurScene } from './scene';
 import { Setup, type SetupAction } from './setup';
 import { formatClock, formatScore, STR } from './strings';
 import { loadBackdrop } from './textures';
-import { playViewFor, type RoundSummary, setupView } from './views';
+import { PAD_BUTTONS, playViewFor, type RoundSummary, setupView } from './views';
 
 const HUD_MS = 100;
 const VIEW_MS = 250;
@@ -68,6 +77,8 @@ interface LastChoice {
 
 const LAST_KEY = 'dapur.last';
 const BEST_KEY = 'dapur.best';
+/** Set once the practice ran (or was skipped) on this main screen. */
+const GUIDE_KEY = 'dapur.tutorialDone';
 
 function loadLast(): Partial<LastChoice> {
   const v = loadJson<Partial<LastChoice> | null>(LAST_KEY, null);
@@ -90,6 +101,8 @@ export class Director {
   private readonly setup: Setup;
   private match: DapurMatch | null = null;
   private stage: 'setup' | 'loading' | 'round' = 'setup';
+  /** The practice while it runs (first game on this main screen). */
+  private guide: Guide | null = null;
   /** The computer helper while exactly one person plays. */
   private cpus: PlayerInfo[] = [];
   private readonly online = new Set<number>();
@@ -196,14 +209,15 @@ export class Director {
         this.takeover.add(p.id);
         m.setPilot(p.id, new CookBrain(TAKEOVER_STYLE, c.side));
       }
-      if (c.name !== p.name || c.color !== p.color || c.fruit !== p.fruit) m.restyle(p.id, this.cookInfo(p));
+      if (c.name !== p.name || c.color !== p.color || c.fruit !== p.fruit || !sameLook(c.look, p.look))
+        m.restyle(p.id, this.cookInfo(p));
     }
     this.lastHud = Number.NEGATIVE_INFINITY;
     this.sendViews(true);
   }
 
   private cookInfo(p: PlayerInfo): CookInfo {
-    return { id: p.id, name: p.name, fruit: p.fruit, color: p.color };
+    return { id: p.id, name: p.name, fruit: p.fruit, look: p.look, color: p.color };
   }
 
   /** Setup: the helper exists only while exactly one person is here. */
@@ -216,22 +230,26 @@ export class Director {
     this.setup.sync([...humans.map((p) => p.id), ...this.cpus.map((c) => c.id)], humans.length);
   }
 
-  /** A newcomer may wear the helper's colour or fruit: the helper switches to a free one. */
+  /** A newcomer may wear the helper's colour, fruit or character: the helper switches to a free one. */
   private restyleCpus(): void {
     if (this.cpus.length === 0) return;
     const people = this.game.allPlayers.filter((p) => p.connected);
     const colors = new Set(people.map((p) => p.color.toUpperCase()));
     const fruits = new Set<string>(people.map((p) => p.fruit));
+    const cast = new Set<string>(people.map((p) => p.look.c));
     this.cpus = this.cpus.map((cpu) => {
       const clashColor = colors.has(cpu.color.toUpperCase());
       const clashFruit = fruits.has(cpu.fruit);
-      if (!clashColor && !clashFruit) return cpu;
+      const clashLook = cast.has(cpu.look.c);
+      if (!clashColor && !clashFruit && !clashLook) return cpu;
       const color = clashColor
         ? (PLAYER_COLORS.find((c) => !colors.has(c.toUpperCase())) ?? cpu.color)
         : cpu.color;
       const fruit = clashFruit ? (FRUITS.find((f) => !fruits.has(f)) ?? cpu.fruit) : cpu.fruit;
-      const next = { ...cpu, color, fruit };
-      this.match?.restyle(cpu.id, { color, fruit });
+      const free = PERSON_IDS.find((c) => !cast.has(c));
+      const look = clashLook && free ? { c: free } : cpu.look;
+      const next = { ...cpu, color, fruit, look };
+      this.match?.restyle(cpu.id, { color, fruit, look });
       return next;
     });
   }
@@ -259,6 +277,10 @@ export class Director {
     }
     const m = this.match;
     if (!m || this.stage !== 'round' || this.clock.paused) return;
+    if (a.id === 'skip') {
+      this.onSkip(m, from);
+      return;
+    }
     if (a.id === 'grab') m.grab(from);
     else if (a.id === 'throw') m.throwItem(from);
     // Answer at once so the carry chip and hint follow the tap.
@@ -288,7 +310,7 @@ export class Director {
 
   private chip(id: number): CookChip | null {
     const p = this.info(id);
-    return p ? { id, name: p.name, fruit: p.fruit, color: p.color } : null;
+    return p ? { id, name: p.name, fruit: p.fruit, look: p.look, color: p.color } : null;
   }
 
   private setupState(): SetupState {
@@ -330,7 +352,7 @@ export class Director {
   }
 
   private guests(): GuestPlayer[] {
-    return this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color }));
+    return this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color }));
   }
 
   private async beginRound(): Promise<void> {
@@ -349,15 +371,25 @@ export class Director {
         return p ? { ...this.cookInfo(p), side: s.sideOf(id), cpu: isCpu(id) } : null;
       })
       .filter((c): c is CookInfo & { side: Side; cpu: boolean } => c !== null);
+    try {
+      await this.scene.preloadHeads(cooks.map((c) => c.look));
+    } catch {
+      // Heads that failed show up blank; the round still plays.
+    }
+    const practice = !loadJson<boolean>(GUIDE_KEY, false);
     const m = new DapurMatch({
       kitchen: s.kitchen,
       difficulty: s.difficulty,
       cooks,
       now: this.clock.now(),
       seed: Math.floor(Math.random() * 0x7fffffff),
+      practice,
     });
+    this.guide = practice ? Guide.for(m) : null;
+    if (practice && !this.guide) m.endPractice(this.clock.now());
     for (const c of m.chefs) {
-      if (c.cpu) m.setPilot(c.id, new CookBrain(styleFor(this.skill), c.side));
+      // During the practice the helper waits until a step needs it (guideFrame).
+      if (c.cpu) m.setPilot(c.id, this.guide ? null : this.cpuBrain(c.side));
       else if (!this.game.player(c.id)?.connected) {
         this.takeover.add(c.id);
         m.setPilot(c.id, new CookBrain(TAKEOVER_STYLE, c.side));
@@ -371,6 +403,94 @@ export class Director {
     this.sendViews(true);
   }
 
+  private cpuBrain(side: Side): CookBrain {
+    return new CookBrain(styleFor(this.skill), side);
+  }
+
+  /* ------------------------------------------------------------------ practice */
+
+  /** After every advance: follow the steps, wake or rest the helper, start the round when done. */
+  private guideFrame(m: DapurMatch, g: Guide, t: number): void {
+    if (!m.practice) return;
+    if (g.update(m, t)) {
+      this.game.sfx('correct');
+      for (const id of this.online) this.buzz(id, 30);
+      this.lastHud = Number.NEGATIVE_INFINITY;
+      this.sendViews(true);
+    }
+    const helper = g.helper(m);
+    for (const c of m.chefs) {
+      if (!c.cpu) continue;
+      const want = helper?.id === c.id;
+      if (want && !c.pilot) m.setPilot(c.id, this.cpuBrain(c.side));
+      else if (!want && c.pilot) m.setPilot(c.id, null);
+    }
+    if (g.over(t)) this.endGuide(m, t);
+  }
+
+  /** Lewati: the first tap asks "Yakin?", the second (within a few seconds) ends the practice. */
+  private onSkip(m: DapurMatch, from: number): void {
+    const g = this.guide;
+    if (!g || !m.practice) return;
+    const t = this.clock.now();
+    if (g.skip(from, t)) {
+      this.game.sfx('select');
+      this.endGuide(m, t);
+      return;
+    }
+    this.game.sfx('tick');
+    this.sendView(from, true);
+  }
+
+  private endGuide(m: DapurMatch, t: number): void {
+    saveJson(GUIDE_KEY, true);
+    this.guide = null;
+    m.endPractice(t);
+    for (const c of m.chefs) if (c.cpu && !c.pilot) m.setPilot(c.id, this.cpuBrain(c.side));
+    this.goAt = Number.NEGATIVE_INFINITY;
+    this.lastHud = Number.NEGATIVE_INFINITY;
+    this.sendViews(true);
+  }
+
+  /** The step card and the arrow for the HUD. */
+  private guideState(m: DapurMatch, g: Guide): GuideState {
+    const text = STR.guide.steps[g.step];
+    const helper = g.helper(m);
+    const target = g.target(m);
+    let arrow: GuideState['arrow'] = null;
+    if (target && target.kind !== 'ticket') {
+      const at = { x: 0, y: 0, up: false };
+      if (this.scene.anchorOf(target, at)) arrow = at;
+    }
+    // The button shown on the screen: what a person who can act would press.
+    const actors = m.chefs.filter((c) => !c.cpu && g.buttonFor(c) !== null);
+    const actor = actors.find((c) => g.buttonFor(c) === 'throw') ?? actors[0];
+    const want = actor && !helper ? g.buttonFor(actor) : null;
+    const b = want ? PAD_BUTTONS.find((x) => x.id === want) : undefined;
+    const sub = helper
+      ? STR.guide.helper(helper.name)
+      : g.waiting
+        ? STR.guide.waitSub
+        : g.step === 'throw' && want === 'throw'
+          ? STR.guide.throwNow
+          : text.sub;
+    return {
+      eyebrow: STR.guide.eyebrow(g.index + 1, g.total),
+      title: g.waiting ? STR.guide.waitTitle : text.title,
+      sub,
+      button: b
+        ? {
+            verb: b.press === 'hold' ? STR.guide.hold : STR.guide.press,
+            label: b.label.toUpperCase(),
+            tone: b.tone,
+          }
+        : null,
+      arrow,
+      ticket: target?.kind === 'ticket',
+      key: `${g.step}${g.waiting ? '-wait' : ''}`,
+    };
+  }
+
   /* ------------------------------------------------------------------ frame */
 
   private frame(): void {
@@ -380,6 +500,7 @@ export class Director {
     m.advance(t);
     this.drainEvents(t);
     if (this.ended) return;
+    if (this.guide) this.guideFrame(m, this.guide, t);
     this.scene.frameT = t;
     this.scene.alpha = m.alpha(t);
     this.workSounds(t);
@@ -428,6 +549,7 @@ export class Director {
 
   private onEvent(m: DapurMatch, e: MatchEvent, t: number): void {
     this.scene.onEvent(e, t);
+    if (this.guide && m.practice) this.guide.onEvent(e, t);
     switch (e.type) {
       case 'count':
         this.game.sfx('count');
@@ -452,6 +574,13 @@ export class Director {
         }
         this.game.sfx('ding');
         window.setTimeout(() => this.game.sfx('clap'), 160);
+        if (m.practice) {
+          this.floatAt(STR.guide.served, e.x, e.y, GREEN, 40);
+          celebrate();
+          this.buzz(e.by, [30, 40, 60]);
+          this.lastHud = Number.NEGATIVE_INFINITY;
+          return;
+        }
         this.floatAt(
           STR.served(e.served.points + e.served.tip),
           e.x,
@@ -644,6 +773,7 @@ export class Director {
         return {
           name: c?.name ?? '',
           fruit: c?.fruit ?? 'jeruk',
+          look: c?.look ?? lookOfFruit(c?.fruit ?? 'jeruk'),
           color: c?.color ?? '#FFFFFF',
           title: a.title,
           desc: a.desc,
@@ -688,6 +818,7 @@ export class Director {
         t: this.clock.now(),
         summary: this.summary,
         guests: this.guests(),
+        guide: this.guide,
       });
     }
     const key = JSON.stringify(view);
@@ -703,6 +834,10 @@ export class Director {
       case 'countdown':
         return { kind: 'count', value: Math.max(1, m.countValue) };
       case 'play':
+        if (m.practice) {
+          if (this.guide?.finished) return { kind: 'guideDone' };
+          return t - this.goAt < GO_MS * 2 ? { kind: 'guideGo' } : { kind: 'none' };
+        }
         if (t - this.goAt < GO_MS) return { kind: 'go' };
         if (t - this.moveAt < MOVE_MS) return { kind: 'move' };
         if (t - this.warnAt < WARN_MS) return { kind: 'warning' };
@@ -716,8 +851,9 @@ export class Director {
   private playState(m: DapurMatch, t: number): PlayState {
     const left = m.timeLeft(t);
     const th = m.thresholds;
-    const score = m.score;
-    const stars = m.stars();
+    // The practice scores nothing: the bar shows a fresh round.
+    const score = m.practice ? 0 : m.score;
+    const stars = m.practice ? 0 : m.stars();
     const lo = stars === 0 ? 0 : th[stars - 1]!;
     const hi = stars >= 3 ? lo : th[stars as 0 | 1 | 2];
     const names = (side: Side) =>
@@ -734,7 +870,7 @@ export class Director {
         const done: string[] = [];
         if (k.got.includes('soda')) done.push('soda');
         if (k.got.includes('burger')) done.push('roti', 'dagingMatang', 'tomatPotong', 'seladaPotong');
-        const p = m.orders.patience(k, t);
+        const p = m.practice ? 1 : m.orders.patience(k, t);
         return {
           id: k.id,
           title: STR.dishes[k.dish],
@@ -765,7 +901,11 @@ export class Director {
       play: this.playState(m, t),
       overlay: this.overlay(m, t),
       result: showResult && this.summary ? this.resultState(m, this.summary) : null,
-      hint: m.phase === 'play' && t - this.goAt < HINT_MS,
+      hint: m.phase === 'play' && !m.practice && t - this.goAt < HINT_MS,
+      guide:
+        this.guide && m.practice && m.phase === 'play' && !this.guide.finished
+          ? this.guideState(m, this.guide)
+          : null,
     });
   }
 }

@@ -21,7 +21,7 @@ function guests(match: WilayahMatch): GuestPlayer[] {
   return match
     .all()
     .filter((r) => isCpu(r.id))
-    .map((r) => ({ id: r.id, name: r.name, fruit: r.fruit, color: r.color }));
+    .map((r) => ({ id: r.id, name: r.name, fruit: r.fruit, look: r.look, color: r.color }));
 }
 
 function countdownView(match: WilayahMatch, r: Runner): ControllerView {

@@ -8,7 +8,7 @@
  * Plane coordinates: x right, y down on the main screen's top view (the phone's aim uses the same
  * axes), metres, origin at the centre of the floe. Time in seconds of game time (pause-aware).
  */
-import type { Fruit, SlingAim } from '@hoorah/protocol';
+import type { Fruit, Look, SlingAim } from '@hoorah/protocol';
 import { SLING_MIN_POWER } from '@hoorah/protocol';
 import { planShot, type ShotPlan } from './brain';
 
@@ -66,6 +66,7 @@ export interface PlayerInfo {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   cpu: boolean;
 }
@@ -335,7 +336,7 @@ export class EsMatch {
       this.endRound();
   }
 
-  restyle(id: number, look: Pick<PlayerInfo, 'name' | 'color' | 'fruit'>): void {
+  restyle(id: number, look: Pick<PlayerInfo, 'name' | 'color' | 'fruit' | 'look'>): void {
     const p = this.player(id);
     if (p) Object.assign(p, look);
   }

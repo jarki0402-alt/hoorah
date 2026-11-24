@@ -2,23 +2,23 @@ import type { GameIcon } from '@hoorah/sdk';
 import { useEffect, useState } from 'preact/hooks';
 import { GAMES } from '../../shared/games';
 import { KeyArt } from '../../shared/keyart';
-import './party.css';
 import { Avatar, Icon, type IconName } from '../../shared/ui';
 import { FocusButton } from '../components';
 import { setFocusMap } from '../nav';
-import { isFinalGame, standings } from '../party';
+import { isFinalGame } from '../party';
 import {
+  canPlayGame,
   goHome,
   lastResult,
   nextPartyGame,
+  offer,
   party,
-  partyLineup,
   players,
   restartGame,
   sfx,
-  startParty,
 } from '../store';
 import { PARTY } from '../strings';
+import { OfferLayer } from './OfferOverlay';
 
 const AWARD_ICON: Record<GameIcon, { icon: IconName; tint: string }> = {
   zap: { icon: 'zap', tint: '#FFC928' },
@@ -36,21 +36,30 @@ const AUTOPLAY_S = 10;
 export function ResultsPage() {
   const res = lastResult.value;
   const [left, setLeft] = useState(AUTOPLAY_S);
-  // Mode Pesta: "Lanjut" to the next game instead of "Main lagi"; the final shows the champion.
+  // Mode Pesta: on to the party table (and the next reveal, or the champion) instead of "Main lagi".
   const p = party.value;
   const final = p ? isFinalGame(p) : false;
-  const [auto, setAuto] = useState(!final);
+  // No countdown to "Main lagi" for a game this room can no longer start (the trial ended).
+  const [auto, setAuto] = useState(() => {
+    const id = lastResult.peek()?.gameId;
+    return party.peek() !== null || (id !== undefined && canPlayGame(id));
+  });
+  // The Hoorah Pass offer (the trial ended during the game, or "Main lagi" on a locked game) owns
+  // the remote while open and stops the countdown.
+  const offerOpen = offer.value !== null;
 
   useEffect(() => {
+    if (offerOpen) {
+      setAuto(false);
+      return;
+    }
     const cur = party.peek();
-    const last = cur ? isFinalGame(cur) : false;
     return setFocusMap(
       {
-        rows: [cur ? (last ? ['party-again', 'done'] : ['next', 'done']) : ['again', 'change', 'done']],
+        rows: [cur ? ['next', 'done'] : ['again', 'change', 'done']],
         onOk: (id) => {
           if (id === 'again') restartGame();
           else if (id === 'next') nextPartyGame();
-          else if (id === 'party-again') startParty(partyLineup());
           else goHome();
         },
         onBack: () => {
@@ -62,16 +71,18 @@ export function ResultsPage() {
           setAuto(false);
         },
       },
-      cur ? (last ? 'party-again' : 'next') : 'again',
+      cur ? 'next' : 'again',
     );
-  }, []);
+  }, [offerOpen]);
 
   useEffect(() => {
     if (!auto) return;
     if (left <= 0) {
       setAuto(false);
+      const id = lastResult.peek()?.gameId;
       if (party.peek()) nextPartyGame();
-      else restartGame();
+      // A game this room can no longer start (the trial ended) does not restart by itself.
+      else if (id) restartGame();
       return;
     }
     const t = window.setTimeout(() => setLeft((s) => s - 1), 1000);
@@ -87,14 +98,6 @@ export function ResultsPage() {
   // Classic podium order: 2nd, 1st, 3rd.
   const order = top.length === 3 ? [top[1]!, top[0]!, top[2]!] : top.length === 2 ? [top[0]!, top[1]!] : top;
   const heights = [148, 108, 84];
-  const table = p
-    ? standings(
-        p,
-        players.value.map((pl) => pl.id),
-      )
-    : [];
-  const champions = table.filter((r) => r.rank === 1 && r.points > 0);
-  const nextGame = p && !final ? p.lineup[p.index + 1] : undefined;
   const countdown = auto ? (
     <span style={{ position: 'relative', width: 30, height: 30, display: 'inline-block' }}>
       <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
@@ -150,7 +153,9 @@ export function ResultsPage() {
         }}
       >
         <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.12em', color: 'var(--text-3)' }}>
-          {GAMES[gameId].title.toUpperCase()} · SELESAI
+          {p
+            ? PARTY.eyebrow(p.index + 1, p.lineup.length, GAMES[gameId].title.toUpperCase())
+            : `${GAMES[gameId].title.toUpperCase()} · SELESAI`}
         </div>
         <h1 class="display outline-text results-title">{result.title}</h1>
         {result.subtitle && <div style={{ fontSize: 17, color: 'var(--text-2)' }}>{result.subtitle}</div>}
@@ -175,12 +180,7 @@ export function ResultsPage() {
                 </svg>
               )}
               {p ? (
-                <Avatar
-                  fruit={p.fruit}
-                  ring={p.color}
-                  size={first ? 124 : 92}
-                  face={first ? 'happy' : 'wow'}
-                />
+                <Avatar look={p.look} ring={p.color} size={first ? 124 : 92} face={first ? 'happy' : 'wow'} />
               ) : (
                 <div style={{ width: 92, height: 92 }} />
               )}
@@ -237,7 +237,7 @@ export function ResultsPage() {
                 <div style={{ fontSize: 16, fontWeight: 800 }}>{a.title}</div>
                 <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{a.desc}</div>
               </div>
-              {p && <Avatar fruit={p.fruit} ring={p.color} size={40} />}
+              {p && <Avatar look={p.look} ring={p.color} size={40} />}
             </div>
           );
         })}
@@ -270,25 +270,14 @@ export function ResultsPage() {
         <div style={{ display: 'flex', gap: 12 }}>
           {p ? (
             <>
-              {final ? (
-                <FocusButton
-                  id="party-again"
-                  class="btn primary"
-                  style={{ fontSize: 17, padding: '10px 20px' }}
-                >
-                  <Icon name="restart" size={16} color="#111214" />
-                  {PARTY.again}
-                </FocusButton>
-              ) : (
-                <FocusButton
-                  id="next"
-                  class="btn primary"
-                  style={{ fontSize: 17, padding: '10px 20px 10px 12px' }}
-                >
-                  {countdown}
-                  {nextGame ? PARTY.next(GAMES[nextGame].title) : ''}
-                </FocusButton>
-              )}
+              <FocusButton
+                id="next"
+                class="btn primary"
+                style={{ fontSize: 17, padding: '10px 20px 10px 12px' }}
+              >
+                {countdown}
+                {final ? PARTY.toChampion : PARTY.toTable}
+              </FocusButton>
               <FocusButton id="done" class="btn">
                 {PARTY.done}
               </FocusButton>
@@ -314,44 +303,15 @@ export function ResultsPage() {
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
           {p
-            ? final
-              ? PARTY.finalHint
-              : auto
-                ? PARTY.autoNext(left)
-                : p.index + 2 === p.lineup.length
-                  ? PARTY.doubleNext
-                  : 'Pilih langkah berikutnya'
+            ? auto
+              ? PARTY.autoNext(left, final)
+              : PARTY.pickNext
             : auto
               ? `Lanjut otomatis dalam ${left} detik · Host bisa memilih lain dari HP`
               : 'Pilih langkah berikutnya'}
         </div>
       </div>
-
-      {p && (
-        <div class={`party-table ${final ? 'is-final' : ''}`}>
-          <div class="party-table-head">
-            {final ? PARTY.finalEyebrow : PARTY.eyebrow(p.index + 1, p.lineup.length)}
-            {final && champions.length > 0 && (
-              <span class="party-champion">
-                {PARTY.champion(champions.map((c) => byId.get(c.playerId)?.name ?? 'Pemain').join(' & '))}
-              </span>
-            )}
-          </div>
-          <div class="party-table-rows">
-            {table.slice(0, 8).map((r) => {
-              const pl = byId.get(r.playerId);
-              return (
-                <div class={`party-row ${r.rank === 1 && r.points > 0 ? 'top' : ''}`} key={r.playerId}>
-                  <b>{r.rank}</b>
-                  {pl && <Avatar fruit={pl.fruit} ring={pl.color} size={26} />}
-                  <span class="party-name">{pl?.name ?? 'Pemain'}</span>
-                  <span class="party-points">{PARTY.points(r.points)}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      <OfferLayer />
     </div>
   );
 }

@@ -3,10 +3,20 @@ import type { AdminPass } from '@hoorah/protocol';
 import { useCallback, useRef, useState } from 'preact/hooks';
 import { api, errorCode } from './api';
 import { useNow, usePolling } from './hooks';
-import { countByStatus, filterPasses, PASS_FILTERS, type PassFilter, upsertPass } from './logic';
+import {
+  countByStatus,
+  filterByKind,
+  filterPasses,
+  KIND_FILTERS,
+  type KindFilter,
+  PASS_FILTERS,
+  type PassFilter,
+  upsertPass,
+  upsertPasses,
+} from './logic';
 import { PassCard } from './pass-card';
 import { CreatePassSheet } from './pass-forms';
-import { EMPTY, ERRORS, FILTERS, STR } from './strings';
+import { EMPTY, ERRORS, FILTERS, KIND_FILTER_LABEL, STR } from './strings';
 import { AdminIcon, EmptyState, LoadError } from './ui';
 
 const REFRESH_MS = 15_000;
@@ -15,6 +25,7 @@ export function PassTab() {
   const [passes, setPasses] = useState<AdminPass[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState<PassFilter>('active');
+  const [kind, setKind] = useState<KindFilter>('all');
   const [creating, setCreating] = useState(false);
   // Re-renders every 30 s so the remaining times keep counting between refreshes.
   useNow(30_000);
@@ -42,14 +53,19 @@ export function PassTab() {
     edits.current++;
     setPasses((list) => (list ?? []).filter((p) => p.id !== id));
   };
-  const created = (p: AdminPass) => {
-    change(p);
+  const created = (added: AdminPass[]) => {
+    edits.current++;
+    setPasses((list) => upsertPasses(list ?? [], added));
     setFilter('active');
+    setKind('all');
   };
 
   const current = Date.now();
-  const counts = passes ? countByStatus(passes, current) : null;
-  const shown = passes ? filterPasses(passes, filter, current) : [];
+  const ofKind = passes ? filterByKind(passes, kind) : [];
+  const counts = passes ? countByStatus(ofKind, current) : null;
+  const shown = filterPasses(ofKind, filter, current);
+  // The kind row only helps once there is more than one kind to tell apart.
+  const kinds = passes ? new Set(passes.map((p) => p.kind)).size : 0;
 
   return (
     <section class="ad-section" aria-labelledby="pass-title">
@@ -81,6 +97,23 @@ export function PassTab() {
           </button>
         ))}
       </fieldset>
+
+      {(kinds > 1 || kind !== 'all') && (
+        <fieldset class="ad-filters ad-filters--kinds">
+          <legend class="sr-only">{STR.kindFiltersLabel}</legend>
+          {KIND_FILTERS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              class={`ad-filter ad-filter--quiet${kind === k ? ' is-on' : ''}`}
+              aria-pressed={kind === k}
+              onClick={() => setKind(k)}
+            >
+              {k === 'all' ? STR.allKinds : KIND_FILTER_LABEL[k]}
+            </button>
+          ))}
+        </fieldset>
+      )}
 
       {loadError && <LoadError text={loadError} onRetry={() => void load()} />}
 

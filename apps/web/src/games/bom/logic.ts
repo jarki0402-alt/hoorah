@@ -10,7 +10,7 @@
  * round, no "Arwah Jahil"). Most lives at the end wins.
  */
 
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { DEFAULT_RIG, GroupCamera } from '../../shared/kotak/camera';
 import { rng, type V3, v3 } from '../../shared/kotak/math';
 import { KotakSim } from '../../shared/kotak/sim';
@@ -20,6 +20,7 @@ export interface RunnerInfo {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -259,7 +260,7 @@ export class BomMatch {
     this.checkEnd();
   }
 
-  restyle(id: number, look: Partial<Pick<RunnerInfo, 'name' | 'fruit' | 'color'>>): void {
+  restyle(id: number, look: Partial<Pick<RunnerInfo, 'name' | 'fruit' | 'look' | 'color'>>): void {
     const r = this.runner(id);
     if (r) Object.assign(r, look);
   }

@@ -4,18 +4,24 @@
  */
 import {
   ADMIN_HEADER,
+  type AdminConfig,
   type AdminEgress,
   type AdminError,
+  type AdminErrorGroup,
   type AdminEvent,
   type AdminMe,
   type AdminPass,
   type AdminPassCreate,
   type AdminPassUpdate,
+  type AdminReport,
+  type AdminReportList,
   type AdminRoom,
   type AdminStats,
   type AdminSystem,
   type AdminSystemHistory,
   type AdminUsage,
+  parseAppConfig,
+  type ReportStatus,
   type SystemHistoryHours,
   type UsageDays,
 } from '@hoorah/protocol';
@@ -72,7 +78,7 @@ function codeFrom(status: number, body: unknown): ErrorCode {
   return status >= 500 ? 'server' : 'bad_request';
 }
 
-type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 async function request(method: Method, path: string, body?: unknown): Promise<unknown> {
   const headers: Record<string, string> = {};
@@ -128,6 +134,30 @@ const isPass = (v: unknown): v is AdminPass =>
 const isRoom = (v: unknown): v is AdminRoom =>
   isObj(v) && typeof v.code === 'string' && typeof v.players === 'number';
 
+const isReport = (v: unknown): v is AdminReport =>
+  isObj(v) &&
+  typeof v.id === 'number' &&
+  typeof v.text === 'string' &&
+  typeof v.status === 'string' &&
+  isObj(v.context);
+
+const isErrorGroup = (v: unknown): v is AdminErrorGroup =>
+  isObj(v) &&
+  typeof v.id === 'number' &&
+  typeof v.message === 'string' &&
+  typeof v.count === 'number' &&
+  isObj(v.last);
+
+/** The settings in an answer, completed and kept in bounds (`fallback` fills what is missing). */
+function configOf(data: unknown, fallback?: AdminConfig): AdminConfig {
+  const body = isObj(data) && isObj(data.config) ? data.config : data;
+  if (!isObj(body)) {
+    if (fallback) return fallback;
+    throw new ApiError(200, 'server');
+  }
+  return parseAppConfig(body, fallback);
+}
+
 function passOf(data: unknown): AdminPass {
   const pass = isObj(data) ? data.pass : undefined;
   return shape<AdminPass>(isPass(pass), pass);
@@ -158,8 +188,13 @@ export const api = {
     return shape<AdminPass[]>(Array.isArray(list) && list.every(isPass), list);
   },
 
-  async createPass(input: AdminPassCreate): Promise<AdminPass> {
-    return passOf(await request('POST', '/passes', input));
+  /** One pass, or a batch of single-use codes: every new pass, in the server's order. */
+  async createPasses(input: AdminPassCreate): Promise<AdminPass[]> {
+    const data = await request('POST', '/passes', input);
+    // A server from before batches answered `{ pass }`.
+    if (isObj(data) && data.created === undefined && isPass(data.pass)) return [data.pass];
+    const list = isObj(data) ? data.created : undefined;
+    return shape<AdminPass[]>(Array.isArray(list) && list.length > 0 && list.every(isPass), list);
   },
 
   async updatePass(id: number, input: AdminPassUpdate): Promise<AdminPass> {
@@ -208,6 +243,42 @@ export const api = {
       isObj(data) && Array.isArray(data.series) && Array.isArray(data.heatmap) && isObj(data.totals),
       data,
     );
+  },
+
+  async config(): Promise<AdminConfig> {
+    return configOf(await request('GET', '/config'));
+  },
+
+  /** Saves the settings; answers what the server kept (it clamps too). */
+  async saveConfig(config: AdminConfig): Promise<AdminConfig> {
+    return configOf(await request('PUT', '/config', config), config);
+  },
+
+  /** Newest first; `status` omitted lists every report. */
+  async reports(status?: ReportStatus): Promise<AdminReportList> {
+    const data = await request('GET', status ? `/reports?status=${status}` : '/reports');
+    return shape<AdminReportList>(
+      isObj(data) && Array.isArray(data.reports) && data.reports.every(isReport) && isObj(data.counts),
+      data,
+    );
+  },
+
+  async setReportStatus(id: number, status: ReportStatus): Promise<void> {
+    await request('PATCH', `/reports/${id}`, { status });
+  },
+
+  async errors(): Promise<AdminErrorGroup[]> {
+    const data = await request('GET', '/errors');
+    const list = isObj(data) ? data.groups : undefined;
+    return shape<AdminErrorGroup[]>(Array.isArray(list) && list.every(isErrorGroup), list);
+  },
+
+  async deleteError(id: number): Promise<void> {
+    await request('DELETE', `/errors/${id}`);
+  },
+
+  async clearErrors(): Promise<void> {
+    await request('DELETE', '/errors');
   },
 
   async events(): Promise<AdminEvent[]> {

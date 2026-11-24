@@ -1,14 +1,14 @@
 /**
  * The Host's game picker (remote design "A + E"): the same groups as the main screen's home
- * ("Pas untuk kalian", one per mood, Semua) as tabs on top; the game list is the only part of the
+ * (Semua, "Pas untuk kalian", one per mood) as tabs on top, "Semua" in the same order as the screen; the game list is the only part of the
  * controller that scrolls. A tab makes the main screen jump to that row; tapping a game opens its
  * detail page there and closes the picker. Loaded on demand: the poster art is only needed once
  * the Host opens it.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { CATEGORIES, GAMES, type GameId, MOODS } from '../shared/games';
+import { CATEGORIES, GAMES, type GameId, MOODS, playsRemote } from '../shared/games';
 import {
-  gridGames,
+  DEFAULT_SECTION,
   HOME_SECTIONS,
   type HomeSection,
   isHomeSection,
@@ -29,7 +29,7 @@ export function GamePicker({ onClose }: { onClose: () => void }) {
     ? pg.tab
     : CATEGORIES.some((c) => c.id === pg.tab)
       ? 'all'
-      : 'fit';
+      : DEFAULT_SECTION;
   // The main screen's group is the truth; a tap here shows at once and the screen catches up.
   const [tab, setTab] = useState<HomeSection>(screenTab);
   // After a tap here the screen scrolls through other rows on its way to the new group; ignore
@@ -45,13 +45,10 @@ export function GamePicker({ onClose }: { onClose: () => void }) {
   const onScreen = pg.page === 'home' || pg.page === 'detail' ? pg.gameId : undefined;
   const recent = (pg.recent ?? []).filter((id): id is GameId => id in GAMES);
   const fits = (id: GameId) => n >= GAMES[id].minPlayers && n <= GAMES[id].maxPlayers;
-  // "Semua": every game, grouped by category with a heading per group.
-  const groups: { key: string; title?: string; games: GameId[] }[] =
-    tab === 'all'
-      ? CATEGORIES.map((c) => ({ key: c.id, title: c.label, games: gridGames(c.id, false) })).filter(
-          (g) => g.games.length > 0,
-        )
-      : [{ key: tab, games: sectionGames(tab, n, recent) }];
+  // One list per group; "Semua" is every game in the main screen's order for these players.
+  const groups: { key: string; title?: string; games: GameId[] }[] = [
+    { key: tab, games: sectionGames(tab, n, recent) },
+  ];
   const empty = groups.every((g) => g.games.length === 0);
 
   const pick = (t: HomeSection) => {
@@ -115,6 +112,8 @@ export function GamePicker({ onClose }: { onClose: () => void }) {
               ...grp.games.map((id) => {
                 const g = GAMES[id];
                 const here = id === onScreen;
+                // Long-distance play: the main screen refuses games a far-away screen cannot show.
+                const farOff = pg.remote === true && !playsRemote(id);
                 const sub = !fits(id)
                   ? STR.needPlayers(g.minPlayers)
                   : recent[0] === id
@@ -124,7 +123,7 @@ export function GamePicker({ onClose }: { onClose: () => void }) {
                   <button
                     key={id}
                     type="button"
-                    class={`pick-card ${here ? 'here' : ''}`}
+                    class={`pick-card ${here ? 'here' : ''} ${farOff ? 'far-off' : ''}`}
                     onClick={() => open(id)}
                   >
                     <img class="pick-art" src={keyArtUrl(id)} alt="" decoding="async" draggable={false} />
@@ -133,6 +132,7 @@ export function GamePicker({ onClose }: { onClose: () => void }) {
                         {g.title}
                         {isNewGame(id) && <span class="pick-new">{STR.newTag}</span>}
                       </span>
+                      {farOff && <span class="pick-far">{STR.remoteNo}</span>}
                       <span class="pick-meta">
                         <span class={`mood-pill mood-${g.mood}`}>{MOODS[g.mood].label}</span>
                         {here ? (

@@ -63,7 +63,7 @@ export const STR = {
   champion: (t: Team) => `${TEAM_LABEL[t]} juara!`,
   score: (a: number, b: number) => `${a}–${b}`,
   winScore: (a: number, b: number) => `Menang ${a}–${b}`,
-  loadError: 'Buka Tarik Tambang dari layar Hoorah.',
+  loadError: 'Buka Tarik Tambang dari layar Kacawbalaw.',
 
   /* Phone views */
   phoneRound: (round: number, clock: string) => `R${round} · ${clock}`,

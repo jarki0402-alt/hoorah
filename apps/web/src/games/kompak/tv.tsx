@@ -12,7 +12,7 @@ import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import type { Face } from '../../shared/art/fruits';
 import { Avatar } from '../../shared/ui';
 import { backdropUrl } from './backdrop';
-import { coopTitle, type KompakMatch, type PlayerRecord, type RoundOutcome, TIMING } from './logic';
+import { coopTitle, type KompakScene, type SceneOutcome, type SceneRecord, TIMING } from './logic';
 import { formatNumber, LETTERS, STR } from './strings';
 import { OPTION_COLORS } from './views';
 
@@ -36,12 +36,15 @@ export class FrameBus {
 }
 
 export interface TvModel {
-  match: KompakMatch;
+  match: KompakScene;
   version: ReadonlySignal<number>;
   waiting: ReadonlySignal<boolean>;
   frame: FrameBus;
-  info(id: number): PlayerInfo | undefined;
+  info(id: number): SeatInfo | undefined;
 }
+
+/** The part of a player card the stage draws (a mirror screen gets it from the Host's state). */
+export type SeatInfo = Pick<PlayerInfo, 'id' | 'name' | 'color' | 'look'>;
 
 export interface StageSize {
   w: number;
@@ -53,8 +56,8 @@ const vars = (v: Vars): JSX.CSSProperties => v as unknown as JSX.CSSProperties;
 const px = (n: number) => `${n}px`;
 
 interface Seat {
-  rec: PlayerRecord;
-  info: PlayerInfo;
+  rec: SceneRecord;
+  info: SeatInfo;
 }
 
 /* Layout constants (stage px), mirrored in kompak.css. */
@@ -102,7 +105,7 @@ export function KompakTv({ model, size }: { model: TvModel; size: ReadonlySignal
 
 /* ------------------------------------------------------------------ header */
 
-function Header({ match }: { match: KompakMatch }) {
+function Header({ match }: { match: KompakScene }) {
   const total = match.total;
   const doneUpTo = match.phase === 'reveal' ? match.round + 1 : match.round;
   const current = match.phase === 'intro' || match.phase === 'question' ? match.round : -1;
@@ -125,7 +128,7 @@ function Header({ match }: { match: KompakMatch }) {
 const RING_R = 24;
 const RING_C = 2 * Math.PI * RING_R;
 
-function TimerRing({ match, frame }: { match: KompakMatch; frame: FrameBus }) {
+function TimerRing({ match, frame }: { match: KompakScene; frame: FrameBus }) {
   const wrap = useRef<HTMLDivElement>(null);
   const arc = useRef<SVGCircleElement>(null);
   const num = useRef<HTMLDivElement>(null);
@@ -228,7 +231,7 @@ function TimerRing({ match, frame }: { match: KompakMatch; frame: FrameBus }) {
 
 /* ------------------------------------------------------------------ chalkboard */
 
-function Board({ match }: { match: KompakMatch }) {
+function Board({ match }: { match: KompakScene }) {
   const q = match.prompt;
   let content: JSX.Element;
   switch (match.phase) {
@@ -267,7 +270,7 @@ function Board({ match }: { match: KompakMatch }) {
 }
 
 /** Paper tag pinned under the chalkboard with the round's verdict. */
-function Verdict({ match }: { match: KompakMatch }) {
+function Verdict({ match }: { match: KompakScene }) {
   const r = match.result;
   if (!r) return null;
   let title: string;
@@ -319,8 +322,8 @@ function Columns({
   info,
   stageH,
 }: {
-  match: KompakMatch;
-  info: (id: number) => PlayerInfo | undefined;
+  match: KompakScene;
+  info: (id: number) => SeatInfo | undefined;
   stageH: number;
 }) {
   const q = match.prompt;
@@ -335,8 +338,8 @@ function Columns({
   const rowH = av + (crowd ? 4 : 6);
   // Bars stop below the verdict tag hanging from the board, so a winner's stamp stays clear.
   const zoneH = stageH - STAMP_CLEAR - COLS_BOTTOM - CARD_H - COUNT_H - 8;
-  const pickers: PlayerInfo[][] = q.options.map(() => []);
-  const outcomes = new Map<number, RoundOutcome>();
+  const pickers: SeatInfo[][] = q.options.map(() => []);
+  const outcomes = new Map<number, SceneOutcome>();
   if (revealed && result) {
     for (const o of result.outcomes) {
       outcomes.set(o.playerId, o);
@@ -382,7 +385,7 @@ function Columns({
                         const face: Face = o && o.points > 0 ? 'wow' : 'sad';
                         return (
                           <span key={p.id} class="kp-bar-av" style={vars({ '--j': String(j) })}>
-                            <Avatar fruit={p.fruit} ring={p.color} size={av} face={face} />
+                            <Avatar look={p.look} ring={p.color} size={av} face={face} />
                           </span>
                         );
                       })}
@@ -421,7 +424,7 @@ function HowTo({ coop }: { coop: boolean }) {
 }
 
 /** "Sudah menjawab" row: avatars hop in as players lock their pick. */
-function Answered({ match, info }: { match: KompakMatch; info: (id: number) => PlayerInfo | undefined }) {
+function Answered({ match, info }: { match: KompakScene; info: (id: number) => SeatInfo | undefined }) {
   const ids = match.participants.filter((id) => match.answers.has(id));
   const n = match.participants.length;
   const size = n > 10 ? 48 : 62;
@@ -438,7 +441,7 @@ function Answered({ match, info }: { match: KompakMatch; info: (id: number) => P
           if (!p) return null;
           return (
             <span key={id} class="kp-answered-av">
-              <Avatar fruit={p.fruit} ring={p.color} size={size} face="happy" />
+              <Avatar look={p.look} ring={p.color} size={size} face="happy" />
             </span>
           );
         })}
@@ -453,10 +456,10 @@ interface Status {
   label: string;
   tone: 'off' | 'idle' | 'wait' | 'done' | 'good' | 'bad';
   face: Face;
-  outcome: RoundOutcome | null;
+  outcome: SceneOutcome | null;
 }
 
-function statusOf(match: KompakMatch, rec: PlayerRecord): Status {
+function statusOf(match: KompakScene, rec: SceneRecord): Status {
   if (match.phase === 'reveal') {
     const o = match.outcomeOf(rec.id) ?? null;
     if (o) {
@@ -527,7 +530,7 @@ function ScoreLed({ from, to, delay }: { from: number; to: number; delay: number
 
 const REVEAL_SCORE_DELAY = 1500;
 
-function Seats({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
+function Seats({ match, seats }: { match: KompakScene; seats: Seat[] }) {
   if (!seats.length) return null;
   const compact = seats.length > 8;
   const revealing = match.phase === 'reveal';
@@ -549,7 +552,7 @@ function Seats({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
               class={`kp-seat-av${st.tone === 'done' ? ' kp-hop' : ''}`}
             >
               <Avatar
-                fruit={info.fruit}
+                look={info.look}
                 ring={info.color}
                 size={compact ? 40 : 58}
                 face={st.face}
@@ -569,7 +572,7 @@ function Seats({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
 }
 
 /** Two players: both seats with the "persen kompak" meter between them. */
-function CoopSeats({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
+function CoopSeats({ match, seats }: { match: KompakScene; seats: Seat[] }) {
   const pct = match.coopPercent;
   const revealing = match.phase === 'reveal';
   const [a, b] = seats;
@@ -588,7 +591,7 @@ function CoopSeats({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
           key={st.tone === 'done' ? 'in' : 'wait'}
           class={`kp-seat-av${st.tone === 'done' ? ' kp-hop' : ''}`}
         >
-          <Avatar fruit={s.info.fruit} ring={s.info.color} size={64} face={st.face} dim={!s.rec.connected} />
+          <Avatar look={s.info.look} ring={s.info.color} size={64} face={st.face} dim={!s.rec.connected} />
         </span>
         <div class="kp-seat-body">
           <div class="kp-seat-name">{s.info.name}</div>
@@ -620,7 +623,7 @@ function CoopSeats({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
 
 /* ------------------------------------------------------------------ final */
 
-function FinalCard({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
+function FinalCard({ match, seats }: { match: KompakScene; seats: Seat[] }) {
   if (match.coop && match.coopRounds > 0) return <CoopFinal match={match} seats={seats} />;
   const byId = new Map(seats.map((s) => [s.rec.id, s]));
   const ranked = match
@@ -646,7 +649,7 @@ function FinalCard({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
             >
               <div class="display kp-rank-n">{r.rank}</div>
               <Avatar
-                fruit={seat.info.fruit}
+                look={seat.info.look}
                 ring={seat.info.color}
                 size={twoCols ? 38 : 48}
                 face={top ? 'wow' : 'happy'}
@@ -662,14 +665,14 @@ function FinalCard({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
   );
 }
 
-function CoopFinal({ match, seats }: { match: KompakMatch; seats: Seat[] }) {
+function CoopFinal({ match, seats }: { match: KompakScene; seats: Seat[] }) {
   const pct = match.coopPercent;
   const t = coopTitle(pct);
   const [a, b] = seats;
   const av = (s: Seat | undefined, side: string) =>
     s ? (
       <div class={`kp-cf-av is-${side}`}>
-        <Avatar fruit={s.info.fruit} ring={s.info.color} size={150} face={pct >= 50 ? 'wow' : 'happy'} />
+        <Avatar look={s.info.look} ring={s.info.color} size={150} face={pct >= 50 ? 'wow' : 'happy'} />
         <div class="kp-cf-name">{s.info.name}</div>
       </div>
     ) : null;

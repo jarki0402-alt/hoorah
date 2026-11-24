@@ -237,3 +237,62 @@ describe('nearby screens and code guessing', () => {
     expect(join(m, code).last('welcome')).toBeDefined();
   });
 });
+
+describe('avatars (look) and seat fruits', () => {
+  function joinLook(m: RoomManager, code: string, name: string, look?: { c: 'mia' | 'bram'; hc?: number }) {
+    const c = new FakeConn();
+    m.handleMessage(c, {
+      t: 'hello',
+      role: 'controller',
+      v: PROTOCOL_VERSION,
+      code,
+      name,
+      ...(look ? { look } : {}),
+    });
+    return c;
+  }
+
+  it('keeps the look a phone sends and hands out a different fruit per seat', () => {
+    const m = makeManager(4);
+    const { screen, code } = openScreen(m);
+    joinLook(m, code, 'Rina', { c: 'mia', hc: 2 });
+    joinLook(m, code, 'Budi', { c: 'bram' });
+    const players = screen.last('players')!.players;
+    expect(players.map((p) => p.look)).toEqual([{ c: 'mia', hc: 2 }, { c: 'bram' }]);
+    expect(new Set(players.map((p) => p.fruit)).size).toBe(2);
+  });
+
+  it('gives an old phone without a look a character from its fruit', () => {
+    const m = makeManager(4);
+    const { screen, code } = openScreen(m);
+    join(m, code, 'Rina');
+    expect(screen.last('players')!.players[0]!.look).toEqual({ c: 'leo' });
+  });
+
+  it('lets a phone change its name and look in the room (lobby "Ubah")', () => {
+    const m = makeManager(4);
+    const { screen, code } = openScreen(m);
+    const a = joinLook(m, code, 'Rina', { c: 'mia' });
+    m.handleMessage(a, { t: 'profile', name: 'Rini', look: { c: 'bram', oc: 3 } });
+    const p = screen.last('players')!.players[0]!;
+    expect(p.name).toBe('Rini');
+    expect(p.look).toEqual({ c: 'bram', oc: 3 });
+    // The main screen cannot change a player's profile.
+    m.handleMessage(screen, { t: 'profile', name: 'X', look: { c: 'leo' } });
+    expect(screen.last('error')?.code).toBe('not_allowed');
+  });
+});
+
+describe('choosing an avatar after joining (picking)', () => {
+  it('shows "picking" on the main screen until the phone says Siap, never for a dropped phone', () => {
+    const m = makeManager(4);
+    const { screen, code } = openScreen(m);
+    const a = join(m, code, 'Rina');
+    m.handleMessage(a, { t: 'profile', name: 'Rina', look: { c: 'mia' }, picking: true });
+    expect(screen.last('players')!.players[0]!.picking).toBe(true);
+    m.handleMessage(a, { t: 'profile', name: 'Rina', look: { c: 'kiki' }, picking: true });
+    expect(screen.last('players')!.players[0]!.look).toEqual({ c: 'kiki' });
+    m.handleMessage(a, { t: 'profile', name: 'Rina', look: { c: 'kiki' } });
+    expect(screen.last('players')!.players[0]!.picking).toBeUndefined();
+  });
+});

@@ -1,9 +1,10 @@
+import { lookOfFruit } from '@hoorah/protocol';
 import { it } from 'vitest';
 import { SACK_ID, TaliMatch, TIMING } from './logic';
 
 it('dbg', () => {
   const m = new TaliMatch({
-    climbers: [{ id: 1, name: 'a', fruit: 'jeruk', color: '#2F8CFF' }],
+    climbers: [{ id: 1, name: 'a', fruit: 'jeruk', look: lookOfFruit('jeruk'), color: '#2F8CFF' }],
     route: 'senja',
     sections: 1,
     seed: 11,

@@ -1,15 +1,21 @@
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { biomeOf, LEVELS } from './levels';
 import {
+  CLEAR_S,
   HINT_IDLE_S,
   INTRO_S,
   isOpen,
+  NEXT_S,
+  needsPass,
   type Person,
   resumeLevel,
   SKIP_AFTER_S,
   scoreStage,
+  secondLook,
   votesNeeded,
   WarnaMatch,
+  worldNeedsPass,
   worldStars,
 } from './logic';
 import { buildResult, pickAwards } from './results';
@@ -19,6 +25,7 @@ const P = (id: number, connected = true): Person => ({
   id,
   name: `P${id}`,
   fruit: 'jeruk',
+  look: lookOfFruit('jeruk'),
   color: '#2F8CFF',
   connected,
 });
@@ -47,7 +54,7 @@ function toDoors(m: WarnaMatch): void {
 
 describe('session', () => {
   it('runs world picker, level picker, intro and play for the chosen stages', () => {
-    const m = new WarnaMatch(3);
+    const m = new WarnaMatch();
     m.setPeople([P(1), P(2)]);
     expect(m.pickWorld('gurun')).toBe(false);
     expect(m.pickWorld('gua')).toBe(true);
@@ -60,7 +67,7 @@ describe('session', () => {
     m.toLevels();
     expect(m.pickLevel('hutan-1')).toBe(true);
     m.start();
-    expect(m.order).toEqual([0, 1, 2]);
+    expect(m.order).toEqual([0]);
     expect(m.phase).toBe('intro');
     expect(m.sim?.chars).toHaveLength(2);
     play(m, INTRO_S + 0.1);
@@ -68,7 +75,7 @@ describe('session', () => {
   });
 
   it('gives a lone player two characters and swaps between them', () => {
-    const m = new WarnaMatch(1);
+    const m = new WarnaMatch();
     m.setPeople([P(7)]);
     begin(m);
     play(m, INTRO_S + 0.1);
@@ -87,7 +94,7 @@ describe('session', () => {
     expect(votesNeeded(1)).toBe(1);
     expect(votesNeeded(2)).toBe(2);
     expect(votesNeeded(5)).toBe(3);
-    const m = new WarnaMatch(1);
+    const m = new WarnaMatch();
     m.setPeople([P(1), P(2), P(3)]);
     begin(m);
     play(m, INTRO_S + 0.1);
@@ -100,7 +107,7 @@ describe('session', () => {
     expect(m.sim).not.toBe(before);
     expect(m.phase).toBe('play');
 
-    const s = new WarnaMatch(1);
+    const s = new WarnaMatch();
     s.setPeople([P(9)]);
     begin(s);
     play(s, INTRO_S + 0.1);
@@ -119,7 +126,7 @@ describe('session', () => {
   });
 
   it('clears a stage when everyone stands at a door of their colour, and records it', () => {
-    const m = new WarnaMatch(1);
+    const m = new WarnaMatch();
     m.setPeople([P(1), P(2)]);
     begin(m);
     play(m, INTRO_S + 0.1);
@@ -129,7 +136,27 @@ describe('session', () => {
     expect(m.scores).toHaveLength(1);
     expect(m.progress['hutan-1']).toBeGreaterThanOrEqual(1);
     play(m, 6);
+    // The Host chooses now; nobody choosing plays on with the next level.
+    expect(m.phase).toBe('next');
+    expect(m.nextLevel()?.id).toBe('hutan-2');
+    expect(m.nextLeft()).toBeGreaterThan(0);
+    play(m, NEXT_S + 0.1);
+    expect(m.phase).toBe('intro');
+    expect(m.level.id).toBe('hutan-2');
+    expect(m.order).toEqual([0, 1]);
+    // Pick another level from the map, then end: the result keeps the finished level.
+    play(m, INTRO_S + 0.1);
+    m.skip();
+    play(m, SKIP_AFTER_S);
+    expect(m.skip()).toBe(true);
+    play(m, CLEAR_S + 0.1);
+    expect(m.phase).toBe('next');
+    expect(m.toMap()).toBe(true);
+    expect(m.phase).toBe('select');
+    expect(m.pickStep).toBe('level');
+    expect(m.finish()).toBe(true);
     expect(m.phase).toBe('done');
+    expect(m.maxStars()).toBe(6);
     const res = buildResult(m, [1, 2]);
     expect(res.ranking.every((r) => r.rank === 1)).toBe(true);
     expect(new Set(res.awards?.map((a) => a.playerId))).toEqual(new Set([1, 2]));
@@ -145,15 +172,45 @@ describe('worlds and progress', () => {
     expect(resumeLevel('hutan', {})?.id).toBe('hutan-1');
     expect(resumeLevel('hutan', { 'hutan-1': 3, 'hutan-2': 1 })?.id).toBe('hutan-3');
     expect(worldStars('hutan', { 'hutan-1': 3, 'hutan-2': 1 })).toEqual({ got: 4, of: 90 });
-    const m = new WarnaMatch(2, { 'hutan-1': 2 });
+    const m = new WarnaMatch({ 'hutan-1': 2 });
     expect(LEVELS[m.pick]?.id).toBe('hutan-2');
     m.toLevels();
     expect(m.pickLevel('hutan-3')).toBe(false);
     expect(m.pickLevel('hutan-1')).toBe(true);
   });
 
+  it('keeps only Hutan 1-5 open on a free main screen (limited), everything open otherwise', () => {
+    const hutan = biomeOf('hutan').levels;
+    expect(needsPass(hutan[4]!, true)).toBe(false);
+    expect(needsPass(hutan[5]!, true)).toBe(true);
+    expect(needsPass(hutan[5]!, false)).toBe(false);
+    expect(worldNeedsPass('hutan', true)).toBe(false);
+    expect(worldNeedsPass('gua', true)).toBe(true);
+    expect(worldNeedsPass('gua', false)).toBe(false);
+
+    const done = { 'hutan-1': 1, 'hutan-2': 1, 'hutan-3': 1, 'hutan-4': 1, 'hutan-5': 1 };
+    expect(resumeLevel('hutan', done, true)?.id).toBe('hutan-5');
+    expect(resumeLevel('hutan', done, false)?.id).toBe('hutan-6');
+
+    const free = new WarnaMatch(done, true);
+    expect(LEVELS[free.pick]?.id).toBe('hutan-5');
+    expect(free.pickWorld('gua')).toBe(false);
+    expect(free.toLevels()).toBe(true);
+    expect(free.pickLevel('hutan-6')).toBe(false);
+    expect(free.pickLevel('hutan-5')).toBe(true);
+    free.setPeople([P(1), P(2)]);
+    free.start();
+    expect(free.level.id).toBe('hutan-5');
+    expect(free.nextLevel()).toBeUndefined();
+    expect(free.nextNeedsPass()).toBe(true);
+
+    const full = new WarnaMatch(done);
+    expect(full.limited).toBe(false);
+    expect(full.pickWorld('gua')).toBe(true);
+  });
+
   it('lets the Host skip after a long time: no stars, the next stage opens', () => {
-    const m = new WarnaMatch(1);
+    const m = new WarnaMatch();
     m.setPeople([P(1), P(2)]);
     begin(m);
     play(m, INTRO_S + 0.1);
@@ -169,7 +226,7 @@ describe('worlds and progress', () => {
 
   it('gives staged hints and pulses the hint button when nothing moves forward', () => {
     const lv = biomeOf('hutan').levels[3]!;
-    const m = new WarnaMatch(1, { 'hutan-1': 1, 'hutan-2': 1, 'hutan-3': 1 });
+    const m = new WarnaMatch({ 'hutan-1': 1, 'hutan-2': 1, 'hutan-3': 1 });
     m.setPeople([P(1), P(2)]);
     m.toLevels();
     expect(m.pickLevel(lv.id)).toBe(true);
@@ -205,5 +262,19 @@ describe('awards', () => {
     expect(awards.map((a) => a.playerId).sort()).toEqual([1, 2, 3, 4]);
     expect(awards.find((a) => a.playerId === 1)?.title).toBe('Pendorong Andal');
     expect(awards.find((a) => a.playerId === 2)?.title).toBe('Pemburu Permata');
+  });
+});
+
+describe('looks', () => {
+  it("keeps each person's look", () => {
+    const m = new WarnaMatch();
+    m.setPeople([{ ...P(1), look: { c: 'ayu', hc: 3 } }, P(2)]);
+    expect(m.person(1)?.look).toEqual({ c: 'ayu', hc: 3 });
+  });
+
+  it('gives the solo second character a different cast member', () => {
+    for (const look of [lookOfFruit('semangka'), lookOfFruit('nanas'), { c: 'opa' as const }, undefined]) {
+      expect(secondLook(look).c).not.toBe(look?.c);
+    }
   });
 });

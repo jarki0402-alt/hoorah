@@ -27,7 +27,7 @@ export function formatElapsed(seconds: number): string {
 
 export const STR = {
   gameTitle: 'LARI TERUS',
-  noShell: 'Lari Terus harus dibuka dari aplikasi Hoorah.',
+  noShell: 'Lari Terus harus dibuka dari aplikasi Kacawbalaw.',
   loadFailed: 'Gagal memuat Lari Terus. Periksa koneksi lalu buka lagi.',
 
   modes: {

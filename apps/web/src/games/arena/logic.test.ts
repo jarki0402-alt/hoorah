@@ -1,6 +1,7 @@
 import {
   FRUITS,
   INPUT_OP,
+  lookOfFruit,
   PAD_ACTION,
   PLAYER_COLORS,
   type PlayerInfo,
@@ -38,6 +39,7 @@ function player(id: number, connected = true): PlayerInfo {
     id,
     name: `P${id}`,
     fruit: FRUITS[i % FRUITS.length]!,
+    look: lookOfFruit(FRUITS[i % FRUITS.length]!),
     color: PLAYER_COLORS[i % PLAYER_COLORS.length]!,
     connected,
     isHost: id === 1,
@@ -426,6 +428,13 @@ describe('players', () => {
     expect(m.snake(2)!.connected).toBe(false);
     expect(m.snake(2)!.gone).toBe(false);
     expect(m.field()).toHaveLength(2);
+  });
+
+  it("keeps each snake's look and follows a restyle", () => {
+    const m = playing(2);
+    expect(m.snake(2)!.look).toEqual(player(2).look);
+    m.setPlayers([player(1), { ...player(2), look: { c: 'kai', s: 4 } }]);
+    expect(m.snake(2)!.look).toEqual({ c: 'kai', s: 4 });
   });
 });
 

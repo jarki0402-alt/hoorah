@@ -352,39 +352,197 @@ html:not([data-game]) .eyebrow.soft {
   border-color: var(--orange);
 }
 
-.fruit-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+/* ---------------------------------------------------------------- avatar maker */
+
+.ae {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  min-height: 0;
 }
 
-.fruit-btn {
+.ae-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ae-preview {
+  width: clamp(64px, calc(var(--vh) * 12), 92px);
+  height: clamp(64px, calc(var(--vh) * 12), 92px);
+}
+
+.ae-top-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ae-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.ae-random {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.ae-random:active {
+  transform: scale(0.96);
+}
+
+.ae-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ae-tab {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--surface);
+  color: var(--text-2);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.ae-tab.on {
+  background: var(--orange);
+  color: #fff;
+}
+
+.ae-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 8px;
+  max-height: clamp(128px, calc(var(--vh) * 30), 300px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+
+.ae-panel.is-skin,
+.ae-panel.is-hairColor,
+.ae-panel.is-outfit {
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+}
+
+.ae-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
   border-radius: 16px;
   border: 2px solid transparent;
   background: var(--surface);
-  padding: clamp(4px, calc(var(--vh) * 1.4), 10px) 0 clamp(3px, calc(var(--vh) * 0.9), 6px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--text-2);
-  transition: transform 0.15s var(--ease-pop);
+  padding: 2px;
 }
 
-.fruit-btn.on {
+.ae-cell.on {
   border-color: var(--orange);
   background: var(--surface-2);
-  transform: scale(1.04);
 }
 
-.fruit-btn svg {
-  width: var(--fruit, 54px);
-  height: var(--fruit, 54px);
+.ae-cell svg {
+  width: 100%;
+  height: 100%;
 }
 
-.fruit-btn.on svg {
-  animation: wiggle 0.5s ease;
+.ae-hair svg {
+  width: 88%;
+  height: auto;
+}
+
+.ae-swatch {
+  aspect-ratio: 1;
+  min-height: 44px;
+  border-radius: 50%;
+  border: 3px solid var(--surface-2);
+  box-shadow: 0 0 0 0 var(--orange);
+}
+
+.ae-swatch.on {
+  box-shadow: 0 0 0 3px var(--orange);
+}
+
+.ae-swatch.is-original {
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Right after joining: the avatar maker on the whole screen, the grid takes what is left. */
+.pick-page {
+  max-width: 720px;
+}
+
+.pick-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pick-page .ae {
+  flex: 1;
+}
+
+.pick-page .ae-panel {
+  flex: 1;
+  max-height: none;
+  min-height: 0;
+  align-content: start;
+}
+
+.pick-ready {
+  flex: none;
+}
+
+/* Lying sideways: the preview and Acak on the left, tabs and grid on the right. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .pick-page .ae {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 16px;
+  }
+
+  .pick-page .ae-top {
+    grid-row: 1 / 3;
+    flex-direction: column;
+    align-items: center;
+    align-self: start;
+  }
+
+  .pick-page .ae-top-text {
+    align-items: center;
+  }
+}
+
+.profile-sheet {
+  gap: 14px;
+  max-height: calc(var(--vh) * 94);
+  overflow-y: auto;
+}
+
+.lobby-edit {
+  align-self: center;
+  min-height: 44px;
 }
 
 /* ---------------------------------------------------------------- setup (code, name, error) */
@@ -410,10 +568,6 @@ html:not([data-game]) .eyebrow.soft {
   align-self: center;
 }
 
-.profile {
-  --fruit: clamp(34px, calc(var(--vh) * 8), 54px);
-}
-
 .profile-name {
   display: flex;
   flex-direction: column;
@@ -425,7 +579,7 @@ html:not([data-game]) .eyebrow.soft {
   font-weight: 600;
 }
 
-/* Portrait reads name → fruit → Masuk; in landscape Masuk stays under the name. */
+/* Portrait reads name → avatar → Masuk; in landscape Masuk stays under the name. */
 .profile .pane > .spacer,
 .profile-go {
   order: 2;
@@ -478,6 +632,13 @@ html:not([data-game]) .eyebrow.soft {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+/* Getar, Lainnya and Keluar: one even row however many pills there are. */
+.ctrl-footer {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
 }
 
 .foot-pill {
@@ -569,7 +730,6 @@ html:not([data-game]) .eyebrow.soft {
 }
 
 .host-name {
-  flex: 1;
   min-width: 0;
   font-size: 17px;
   font-weight: 800;
@@ -591,62 +751,33 @@ html:not([data-game]) .eyebrow.soft {
   order: 2;
 }
 
-.dpad {
-  --cell: clamp(64px, calc(var(--vh) * 13), 92px);
-  display: grid;
-  grid-template-columns: repeat(3, var(--cell));
-  grid-template-rows: repeat(3, var(--cell));
-  gap: 6px;
-  justify-content: center;
-}
-
-@supports (container-type: size) {
-  .dpad {
-    --cell: max(64px, min(92px, calc((100cqh - 18px) / 3), calc((100cqw - 12px) / 3)));
-  }
-}
-
-.dpad button {
-  border: none;
-  background: var(--surface-2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 5px 0 var(--surface-3);
-  touch-action: none;
-}
-
-.dpad button:active,
-.dpad button.pressed {
-  transform: translateY(4px);
-  box-shadow: none;
-  background: #34363c;
-}
-
-.dpad .ok {
-  border-radius: 50%;
-  background: var(--orange);
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 28px;
-  box-shadow: 0 5px 0 var(--orange-dark);
-}
-
-.dpad .ok:active,
-.dpad .ok.pressed {
-  background: #ff7a45;
-}
-
 /* ---------------------------------------------------------------- Host remote (d-pad + Pilih game)
    Status with HOST centred; the host card (avatar, name, small yellow Pilih game on the right);
    one compact row Kembali | Beranda | Getar | Keluar; the d-pad in a ring at the bottom, where
    the thumb rests. */
 
 .status-row {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* The two pills keep their full width; HOST sits centred in the room left between them, so it
+     can never slide under the code pill on a narrow pane. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+  /* Its own width decides what fits (a landscape side pane is much narrower than the phone). */
+  container-type: inline-size;
+}
+
+/* Too narrow for all three pills in full (small phones on their side): the connection pill keeps
+   only its dot, then the code pill drops its "Kode" label. Nothing ever overlaps. */
+@container (max-width: 320px) {
+  .status-row > :first-child .status-label {
+    display: none;
+  }
+}
+
+@container (max-width: 230px) {
+  .status-row > :last-child .status-label {
+    display: none;
+  }
 }
 
 .status-row > :first-child {
@@ -655,6 +786,10 @@ html:not([data-game]) .eyebrow.soft {
 
 .status-row > :last-child {
   justify-self: end;
+}
+
+.status-row > :nth-child(2) {
+  justify-self: center;
 }
 
 .status-row .pill {
@@ -678,6 +813,12 @@ html:not([data-game]) .eyebrow.soft {
   font-family: var(--font-display);
   font-size: 16px;
   white-space: nowrap;
+}
+
+/* The key row sizes itself to its own width (container query below), not the phone's. */
+.host-bricks-box {
+  align-self: stretch;
+  container-type: inline-size;
 }
 
 .host-bricks {
@@ -741,29 +882,80 @@ html:not([data-game]) .eyebrow.soft {
   height: 7px;
 }
 
+/* Six keys (Kembali, Beranda, Ganti Host / Getar, Lainnya, Keluar): always two even rows of
+   three, so labels never touch on narrow panes (owner 2026-11-23). */
+.host-bricks {
+  grid-auto-flow: row;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 /* Portrait: the d-pad sits at the bottom of its zone, under the thumb. */
 .hostpad .dpad-zone {
   align-items: flex-end;
 }
 
-.dpad-ring {
-  --cell: clamp(56px, calc(var(--vh) * 12), 96px);
-  padding: clamp(10px, calc(var(--vh) * 1.8), 16px);
-  border-radius: 50%;
-  background: var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* The round pad (ringpad.tsx): as large as its zone allows, never smaller than a thumb's reach. */
+.ring-pad {
+  --ring: clamp(184px, calc(var(--vh) * 40), 300px);
+  width: var(--ring);
+  height: var(--ring);
+  flex: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 @supports (container-type: size) {
-  .dpad-ring {
-    --cell: max(52px, min(96px, calc((100cqh - 46px) / 3), calc((100cqw - 46px) / 3)));
+  .ring-pad {
+    --ring: max(168px, min(300px, calc(100cqh - 8px), calc(100cqw - 8px)));
   }
 }
 
-.dpad-ring .dpad {
-  --cell: inherit;
+.ring-base {
+  fill: var(--surface);
+}
+
+.ring-ledge {
+  fill: var(--surface-3);
+}
+
+/* The thin X between the keys is the base colour showing through a stroke round every key. */
+.ring-fill {
+  fill: var(--surface-2);
+  stroke: var(--surface);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.ring-arrow {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ring-key.pressed .ring-fill {
+  fill: #34363c;
+}
+
+.ring-ok-ledge {
+  fill: var(--orange-dark);
+}
+
+.ring-ok-fill {
+  fill: var(--orange);
+}
+
+.ring-ok.pressed .ring-ok-fill {
+  fill: #ff7a45;
+}
+
+.ring-ok-text {
+  fill: var(--ink);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  pointer-events: none;
 }
 
 /* ---------------------------------------------------------------- game picker
@@ -1685,6 +1877,36 @@ html:not([data-game]) .eyebrow.soft {
   animation: rise-in 0.3s var(--ease-out);
 }
 
+/* Questions that must be seen (Jadi Host?): above the rotate screen and the full-screen offer. */
+.sheet.sheet-top {
+  z-index: 95;
+}
+
+.host-ask {
+  animation:
+    rise-in 0.3s var(--ease-out),
+    host-ask-nudge 0.5s ease 0.35s 2;
+}
+
+@keyframes host-ask-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+.host-ask-left {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--orange);
+}
+
 .sheet-title {
   font-size: clamp(22px, calc(var(--vh) * 4), 26px);
 }
@@ -1847,16 +2069,24 @@ html.has-pill .ctrl {
   padding-top: calc(max(8px, env(safe-area-inset-top)) + 46px);
 }
 
-/* ---------------------------------------------------------------- in-game menus (Host / player) */
+/* ---------------------------------------------------------------- in-game menus (Host / player)
+   One fixed screen on every phone (owner 2026-11-23): never scrolled, never scaled. Portrait:
+   Lanjutkan, the action keys, the switches. Sideways: Lanjutkan and the switches on the left,
+   the actions on the right. Keys are remote-style 3D bricks with a big icon on a coloured tile. */
 
 .ctrl.ig-menu {
   max-width: none;
+}
+
+.ig-top {
+  flex: none;
 }
 
 .ig-head {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .ig-eyebrow {
@@ -1875,144 +2105,143 @@ html.has-pill .ctrl {
 }
 
 .ig-body {
-  display: flex;
-  flex-direction: column;
-  gap: clamp(10px, calc(var(--vh) * 2.4), 18px);
+  flex: 1;
   min-height: 0;
-}
-
-.ig-col {
-  display: flex;
-  flex-direction: column;
-  /* Every button has a 4 to 6 px ledge under it: the gap is the ledge plus visible air. */
-  gap: clamp(12px, calc(var(--vh) * 2), 16px);
-  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  grid-template-areas: "resume" "actions" "switches";
+  /* Tall phones: the keys sit together at the bottom, under the thumb, not spread out. */
+  align-content: end;
+  gap: clamp(12px, calc(var(--vh) * 2.2), 18px);
 }
 
 .big-btn.ig-resume {
+  grid-area: resume;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: clamp(56px, calc(var(--vh) * 10), 72px);
+  min-height: clamp(52px, calc(var(--vh) * 10), 72px);
   font-size: clamp(18px, calc(var(--vh) * 3), 21px);
-  /* Keeps its 3D ledge; the extra margin leaves clear air under the ledge. */
-  margin-bottom: clamp(4px, calc(var(--vh) * 1.2), 8px);
 }
 
-.ig-tiles {
+.ig-actions {
+  grid-area: actions;
+  min-height: 0;
+}
+
+.ig-switches {
+  grid-area: switches;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: clamp(12px, calc(var(--vh) * 2), 16px);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px;
 }
 
-/* Every action is one even row (icon + label): nothing wraps or sits out of line, at any size. */
-.ig-tile {
+.ig-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  gap: clamp(10px, calc(var(--vh) * 1.8), 14px);
+}
+
+.ig-grid.is-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A key: icon tile on top, label below, a 5 px ledge like the remote's keys. */
+.ig-brick {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  min-height: clamp(46px, calc(var(--vh) * 8.4), 60px);
-  padding: 0 16px;
+  justify-content: center;
+  gap: clamp(3px, calc(var(--vh) * 0.8), 6px);
+  min-width: 0;
+  min-height: clamp(62px, calc(var(--vh) * 13), 112px);
+  padding: 6px 4px 8px;
   border: none;
   border-radius: 18px;
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--text);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
-  text-align: left;
-  white-space: nowrap;
-  box-shadow:
-    inset 0 0 0 2px var(--line),
-    0 4px 0 var(--surface-3);
+  line-height: 1.1;
+  text-align: center;
+  box-shadow: 0 5px 0 var(--surface-3);
+  touch-action: manipulation;
 }
 
-.ig-tile.is-danger {
+.ig-brick:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--surface-3);
+}
+
+.ig-brick.is-danger {
   color: #ff8a80;
 }
 
-.ig-tile:active {
-  transform: translateY(3px);
-  box-shadow:
-    inset 0 0 0 2px var(--line),
-    0 1px 0 var(--surface-3);
-}
-
-.ig-section {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
-}
-
-.ig-toggle {
+/* A plain icon in the text colour, like the keys of the home remote (owner 2026-11-24: no
+   coloured tiles in the pause menu). Switches tell their state in the line under the label. */
+.ig-brick-icon {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: clamp(48px, calc(var(--vh) * 8.6), 60px);
-  padding: clamp(4px, calc(var(--vh) * 1.2), 10px) 14px clamp(4px, calc(var(--vh) * 1.2), 10px) 16px;
-  border: none;
-  border-radius: 16px;
-  background: var(--surface);
-  color: var(--text);
-  text-align: left;
-  box-shadow: inset 0 0 0 2px var(--line);
+  justify-content: center;
+  color: inherit;
 }
 
-.ig-toggle-text {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.ig-toggle-label {
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.ig-toggle-sub {
-  font-size: 12px;
+.ig-brick.is-off .ig-brick-icon {
   color: var(--text-3);
 }
 
-.ig-switch {
-  position: relative;
-  flex: none;
-  width: 50px;
-  height: 30px;
-  border-radius: 999px;
-  background: var(--surface-3);
-  box-shadow: inset 0 0 0 2px var(--line);
+.ig-brick-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ig-switch span {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--text-3);
+.ig-brick-state {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--green-text);
 }
 
-.ig-toggle.on .ig-switch {
-  background: var(--green, #22b35e);
-  box-shadow: none;
+.ig-brick.is-off .ig-brick-state {
+  color: var(--text-3);
 }
 
-.ig-toggle.on .ig-switch span {
-  left: 24px;
-  background: #fff;
-}
-
-.ig-invite {
+/* "Tambah pemain": one short line, then Selesai and Kode Pass as keys. */
+.ig-add {
   display: flex;
   flex-direction: column;
-  gap: clamp(4px, calc(var(--vh) * 1.1), 8px);
-  padding: clamp(10px, calc(var(--vh) * 2.2), 16px) 16px;
+  gap: 10px;
+}
+
+.ig-add .ig-grid {
+  flex: 1;
+  align-content: start;
+}
+
+.ig-add-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+/* Player menu: the room code to invite a friend. */
+.ig-code-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 12px;
   border-radius: 18px;
   background: var(--surface);
   box-shadow: inset 0 0 0 2px var(--line);
@@ -2020,68 +2249,29 @@ html.has-pill .ctrl {
 
 .ig-code {
   font-family: var(--font-display);
-  font-size: clamp(34px, calc(var(--vh) * 7.5), 52px);
+  font-size: clamp(30px, calc(var(--vh) * 6.4), 44px);
   font-weight: 800;
-  letter-spacing: 0.14em;
-  line-height: 1;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
   color: var(--yellow);
 }
 
-.ig-invite-hint,
-.ig-note {
-  font-size: clamp(13px, calc(var(--vh) * 2.2), 14px);
-  line-height: 1.4;
-  color: var(--text-2);
-}
-
-.ig-invite-hint b {
-  color: var(--text);
-}
-
-.ig-seats {
+.ig-code-host {
   font-size: 13px;
-  line-height: 1.4;
   color: var(--text-3);
-}
-
-.ig-seats.is-full {
-  color: var(--yellow);
-}
-
-/* Host invite: Selesai sits beside the code instead of under the text. */
-.ig-invite.has-done {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 12px;
-  align-items: center;
-}
-
-.has-done > * {
-  grid-column: 1 / -1;
-}
-
-.has-done > .ig-eyebrow {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.has-done > .ig-code {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-.has-done > .big-btn {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  padding: 0 22px;
 }
 
 @media (orientation: landscape) {
   .ig-body {
-    display: grid;
-    grid-template-columns: 1.15fr 1fr;
-    gap: 18px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "resume actions" "switches actions";
+    align-content: stretch;
+    column-gap: 18px;
+  }
+
+  .ig-switches {
+    align-self: end;
   }
 }
 
@@ -3011,11 +3201,7 @@ html.has-pill .ctrl {
     margin-top: 0;
   }
 
-  .profile {
-    --fruit: clamp(32px, calc(var(--vh) * 12), 54px);
-  }
-
-  .profile-fruits {
+  .profile-avatar {
     flex-grow: 1.3;
   }
 
@@ -3155,13 +3341,6 @@ html.has-pill .ctrl {
   }
 }
 
-/* The shortest landscape phones (about 320 px tall) drop the one explanatory line. */
-@media (orientation: landscape) and (max-height: 360px) {
-  .ig-note {
-    display: none;
-  }
-}
-
 /* Older browsers without container units: size the big controls from the landscape height. */
 @supports not (container-type: size) {
   @media (orientation: landscape) and (max-height: 540px) {
@@ -3178,8 +3357,8 @@ html.has-pill .ctrl {
       --gh: calc(var(--vh) * 100 - 70px);
     }
 
-    .dpad {
-      --cell: max(56px, min(92px, calc((var(--vh) * 100 - 80px) / 3)));
+    .ring-pad {
+      --ring: max(160px, min(300px, calc(var(--vh) * 100 - 40px)));
     }
   }
 }
@@ -3483,10 +3662,6 @@ html.fit-compact .big-btn {
   min-height: 44px;
 }
 
-html.fit-compact .big-btn.ig-resume {
-  min-height: 52px;
-}
-
 html.fit-compact .answer {
   min-height: 56px;
 }
@@ -3495,17 +3670,6 @@ html.fit-compact .menu-opt {
   min-height: 46px;
   padding-top: 8px;
   padding-bottom: 8px;
-}
-
-html.fit-compact .ig-tile {
-  min-height: 44px;
-  padding: 0 12px;
-}
-
-html.fit-compact .ig-toggle {
-  min-height: 46px;
-  padding-top: 6px;
-  padding-bottom: 6px;
 }
 
 html.fit-compact .foot-pill {
@@ -3526,9 +3690,12 @@ html.fit-scale .ctrl {
 }
 
 /* Tight phones: smaller air, but never less than the 3D ledge plus a few pixels. */
-html.fit-compact .ig-col,
-html.fit-compact .ig-tiles {
+html.fit-compact .ig-body {
   gap: 10px;
+}
+
+html.fit-compact .ig-brick {
+  min-height: 56px;
 }
 
 /* ---------------------------------------------------------------- nearby screens (code page) */
@@ -3654,12 +3821,6 @@ html.fit-compact .ig-tiles {
   color: var(--green-text);
 }
 
-.ig-pass {
-  align-self: flex-start;
-  font-weight: 800;
-  color: var(--yellow);
-}
-
 /* "Cara main" on the main screen: the phone only offers Paham! (and Lewati for the Host). */
 .tu-phone-view {
   align-items: center;
@@ -3743,4 +3904,268 @@ html.fit-compact .ig-tiles {
 
 .host-notice {
   z-index: 90;
+}
+
+/* ---------------------------------------------------------------- "Laporkan masalah" (report.tsx)
+   A small text link that never takes a key's place: in the in-game menus it sits at the right of
+   the header row (no extra height), in the lobby under the greeting, on the Host pad under the
+   key row. The sheet itself scrolls when the keyboard is up. */
+
+.report-link {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.report-link:active {
+  color: var(--text);
+}
+
+/* Header row of the in-game menus: the name and title shorten before the row grows. */
+.ig-top .ig-head {
+  flex: 1;
+}
+
+.ig-top .ig-eyebrow,
+.ig-top .ig-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Two short lines ("Laporkan / masalah") so the title keeps its room on narrow phones. */
+.ig-report {
+  max-width: 92px;
+  margin-right: -6px;
+  font-size: 12px;
+}
+
+.lobby-report {
+  align-self: center;
+}
+
+.host-report {
+  align-self: center;
+  min-height: 32px;
+  margin: -4px 0;
+}
+
+.report-card {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.report-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-2);
+}
+
+.report-kind {
+  min-height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+
+.report-kind.is-on {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.report-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.report-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+}
+
+.text-input.report-text {
+  height: auto;
+  min-height: 84px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  resize: none;
+}
+
+.text-input.report-contact {
+  height: 48px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Phones held sideways: smaller chips and a shorter text box, the card scrolls for the rest. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .report-kind {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .text-input.report-text {
+    min-height: 64px;
+  }
+}
+
+.report-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.report-done-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--green);
+  color: var(--ink);
+  animation: pop-in 0.4s var(--ease-pop) both;
+}
+
+/* ---------------------------------------------------------------- Lainnya sheet, access badge */
+
+.more-sheet {
+  gap: 12px;
+}
+
+.more-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 18px;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface-2);
+  box-shadow: 0 5px 0 var(--surface-3);
+}
+
+.more-row:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--surface-3);
+}
+
+.more-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  color: var(--ink);
+}
+
+.more-icon.t-yellow {
+  background: var(--yellow);
+}
+
+.more-icon.t-blue {
+  background: #5aa9ff;
+}
+
+.more-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.more-text b {
+  font-size: 16px;
+}
+
+.more-text span {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.access-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.access-badge.is-free {
+  color: var(--text-2);
+  background: var(--surface-3);
+}
+
+.access-badge.is-trial {
+  color: var(--ink);
+  background: var(--orange);
+}
+
+.access-badge.is-pass {
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.access-badge.is-open {
+  color: var(--ink);
+  background: #5aa9ff;
+}
+
+/* Name with the access badge under it: both stay visible on the narrowest phones. */
+.host-id {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.host-id .host-name {
+  max-width: 100%;
 }

@@ -53,3 +53,27 @@ export async function shareText(text: string): Promise<boolean> {
     return err instanceof DOMException && err.name === 'AbortError';
   }
 }
+
+/** Saves `text` as a file through a temporary link; false when the browser refused. */
+export function downloadText(fileName: string, text: string, mime = 'text/csv;charset=utf-8'): boolean {
+  let url: string | null = null;
+  try {
+    // The byte order mark makes Excel read the file as UTF-8.
+    url = URL.createObjectURL(new Blob(['﻿', text], { type: mime }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    // Revoke after the click has been handled, or some browsers cancel the download.
+    const done = url;
+    if (done) setTimeout(() => URL.revokeObjectURL(done), 10_000);
+  }
+}

@@ -150,6 +150,13 @@ body {
   gap: 28px;
 }
 
+.topbar-home {
+  display: flex;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 12px;
+}
+
 .topbar-right {
   display: flex;
   align-items: center;
@@ -212,22 +219,14 @@ body {
 
 .qr-card {
   position: relative;
-  background: #fff;
   border-radius: 20px;
-  padding: 12px;
+  /* The code draws its own 4-square margin; the rounded corners clip it neatly. */
+  padding: 0;
+  overflow: hidden;
+  line-height: 0;
+  background: #b8b8b8;
   box-shadow: 0 0 0 6px var(--orange);
   animation: pop-in 0.5s var(--ease-pop) both;
-}
-
-.qr-logo {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background: #fff;
-  border-radius: 10px;
-  padding: 4px;
-  display: flex;
 }
 
 .room-code {
@@ -246,6 +245,16 @@ body {
   border-radius: 16px;
   padding: 10px 12px;
   animation: pop-in 0.45s var(--ease-pop) both;
+}
+
+.player-picking {
+  animation: picking-blink 1.4s ease-in-out infinite;
+}
+
+@keyframes picking-blink {
+  50% {
+    opacity: 0.45;
+  }
 }
 
 .player-row.empty {
@@ -830,4 +839,366 @@ body {
   display: flex;
   gap: 12px;
   margin-top: 6px;
+}
+
+/* ------------------------------------------------------------ Hoorah Pass offer */
+
+.offer-overlay {
+  z-index: 60;
+  background: rgba(17, 18, 20, 0.9);
+}
+
+.offer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 560px;
+  padding: 36px 40px 28px;
+  border-radius: 28px;
+  background: var(--surface);
+  animation: pop-in 0.3s var(--ease-pop);
+}
+
+.offer-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.offer-reason {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.offer-title {
+  margin: 0;
+  font-size: 38px;
+  line-height: 1.08;
+}
+
+.offer-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.offer-benefits li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.offer-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--orange);
+}
+
+.offer-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.offer-btn {
+  width: 100%;
+  padding: 13px 18px;
+  font-size: 17px;
+}
+
+.offer-hint {
+  font-size: 13px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+/* What the room has, in the top bar: filled colour per state (no edge stripes). */
+.access-chip {
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.access-chip.is-free {
+  color: var(--text-2);
+}
+
+.access-chip.is-trial {
+  color: var(--ink);
+  background: var(--orange);
+}
+
+.access-chip.is-pass {
+  color: var(--ink);
+  background: var(--yellow);
+  font-variant-numeric: tabular-nums;
+}
+
+.access-chip.is-open {
+  color: var(--ink);
+  background: #5aa9ff;
+}
+
+/* ------------------------------------------------------------ long-distance play */
+
+/* "Main bareng teman jauh" next to the logo: two lines, the yellow round icon marks it. */
+.chip.remote-btn {
+  border: none;
+  font-family: inherit;
+  padding: 5px 16px 5px 5px;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.remote-btn-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--yellow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.remote-btn-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+}
+
+.remote-btn-title {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.remote-btn-sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.chip.remote-btn.is-on .remote-btn-icon {
+  background: var(--green-text);
+}
+
+.chip.remote-btn.is-on .remote-btn-title {
+  color: var(--green-text);
+}
+
+.chip.remote-chip {
+  font-weight: 800;
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+.remote-chip-host {
+  font-weight: 700;
+  padding-left: 7px;
+  border-left: 1px solid rgba(17, 18, 20, 0.3);
+}
+
+.remote-panel {
+  max-width: 1040px;
+  align-items: center;
+}
+
+.remote-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 600px;
+}
+
+.remote-title {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.05;
+}
+
+.remote-link-label {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-3);
+}
+
+.remote-link {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1.15;
+  color: var(--yellow);
+  overflow-wrap: anywhere;
+}
+
+.remote-steps {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.remote-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.remote-steps .howto-num {
+  flex: none;
+}
+
+.remote-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-2);
+}
+
+.remote-status.is-on {
+  color: var(--green-text);
+}
+
+.remote-status .spinner {
+  border-color: rgba(255, 255, 255, 0.2);
+  border-top-color: var(--yellow);
+}
+
+.remote-note {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.remote-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.remote-qr {
+  flex: none;
+}
+
+/* A game a far-away screen cannot show yet: bottom left of the card art, dark so it reads as "not now". */
+.tag.remote-tag {
+  color: #fff;
+  background: var(--ink);
+}
+
+.card-art > .tag.remote-tag {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 1;
+}
+
+.remote-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: var(--green-text);
+}
+
+.remote-detail.is-off {
+  color: var(--yellow);
+}
+
+/* Far-away main screen: the room's join QR in the corner for the phones there. */
+.far-badge {
+  position: absolute;
+  right: 28px;
+  bottom: 24px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 10px;
+  border-radius: 18px;
+  background: rgba(17, 18, 20, 0.92);
+}
+
+/* The detail page keeps its side panel on the right: the badge sits under the "Cara main" cards. */
+/* The detail page keeps its steps at the bottom left and its panel at the right: the badge goes
+   to the empty top right, over the game's picture. */
+.far-badge.is-top {
+  top: 24px;
+  bottom: auto;
+}
+
+.far-badge .qr-card {
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px var(--orange);
+}
+
+.far-badge-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.far-badge-code {
+  font-size: 26px;
+  letter-spacing: 0.06em;
+  color: var(--yellow);
+}
+
+.far-overlay {
+  z-index: 70;
+  background: rgba(17, 18, 20, 0.95);
+}
+
+.far-title {
+  margin: 0;
+  font-size: 48px;
+  line-height: 1.1;
+}
+
+.far-text {
+  max-width: 640px;
+  font-size: 20px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.spinner.far-spinner {
+  width: 56px;
+  height: 56px;
+  border-width: 6px;
+  border-color: rgba(255, 255, 255, 0.2);
+  border-top-color: var(--yellow);
 }

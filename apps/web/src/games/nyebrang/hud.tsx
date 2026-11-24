@@ -5,7 +5,7 @@
  * per-frame things (tags, pop-ups) are written straight to pooled elements so Preact never
  * re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
 import { THUMBS } from '../../controller/thumbs/nyebrang';
@@ -18,7 +18,7 @@ import { MAP_DESC, MAP_NAME, MODE_DESC, MODE_NAME, STR } from './strings';
 export interface BoardRow {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   dist: number;
   state: 'run' | 'dead' | 'out' | 'done';
@@ -29,7 +29,7 @@ export interface BoardRow {
 export interface ScoreRow {
   id: number;
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: string;
   dist: number;
   near: number;
@@ -95,7 +95,7 @@ function Board({ rows }: { rows: BoardRow[] }) {
       {rows.map((r, i) => (
         <div key={r.id} class={`nb-row is-${r.state}`}>
           <span class="nb-row-rank">{i + 1}</span>
-          <Avatar fruit={r.fruit} ring={r.color} size={30} face={r.state === 'out' ? 'sad' : 'happy'} />
+          <Avatar look={r.look} ring={r.color} size={30} face={r.state === 'out' ? 'sad' : 'happy'} />
           <span class="nb-row-name">{r.name}</span>
           <span class="nb-row-val">
             {r.state === 'out'
@@ -173,7 +173,7 @@ function Scores({ rows, title, foot }: { rows: ScoreRow[]; title: string; foot?:
         <div key={r.id} class={`nb-score ${r.rank === 1 ? 'is-top' : ''}`}>
           <span class="nb-score-rank">{r.rank}</span>
           <span class="nb-score-who">
-            <Avatar fruit={r.fruit} ring={r.color} size={34} face={r.rank === 1 ? 'wow' : 'happy'} />
+            <Avatar look={r.look} ring={r.color} size={34} face={r.rank === 1 ? 'wow' : 'happy'} />
             {r.name}
           </span>
           <span>{r.dist}</span>

@@ -1,3 +1,4 @@
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { RuntuhMatch } from './logic';
 import { PUSH_BUTTON, viewFor } from './views';
@@ -6,6 +7,7 @@ const players = [1, 2].map((id) => ({
   id,
   name: `P${id}`,
   fruit: 'jeruk' as const,
+  look: lookOfFruit('jeruk'),
   color: '#2F8CFF',
   cpu: false,
 }));

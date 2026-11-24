@@ -151,5 +151,5 @@ export const STR = {
   awardWorker: 'Pekerja Keras',
   awardWorkerDesc: (n: number) => `Menyumbang ${n} lantai`,
 
-  noShell: 'Buka Rusun dari aplikasi Hoorah di layar utama.',
+  noShell: 'Buka Rusun dari aplikasi Kacawbalaw di layar utama.',
 } as const;

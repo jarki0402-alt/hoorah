@@ -2,7 +2,7 @@
  * Glue between the Hoorah SDK, the pure rules, the Phaser scene and the DOM HUD: owns the game
  * clock (frozen while paused), turns logic events into sounds, phone views and HUD state.
  */
-import type { ControllerToGame, ControllerView, PlayerInfo } from '@hoorah/protocol';
+import { type ControllerToGame, type ControllerView, lookOfFruit, type PlayerInfo } from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import type { Face } from '../../shared/art/fruits';
 import { floorWidth } from '../../shared/art/rusun';
@@ -552,6 +552,7 @@ export class RusunDriver implements SceneDriver {
       id,
       name: p?.name ?? STR.unknownPlayer,
       fruit: p?.fruit ?? 'semangka',
+      look: p?.look ?? lookOfFruit('semangka'),
       color: p?.color ?? '#C4C7CC',
     };
   }

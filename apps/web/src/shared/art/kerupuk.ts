@@ -5,7 +5,8 @@
  * (world px = 2x); characters stand with their feet at (0, 0).
  */
 import type { Fruit } from '@hoorah/protocol';
-import { type Face, FRUIT_ART, fruitMarkup } from './fruits';
+import { type Face, FRUIT_ART } from './fruits';
+import { castHead } from './people';
 import { f1, svgDoc } from './svg';
 
 export const KERUPUK_SKY = '#9ADBFF';
@@ -246,7 +247,7 @@ export function kerupukBody(shirt: string): string {
 
 /** Full character (body + head) for the poster. */
 function contestant(shirt: string, fruit: Fruit, face: Face): string {
-  return `${kerupukBody(shirt)}<g transform="translate(${HEAD.x} ${HEAD.y}) scale(${HEAD.scale})">${fruitMarkup(fruit, face)}</g>`;
+  return `${kerupukBody(shirt)}<g transform="translate(${HEAD.x} ${HEAD.y}) scale(${HEAD.scale})">${castHead(fruit, face)}</g>`;
 }
 
 function shade(hex: string, k: number): string {

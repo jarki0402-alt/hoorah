@@ -27,6 +27,7 @@
 import {
   type Fruit,
   INPUT_OP,
+  type Look,
   PAD_DOWN,
   PAD_LEFT,
   PAD_RIGHT,
@@ -154,6 +155,7 @@ export interface Runner extends Motion {
   v: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
   alive: boolean;
@@ -538,6 +540,7 @@ export class WilayahMatch {
         r.name = p.name;
         r.color = p.color;
         r.fruit = p.fruit;
+        r.look = p.look;
         continue;
       }
       if (!p.connected || this.phase === 'over' || this.phase === 'done') continue;
@@ -577,6 +580,7 @@ export class WilayahMatch {
       v: slot + 1,
       name: p.name,
       fruit: p.fruit,
+      look: p.look,
       color: p.color,
       connected: p.connected,
       alive: false,

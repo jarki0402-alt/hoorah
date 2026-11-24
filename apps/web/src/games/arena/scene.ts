@@ -6,7 +6,7 @@
  * Performance: one texture atlas, pooled sprites per snake (outline pass, body pass, head), one
  * pooled sprite pair per seed slot. Hot paths reuse buffers and never allocate.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import { PLAYER_COLORS } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
@@ -17,10 +17,12 @@ import { type ArenaMatch, colorNumber, PELLET_FREE, SEED_COLORS, type Snake } fr
 import {
   ATLAS_KEY,
   Atlas,
+  BLANK_KEY,
   bandFrame,
   DISC_R,
   GLOW_R,
-  headFrame,
+  HEADS_KEY,
+  HeadAtlas,
   mixColor,
   RENDER_SCALE,
   SEED_R,
@@ -43,7 +45,7 @@ const D_GLOW = 2;
 const D_TONGUE = 3;
 const D_HEADRING = 4;
 const D_HEAD = 5;
-const D_FRUIT = 6;
+const D_AVATAR = 6;
 
 interface SnakeView {
   layer: Phaser.GameObjects.Layer;
@@ -58,8 +60,11 @@ interface SnakeView {
   tongue: Phaser.GameObjects.Image;
   headRing: Phaser.GameObjects.Image;
   head: Phaser.GameObjects.Image;
-  fruit: Phaser.GameObjects.Image;
-  fruitKey: string;
+  /** The player's head on top of the snake's head disc. */
+  avatar: Phaser.GameObjects.Image;
+  /** Frame shown on `avatar` ('' = re-apply on the next face update). */
+  avatarKey: string;
+  face: Face;
   live: boolean;
   dyingAt: number;
   spawnAt: number;
@@ -99,8 +104,8 @@ export class ArenaScene extends Phaser.Scene {
   view: ArenaView = { x: 0, y: 0, w: 1, h: 1, s: 1 };
 
   private resolveReady!: () => void;
-  private readonly heads: Map<string, HTMLImageElement>;
   private atlas!: Atlas;
+  private heads!: HeadAtlas;
   private model: ArenaMatch | null = null;
   private arenaCam!: Phaser.Cameras.Scene2D.Camera;
   private stageW = 1280;
@@ -133,16 +138,16 @@ export class ArenaScene extends Phaser.Scene {
   private flashUntil = 0;
   private flashColor = 0xffffff;
 
-  constructor(heads: Map<string, HTMLImageElement>) {
+  constructor() {
     super({ key: 'arena' });
-    this.heads = heads;
     this.ready = new Promise((resolve) => {
       this.resolveReady = resolve;
     });
   }
 
   create(): void {
-    this.atlas = new Atlas(this.textures, this.heads);
+    this.atlas = new Atlas(this.textures);
+    this.heads = new HeadAtlas(this.textures, () => this.headsChanged());
     for (const c of SEED_COLORS) this.atlas.ensureSeed(c);
     for (const c of PLAYER_COLORS) this.atlas.ensureSnake(colorNumber(c));
     this.atlas.flush();
@@ -331,8 +336,8 @@ export class ArenaScene extends Phaser.Scene {
     this.arenaCam.shake(200 + big * 120, 0.0035 + big * 0.003);
     if (v && this.model) {
       v.dyingAt = this.model.now;
-      v.fruitKey = '';
-      this.setFace(v, this.model.snake(id)?.fruit, 'sad');
+      v.avatarKey = '';
+      this.setFace(v, this.model.snake(id)?.look, 'sad');
     }
   }
 
@@ -470,7 +475,8 @@ export class ArenaScene extends Phaser.Scene {
     const tongue = img('tongue', D_TONGUE).setVisible(false);
     const headRing = img('disc', D_HEADRING);
     const head = img('disc', D_HEAD);
-    const fruit = img(headFrame(s.fruit, 'happy'), D_FRUIT);
+    const avatar = this.make.image({ key: BLANK_KEY }, false).setDepth(D_AVATAR);
+    layer.add(avatar);
     const v: SnakeView = {
       layer,
       color: -1,
@@ -484,8 +490,9 @@ export class ArenaScene extends Phaser.Scene {
       tongue,
       headRing,
       head,
-      fruit,
-      fruitKey: '',
+      avatar,
+      avatarKey: '',
+      face: 'happy',
       live: false,
       dyingAt: -1,
       spawnAt: Number.NEGATIVE_INFINITY,
@@ -513,12 +520,23 @@ export class ArenaScene extends Phaser.Scene {
     for (const o of v.outline) o.setTint(v.dark);
   }
 
-  private setFace(v: SnakeView, fruit: Fruit | undefined, face: Face): void {
-    if (!fruit) return;
-    const key = headFrame(fruit, face);
-    if (v.fruitKey === key) return;
-    v.fruitKey = key;
-    v.fruit.setFrame(key);
+  private setFace(v: SnakeView, look: Look | undefined, face: Face): void {
+    if (!look) return;
+    v.face = face;
+    const frame = this.heads.frame(look, face);
+    const key = frame ?? BLANK_KEY;
+    if (v.avatarKey === key) return;
+    v.avatarKey = key;
+    if (frame) v.avatar.setTexture(HEADS_KEY, frame);
+    else v.avatar.setTexture(BLANK_KEY);
+  }
+
+  /** Head atlas changed (a look finished rasterizing or a slot was recycled): re-apply every head. */
+  private headsChanged(): void {
+    for (const [id, v] of this.views) {
+      v.avatarKey = '';
+      this.setFace(v, this.model?.snake(id)?.look, v.face);
+    }
   }
 
   private grow(v: SnakeView, n: number): void {
@@ -617,12 +635,12 @@ export class ArenaScene extends Phaser.Scene {
     v.headRing.setPosition(hx, hy).setScale((hr + ow) / DISC_R);
     v.head.setPosition(hx, hy).setScale(hr / DISC_R);
     v.lean += (s.steer * 0.24 - v.lean) * 0.16;
-    v.fruit
+    v.avatar
       .setPosition(hx, hy)
       .setScale((hr * 2.3) / 128)
       .setRotation(v.lean);
     const face: Face = s.boosting ? 'effort' : now < v.wowUntil ? 'wow' : 'happy';
-    this.setFace(v, s.fruit, face);
+    this.setFace(v, s.look, face);
 
     // A quick tongue flick now and then.
     const ca = Math.cos(s.angle);

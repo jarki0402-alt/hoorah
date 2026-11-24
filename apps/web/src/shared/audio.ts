@@ -62,6 +62,11 @@ const BELL_PARTIALS: readonly (readonly [number, number, number])[] = [
 
 /** Music bus level: under the sound effects. */
 const MUSIC_LEVEL = 0.22;
+/**
+ * The menu song plays at 40% of the game songs (owner 2026-11-23): it is background while people
+ * talk and pick a game, the select sounds stay clear over it.
+ */
+const MENU_LEVEL = 0.4;
 
 class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -78,6 +83,7 @@ class AudioEngine {
   private noise!: AudioBuffer;
   private muted = false;
   private musicOn = true;
+  private musicIdle = false;
   private track: Track | null = null;
   private player: MusicPlayer | null = null;
 
@@ -98,7 +104,7 @@ class AudioEngine {
     this.sfxBus.gain.value = 0.7;
     this.sfxBus.connect(this.master);
     this.musicBus = ctx.createGain();
-    this.musicBus.gain.value = this.musicOn ? MUSIC_LEVEL : 0;
+    this.musicBus.gain.value = this.musicGain();
     this.duckBus = ctx.createGain();
     this.musicBus.connect(this.duckBus).connect(this.master);
     // Smart TV browsers and 1–2 core machines get the music without reverb/delay (cheaper).
@@ -144,7 +150,26 @@ class AudioEngine {
   /** Music only (sound effects keep playing); `setMuted` silences everything. */
   setMusicOn(on: boolean): void {
     this.musicOn = on;
-    if (this.ctx) this.musicBus.gain.setTargetAtTime(on ? MUSIC_LEVEL : 0, this.ctx.currentTime, 0.08);
+    this.applyMusicGain(0.08);
+  }
+
+  /**
+   * Nobody has touched anything for a while: the music fades out slowly (a few seconds) and comes
+   * back softly on the next input. Sound effects are not affected.
+   */
+  setMusicIdle(idle: boolean): void {
+    if (this.musicIdle === idle) return;
+    this.musicIdle = idle;
+    this.applyMusicGain(idle ? 2 : 0.4);
+  }
+
+  private musicGain(): number {
+    if (!this.musicOn || this.musicIdle) return 0;
+    return MUSIC_LEVEL * (this.track === 'menu' ? MENU_LEVEL : 1);
+  }
+
+  private applyMusicGain(timeConstant: number): void {
+    if (this.ctx) this.musicBus.gain.setTargetAtTime(this.musicGain(), this.ctx.currentTime, timeConstant);
   }
 
   setMuted(muted: boolean): void {
@@ -163,6 +188,8 @@ class AudioEngine {
   music(track: Track | null): void {
     if (track === this.track) return;
     this.track = track;
+    // Menu songs softer than game songs, eased with the crossfade.
+    this.applyMusicGain(0.3);
     // Every song starts calm and at its written tempo.
     this.musicIntensity(0);
     this.musicHurry(false);

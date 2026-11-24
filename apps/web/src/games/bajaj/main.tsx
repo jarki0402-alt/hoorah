@@ -8,7 +8,7 @@
  * starting settings (quality.ts); the quality ladder steps down while racing. Debug pins: `?q=0..3`
  * shadow tier, `?k=` pixel ratio, `?aa=0|1` MSAA.
  */
-import { FRUITS, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
+import { FRUITS, lookOfFruit, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
 import { connect, type GameResult } from '@hoorah/sdk';
 import { render } from 'preact';
 import * as THREE from 'three';
@@ -57,6 +57,7 @@ class DemoGame implements GameLike {
       id: i + 1,
       name: names[i]!,
       fruit: FRUITS[i]!,
+      look: lookOfFruit(FRUITS[i]!),
       color: PLAYER_COLORS[i]!,
       connected: true,
       isHost: i === 0,
@@ -202,6 +203,7 @@ async function bootPoster(root: HTMLElement): Promise<void> {
     name: '',
     color,
     fruit,
+    look: lookOfFruit(fruit),
   }));
   const params = new URLSearchParams(window.location.search);
   const circuit = (params.get('map') as CircuitId | null) ?? 'kota';

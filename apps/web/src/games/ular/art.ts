@@ -2,8 +2,8 @@
  * Board and token art for the main screen. The board is one inline SVG drawn once per size and
  * cell size (numbers use the brand font, so it lives in the DOM, not in an <img>).
  */
-import type { Fruit } from '@hoorah/protocol';
-import { fruitMarkup } from '../../shared/art/fruits';
+import type { Look } from '@hoorah/protocol';
+import { avatarMarkup } from '../../shared/art/people';
 import { f1 } from '../../shared/art/svg';
 import { ladderMarkup, type P, SNAKE_SKINS, snakeMarkup } from '../../shared/art/ular';
 import { type Board, cellCenter, ladderPoint, snakePoint, squareCell } from './board';
@@ -109,13 +109,16 @@ export function squarePx(board: Board, n: number, c: number): P {
   return { x: FRAME + p.x * c, y: FRAME + p.y * c };
 }
 
-/** Token face: fruit avatar in a cream disc with the player's colour as ring. */
-export function tokenMarkup(fruit: Fruit, color: string): string {
+/**
+ * Token face: the player's avatar in a cream disc with the player's colour as ring. `uid` keeps
+ * the avatar's clip ids unique when several tokens share one document.
+ */
+export function tokenMarkup(look: Look, color: string, uid?: string): string {
   return [
     '<ellipse cx="32" cy="61" rx="22" ry="5" fill="#000" opacity="0.28"/>',
     `<circle cx="32" cy="32" r="28" fill="#FFF7EA" stroke="${color}" stroke-width="6"/>`,
     '<circle cx="32" cy="32" r="31" fill="none" stroke="#3A2410" stroke-width="1.6"/>',
-    `<g transform="translate(9.6 9.6) scale(0.7)">${fruitMarkup(fruit, 'happy')}</g>`,
+    `<g transform="translate(9.6 9.6) scale(0.7)">${avatarMarkup(look, 'happy', uid)}</g>`,
   ].join('');
 }
 

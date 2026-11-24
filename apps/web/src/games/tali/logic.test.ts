@@ -1,3 +1,4 @@
+import { lookAt, lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { rng } from '../../shared/kotak/math';
 import { buildSection, isRouteId, levelOf, ROUTES, sectionPlan } from './course';
@@ -8,6 +9,7 @@ const people = (n: number): ClimberInfo[] =>
     id: i + 1,
     name: `P${i + 1}`,
     fruit,
+    look: lookOfFruit(fruit),
     color: ['#2F8CFF', '#F2453D', '#22B35E', '#FFC928'][i]!,
   }));
 
@@ -74,6 +76,14 @@ describe('Satu Tali courses', () => {
 });
 
 describe('Satu Tali match', () => {
+  it('carries each climber look and restyles it', () => {
+    const m = new TaliMatch({ climbers: people(2), route: 'senja', sections: 1, seed: 1 });
+    expect(m.climber(1)!.look).toEqual(lookOfFruit('jeruk'));
+    m.restyle(1, { look: lookAt(5) });
+    expect(m.climber(1)!.look).toEqual(lookAt(5));
+    expect(m.climber(2)!.look).toEqual(lookOfFruit('semangka'));
+  });
+
   it('ties a lone climber to a sandbag, and a team only to each other', () => {
     const solo = new TaliMatch({ climbers: people(1), route: 'senja', sections: 3, seed: 1 });
     expect(solo.sack).toBe(true);

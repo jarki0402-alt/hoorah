@@ -1,6 +1,6 @@
 /**
  * The 3D tabletop: one WebGL canvas covering the stage. A printed board with raised bevelled tiles
- * on a teak table under a warm lamp, glossy fruit pawns that hop tile by tile, ivory dice that
+ * on a teak table under a warm lamp, glossy character pawns that hop tile by tile, ivory dice that
  * tumble onto the rolled values, buildings that pop up in the owner's colour and grow with every
  * upgrade, a flip and a paint splash when a city is taken over, owner frames and gold coins flying
  * between players and the bank. The camera frames the whole board inside the free
@@ -12,7 +12,7 @@
  * frame is drawn only when something moves; the idle bob and pulses alone are drawn at 30 fps and a
  * paused board is not redrawn at all.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -52,7 +52,7 @@ import { cardBack, softShadow, woodTexture } from './textures';
 
 export interface PawnInfo {
   id: number;
-  fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -826,7 +826,7 @@ export class JuraganView {
     this.pawns.clear();
     this.dirty = true;
     for (const info of list) {
-      const model = new PawnModel(info.fruit, info.color);
+      const model = new PawnModel(info.look, info.color);
       this.scene.add(model.root);
       const blobMat = this.makeBlobMat(this.blobMat.map);
       const blob = this.blob(PAWN_BLOB, PAWN_BLOB, blobMat);

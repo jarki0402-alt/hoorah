@@ -71,7 +71,7 @@ const list = (names: string[]) =>
 
 export const STR = {
   logo: 'Kampung Siluman',
-  noShell: 'Buka Kampung Siluman dari layar utama Hoorah.',
+  noShell: 'Buka Kampung Siluman dari layar utama Kacawbalaw.',
   guide: 'Pemandu',
 
   // Setup

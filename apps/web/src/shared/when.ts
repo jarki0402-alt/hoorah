@@ -20,3 +20,14 @@ export function formatUntil(ms: number, now: number = Date.now()): string {
   if (days === 1) return `besok ${time}`;
   return `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${time}`;
 }
+
+/** Time left as a clock, "23:41:05" (hours may pass 24: "47:59:59"); never negative. */
+export function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return `${two(h)}:${two(m)}:${two(total % 60)}`;
+}
+
+/** Under this much time left a Pass shows a live countdown instead of its end time. */
+export const COUNTDOWN_UNDER_MS = 48 * 3_600_000;

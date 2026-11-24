@@ -191,5 +191,5 @@ export const STR = {
   awardTraveler: 'Penjelajah Kampung',
   awardTravelerDesc: (n: number) => `Sampai di kotak ${n}`,
 
-  noShell: 'Buka Ular Tangga dari aplikasi Hoorah di layar utama.',
+  noShell: 'Buka Ular Tangga dari aplikasi Kacawbalaw di layar utama.',
 } as const;

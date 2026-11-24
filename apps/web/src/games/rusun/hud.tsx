@@ -3,7 +3,7 @@
  * per-frame values (camera offset, countdown ring, card fades) are written straight to the DOM
  * so nothing re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import type { Face } from '../../shared/art/fruits';
 import { Avatar } from '../../shared/ui';
@@ -14,6 +14,7 @@ export interface PlayerCard {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -227,7 +228,7 @@ function TurnCard({ m, store }: { m: HudModel; store: HudStore }) {
       </div>
       {t ? (
         <div class="rs-turn-who" key={t.id}>
-          <Avatar fruit={t.fruit} ring={t.color} size={56} face="effort" />
+          <Avatar look={t.look} ring={t.color} size={56} face="effort" />
           <div class="rs-turn-name">
             <div class="rs-eyebrow">{STR.turn}</div>
             <div class="rs-name">{t.name}</div>
@@ -333,7 +334,7 @@ function SidePanel({ m, store }: { m: HudModel; store: HudStore }) {
       <div class="rs-players">
         {m.players.map((p) => (
           <div key={p.id} class={`rs-player${p.active ? ' is-active' : ''}`} style={{ opacity: p.dim }}>
-            <Avatar fruit={p.fruit} ring={p.color} size={compact ? 32 : 40} face={p.face} />
+            <Avatar look={p.look} ring={p.color} size={compact ? 32 : 40} face={p.face} />
             <div class="rs-player-text">
               <div class="rs-player-name">{p.name}</div>
               <div class="rs-player-stat">{p.stat}</div>
@@ -364,7 +365,7 @@ function BannerView({ b }: { b: Banner }) {
           <div class="display outline-text rs-roboh-title">{STR.roboh}</div>
         </div>
         <div class="rs-roboh-pill">
-          <Avatar fruit={b.collapser.fruit} ring={b.collapser.color} size={40} face="sad" />
+          <Avatar look={b.collapser.look} ring={b.collapser.color} size={40} face="sad" />
           <div class="rs-roboh-text">
             <b>{b.collapser.name}</b>
             {b.who}
@@ -372,7 +373,7 @@ function BannerView({ b }: { b: Banner }) {
             {b.highlight && <span class="rs-hl">{b.highlight}</span>}
             {b.rest}
           </div>
-          {b.winner && <Avatar fruit={b.winner.fruit} ring={b.winner.color} size={40} face="happy" />}
+          {b.winner && <Avatar look={b.winner.look} ring={b.winner.color} size={40} face="happy" />}
         </div>
       </div>
     );
@@ -396,7 +397,7 @@ function BannerView({ b }: { b: Banner }) {
   return (
     <div class="rs-banner rs-finale" key={b.key}>
       {b.winner && (
-        <Avatar fruit={b.winner.fruit} ring={b.winner.color} size={112} face="wow" class="rs-finale-avatar" />
+        <Avatar look={b.winner.look} ring={b.winner.color} size={112} face="wow" class="rs-finale-avatar" />
       )}
       <div class="display outline-text rs-finale-title">{b.title}</div>
       {b.record && <div class={`rs-record-pill${b.record.isNew ? ' is-new' : ''}`}>{b.record.text}</div>}
@@ -420,7 +421,7 @@ function PopupView({ p }: { p: Popup }) {
 function BubbleView({ b }: { b: Bubble }) {
   return (
     <div class={`rs-bubble is-${b.tone}`} style={{ left: b.x }}>
-      <Avatar fruit={b.who.fruit} ring={b.who.color} size={34} face={b.tone === 'boo' ? 'sad' : 'happy'} />
+      <Avatar look={b.who.look} ring={b.who.color} size={34} face={b.tone === 'boo' ? 'sad' : 'happy'} />
       <div class="rs-bubble-text">
         <span class="rs-bubble-name">{b.who.name}</span>
         <span class="rs-bubble-say">{b.text}</span>

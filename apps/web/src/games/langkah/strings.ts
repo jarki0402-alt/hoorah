@@ -73,7 +73,7 @@ export const STAGE_INFO: Record<Stage, { name: string; desc: string; short: stri
 
 export const STR = {
   gameTitle: 'LANGKAH MAUT',
-  noShell: 'Langkah Maut harus dibuka dari aplikasi Hoorah.',
+  noShell: 'Langkah Maut harus dibuka dari aplikasi Kacawbalaw.',
   loadFailed: 'Gagal memuat Langkah Maut. Periksa koneksi lalu buka lagi.',
 
   /* Setup (Host picks) */

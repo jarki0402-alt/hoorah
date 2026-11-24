@@ -9,7 +9,7 @@ export const ROLE_NAME: Record<Role, string> = { warga: 'Warga', penyusup: 'Peny
 
 export const STR = {
   logo: 'PENYUSUP',
-  noShell: 'Buka Penyusup dari Hoorah di layar utama.',
+  noShell: 'Buka Penyusup dari Kacawbalaw di layar utama.',
 
   /* Setup (Host menu on the phone, mirrored on the main screen) */
   menuEyebrow: (n: number, total: number) => `PENGATURAN ${n}/${total}`,

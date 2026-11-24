@@ -27,15 +27,20 @@ import '../games/ular/controller-theme.css';
 import '../games/lari/controller-theme.css';
 import '../games/wilayah/controller-theme.css';
 
-import { isFruit } from '@hoorah/protocol';
+import { isFruit, isPersonId, lookOfFruit } from '@hoorah/protocol';
 import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import { KeepAwake } from '../shared/device';
+import { installErrorReporter } from '../shared/report';
 import { startAutoFit } from './fit';
+import { controllerExtra } from './report';
 import { LeaveSheet, RoomView } from './room';
 import { startScreenMode } from './screenmode';
 import { CodePage, ErrorPage, JoiningPage, ProfilePage } from './setup';
-import { fruit, join, name, stage, tryResume } from './store';
+import { join, look, name, stage, tryResume } from './store';
+
+// Uncaught errors on this phone go to the owner's dashboard (deduped, capped per load).
+installErrorReporter('controller', controllerExtra);
 
 let confirmLeave: (() => void) | null = null;
 
@@ -147,11 +152,14 @@ window.addEventListener('pointerdown', () => void awake.enable(), { once: true }
 startAutoFit();
 startScreenMode();
 tryResume(params.get('r'));
-// Simulator / test hook: /?ctrl=1&r=CODE&name=Bot&fruit=durian&auto=1 joins straight away.
+// Simulator / test hook: /?ctrl=1&r=CODE&name=Bot&look=mia&auto=1 joins straight away (an old
+// `fruit=durian` picks the matching character).
 if (params.has('auto') && stage.value === 'profile') {
+  const c = params.get('look');
   const f = params.get('fruit');
   name.value = params.get('name') ?? 'Bot';
-  if (isFruit(f)) fruit.value = f;
+  if (isPersonId(c)) look.value = { c };
+  else if (isFruit(f)) look.value = lookOfFruit(f);
   join();
 }
 render(<App />, document.getElementById('app')!);

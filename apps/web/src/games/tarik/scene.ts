@@ -3,7 +3,7 @@
  * in logic.ts. The director writes `view` every frame and calls the effect methods on events.
  * Hot paths (update, rope drawing) reuse preallocated buffers and never allocate.
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Look, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
 import type { Team } from './logic';
@@ -15,7 +15,8 @@ import {
   FLAG_BOX,
   FLAG_KEY,
   HEAD,
-  headKey,
+  HeadBank,
+  lookId,
   RENDER_SCALE,
   WING_KEY,
 } from './textures';
@@ -44,7 +45,7 @@ const TEAM_ORDER: readonly Team[] = ['red', 'blue'];
 
 export interface RosterEntry {
   id: number;
-  fruit: Fruit;
+  look: Look;
   connected: boolean;
 }
 
@@ -73,7 +74,9 @@ interface Puller {
   body: Phaser.GameObjects.Image;
   face: Phaser.GameObjects.Image;
   shadow: Phaser.GameObjects.Image;
-  fruit: Fruit;
+  look: Look;
+  /** Expression on the head image ('effort' while pulling). */
+  faceName: Face;
   bob: number;
   bobV: number;
   seed: number;
@@ -91,6 +94,7 @@ export class TarikScene extends Phaser.Scene {
   private resolveReady!: () => void;
   private readonly images: Map<string, HTMLImageElement>;
   private readonly teams: Record<Team, Puller[]> = { red: [], blue: [] };
+  private heads!: HeadBank;
   private rosterKey = '';
   private dispP = 0;
   private readonly strain: Record<Team, number> = { red: 0, blue: 0 };
@@ -126,6 +130,7 @@ export class TarikScene extends Phaser.Scene {
     for (const [key, img] of this.images) {
       if (!this.textures.exists(key)) this.textures.addImage(key, img);
     }
+    this.heads = new HeadBank(this.textures, (look) => this.headsReady(look));
     this.makeParticleTextures();
 
     this.setViewSize(this.viewW, this.viewH);
@@ -223,7 +228,7 @@ export class TarikScene extends Phaser.Scene {
 
   setRoster(red: readonly RosterEntry[], blue: readonly RosterEntry[]): void {
     const key = [red, blue]
-      .map((list) => list.map((r) => `${r.id}:${r.fruit}:${r.connected ? 1 : 0}`).join(','))
+      .map((list) => list.map((r) => `${r.id}:${lookId(r.look)}:${r.connected ? 1 : 0}`).join(','))
       .join('|');
     if (key === this.rosterKey) return;
     this.rosterKey = key;
@@ -245,13 +250,12 @@ export class TarikScene extends Phaser.Scene {
     const homeX = FRONT_X[team] - dir * slot * spacing;
     const homeY = FEET_Y - slot * 12;
     const body = this.add
-      .image(0, 0, charKey(team, entry.fruit))
+      .image(0, 0, charKey(team))
       .setOrigin(-CHAR_BOX.x / CHAR_BOX.w, -CHAR_BOX.y / CHAR_BOX.h)
       .setScale(1 / CHAR_PX);
     const face = this.add
-      .image(0, HEAD_CENTER_Y, headKey(entry.fruit, 'happy'))
-      .setDisplaySize(HEAD.size, HEAD.size)
-      .setVisible(false);
+      .image(0, HEAD_CENTER_Y, this.heads.key(entry.look, 'effort'))
+      .setDisplaySize(HEAD.size, HEAD.size);
     const root = this.add
       .container(homeX, homeY, [body, face])
       .setScale(dir * unit, unit)
@@ -275,7 +279,8 @@ export class TarikScene extends Phaser.Scene {
       body,
       face,
       shadow,
-      fruit: entry.fruit,
+      look: entry.look,
+      faceName: 'effort',
       bob: 0,
       bobV: 0,
       seed: entry.id * 1.618 + slot * 2.3,
@@ -368,14 +373,22 @@ export class TarikScene extends Phaser.Scene {
         this.tweens.killTweensOf(pl.root);
         pl.mode = 'pull';
         pl.recover = 0;
-        pl.face.setVisible(false);
+        this.setFace(pl, 'effort');
         pl.body.clearTint();
       }
     }
   }
 
   private setFace(pl: Puller, face: Face): void {
-    pl.face.setTexture(headKey(pl.fruit, face)).setDisplaySize(HEAD.size, HEAD.size).setVisible(true);
+    pl.faceName = face;
+    pl.face.setTexture(this.heads.key(pl.look, face)).setDisplaySize(HEAD.size, HEAD.size);
+  }
+
+  /** A look's head textures finished rasterizing: swap them in for its pullers. */
+  private headsReady(look: Look): void {
+    for (const team of TEAM_ORDER) {
+      for (const pl of this.teams[team]) if (sameLook(pl.look, look)) this.setFace(pl, pl.faceName);
+    }
   }
 
   /** World position of a team's front puller's head (for HUD floaters). World = stage coords. */

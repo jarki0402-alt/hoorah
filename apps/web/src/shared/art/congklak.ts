@@ -1,4 +1,4 @@
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { f1, seeded, svgDoc } from './svg';
 
 /**
@@ -216,8 +216,8 @@ export function congklakSvg(): string {
       '<rect x="0" y="0" width="640" height="96" fill="#7A4521"/>',
       '<rect x="0" y="92" width="640" height="8" fill="#5A3016"/>',
       '<g fill="#8C5228"><rect x="0" y="26" width="640" height="3"/><rect x="0" y="60" width="640" height="3"/></g>',
-      `<g transform="translate(372 92) scale(1.15)">${fruitMarkup('mangga', 'effort')}</g>`,
-      `<g transform="translate(470 104) scale(1)">${fruitMarkup('rambutan', 'wow')}</g>`,
+      `<g transform="translate(372 92) scale(1.15)">${castHead('mangga', 'effort')}</g>`,
+      `<g transform="translate(470 104) scale(1)">${castHead('rambutan', 'wow')}</g>`,
       `<g transform="translate(${f1(ox)} ${f1(oy)}) scale(${s})">${boardMarkup(false)}${piles}</g>`,
       shell(52, 140, 30, 0),
       shell(590, 150, 120, 1),

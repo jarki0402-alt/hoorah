@@ -4,7 +4,7 @@ import {
   arrow,
   box,
   circle,
-  fruit,
+  fruitHead,
   label,
   move,
   pulse,
@@ -20,8 +20,8 @@ const ROAD = '#3A3D44';
 const GOLD = '#FFC928';
 const ROAD_Y = 196;
 
-type Fruit = Parameters<typeof fruit>[0];
-type Face = Parameters<typeof fruit>[4];
+type Fruit = Parameters<typeof fruitHead>[0];
+type Face = Parameters<typeof fruitHead>[4];
 
 function street(): string {
   let dashes = '';
@@ -31,7 +31,7 @@ function street(): string {
 
 /** A three-wheeled bajaj facing right, wheels resting on y, with a fruit driver. */
 function bajaj(x: number, y: number, color: string, who: Fruit, face: Face = 'happy'): string {
-  return `${box(x - 70, y - 92, 140, 72, color, 28)}${box(x - 60, y - 102, 108, 16, '#1F2A44', 8)}${box(x - 44, y - 84, 50, 34, '#BFE6FF', 6)}${fruit(who, x - 19, y - 66, 34, face)}${box(x + 14, y - 84, 34, 34, '#BFE6FF', 10)}${box(x - 66, y - 44, 132, 7, GOLD, 2)}${circle(x - 44, y - 16, 17, '#111214')}${circle(x - 44, y - 16, 7, '#9AA0A6')}${circle(x + 48, y - 16, 17, '#111214')}${circle(x + 48, y - 16, 7, '#9AA0A6')}`;
+  return `${box(x - 70, y - 92, 140, 72, color, 28)}${box(x - 60, y - 102, 108, 16, '#1F2A44', 8)}${box(x - 44, y - 84, 50, 34, '#BFE6FF', 6)}${fruitHead(who, x - 19, y - 66, 34, face)}${box(x + 14, y - 84, 34, 34, '#BFE6FF', 10)}${box(x - 66, y - 44, 132, 7, GOLD, 2)}${circle(x - 44, y - 16, 17, '#111214')}${circle(x - 44, y - 16, 7, '#9AA0A6')}${circle(x + 48, y - 16, 17, '#111214')}${circle(x + 48, y - 16, 7, '#9AA0A6')}`;
 }
 
 function speedLines(x: number, y: number): string {

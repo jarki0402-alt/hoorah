@@ -24,6 +24,8 @@ async function phone(code: string, name: string): Promise<Page> {
     .getByRole('button', { name: 'Nanti saja' })
     .click({ timeout: 3_000 })
     .catch(() => {});
+  // Right after joining the avatar maker shows; Siap goes on to the lobby.
+  await page.getByRole('button', { name: 'Siap', exact: true }).click();
   return page;
 }
 
@@ -31,7 +33,7 @@ test('Host hand-over: the Host asks, the other phone declines, then accepts', as
   errors.length = 0;
   const tv = await (await chrome.newContext({ viewport: { width: 1920, height: 1080 } })).newPage();
   tv.on('pageerror', (e) => errors.push(`[tv] ${e.message}`));
-  await tv.goto(`${BASE}/`);
+  await tv.goto(`${BASE}/main`);
   await expect(tv.locator('.room-code')).toHaveText(/^\d{3} \d{3}$/);
   const code = (await tv.locator('.room-code').textContent())!.replace(/\s/g, '');
 

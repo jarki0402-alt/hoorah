@@ -1,3 +1,4 @@
+import { lookAt } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { seeded } from '../../shared/art/svg';
 import { CookBrain, styleFor } from './brain';
@@ -13,6 +14,7 @@ function simulate(kitchen: KitchenId, difficulty: Difficulty, sides: Side[], ski
       id: i + 1,
       name: `C${i + 1}`,
       fruit: 'nanas' as const,
+      look: lookAt(i),
       color: '#22B35E',
       side,
     })),
@@ -67,8 +69,8 @@ describe('computer cooks', () => {
       kitchen: 'terbelah',
       difficulty: 'normal',
       cooks: [
-        { id: 1, name: 'A', fruit: 'jeruk', color: '#FF5A1F', side: 0 },
-        { id: 2, name: 'B', fruit: 'nanas', color: '#22B35E', side: 1 },
+        { id: 1, name: 'A', fruit: 'jeruk', look: lookAt(1), color: '#FF5A1F', side: 0 },
+        { id: 2, name: 'B', fruit: 'nanas', look: lookAt(2), color: '#22B35E', side: 1 },
       ],
       now: 0,
     });

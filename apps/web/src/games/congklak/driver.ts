@@ -3,7 +3,7 @@
  * (frozen while paused), replays each move seed by seed on the board, and turns logic events
  * into sounds, toasts, banners and phone views.
  */
-import type { ControllerToGame, ControllerView, PlayerInfo } from '@hoorah/protocol';
+import { type ControllerToGame, type ControllerView, lookOfFruit, type PlayerInfo } from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import { pitXY } from '../../shared/art/congklak';
 import type { Sfx } from '../../shared/audio';
@@ -12,7 +12,6 @@ import { cpuSkill, isCpu, reportSoloResult, soloOpponents, thinkMs } from '../co
 import { chooseHole } from './brain';
 import {
   type ActiveMove,
-  applyStep,
   type CongklakEvent,
   CongklakMatch,
   GameClock,
@@ -20,11 +19,12 @@ import {
   type RoundResult,
   type Side,
   type Step,
-  stepTimes,
   storeOf,
   TURN_MS,
   validHoles,
 } from './logic';
+import { type MirrorMoveSrc, toMirror } from './mirror';
+import { SowReplay } from './replay';
 import { buildResult, headline, sideLabel } from './results';
 import { STR } from './strings';
 import type { PanelModel, PlayerCard, TvStore } from './tv';
@@ -48,10 +48,7 @@ export function parseRounds(v: unknown): number {
 
 interface Anim {
   move: ActiveMove;
-  at: number[];
-  applied: number;
-  board: number[];
-  hand: number;
+  replay: SowReplay;
 }
 
 export class CongklakDriver {
@@ -61,6 +58,8 @@ export class CongklakDriver {
   private readonly reactAt = new Map<number, number>();
   private connected = new Set<number>();
   private anim: Anim | null = null;
+  /** The last move, for far-away main screens (long-distance play) to replay; null between rounds. */
+  private shownMove: MirrorMoveSrc | null = null;
   /** What the board shows (lags the logic while a move is replayed). */
   private counts: number[];
   private roundViews: Map<number, ControllerView> | null = null;
@@ -101,6 +100,9 @@ export class CongklakDriver {
     this.game.on('players', () => this.onPlayers());
     this.game.on('action', (from, a) => this.onAction(from, a));
     this.game.on('pause', (p) => this.setPaused(p));
+    this.game.on('mirrors', (on) => {
+      if (on) this.publish();
+    });
     if (this.game.paused) this.setPaused(true);
     this.flush();
     this.pushBoard();
@@ -163,20 +165,15 @@ export class CongklakDriver {
   private animate(now: number): void {
     const a = this.anim;
     if (!a) return;
-    const steps = a.move.trace.steps;
-    const elapsed = now - a.move.startAt;
     const side = a.move.trace.side;
-    let changed = false;
-    while (a.applied < steps.length && a.at[a.applied]! <= elapsed) {
-      const s = steps[a.applied]!;
-      a.hand = applyStep(a.board, a.hand, s, side);
-      a.applied++;
-      changed = true;
-      this.onStep(s, side, a.applied === 1, now);
-    }
-    if (!changed) return;
-    this.counts = a.board.slice();
-    if (a.applied >= steps.length) {
+    const start = a.replay.applied;
+    const steps = a.replay.advance(now);
+    if (!steps.length) return;
+    steps.forEach((s, i) => {
+      this.onStep(s, side, start + i === 0, now);
+    });
+    this.counts = a.replay.board.slice();
+    if (a.replay.done) {
       this.onMoveDone(a.move, now);
       this.anim = null;
     }
@@ -233,10 +230,12 @@ export class CongklakDriver {
       ...this.tv.toasts.value,
       { id: ++this.seq, text, kind, x, y, until: now + TOAST_MS },
     ];
+    this.publish();
   }
 
   private flash(pos: number[]): void {
     this.tv.board.value = { ...this.tv.board.value, flash: pos, flashKey: ++this.seq };
+    this.publish();
   }
 
   /* ---------------------------------------------------------------- SDK input */
@@ -300,6 +299,7 @@ export class CongklakDriver {
     this.tv.paused.value = paused;
     // Deadlines go to the phones in server time, which moved on while paused.
     if (!paused) this.syncViews();
+    this.publish();
   }
 
   private react(from: number, kind: 'cheer' | 'boo' | 'rematch'): void {
@@ -316,6 +316,7 @@ export class CongklakDriver {
       ...list.value.slice(-2),
       { id: ++this.seq, who: p.name, text, tone: kind, until: now + BUBBLE_MS },
     ];
+    this.publish();
   }
 
   /* ---------------------------------------------------------------- events */
@@ -335,6 +336,7 @@ export class CongklakDriver {
       case 'intro':
         this.roundViews = null;
         this.anim = null;
+        this.shownMove = null;
         this.counts = M.board.slice();
         this.tv.toasts.value = [];
         this.sfx('reveal');
@@ -345,10 +347,19 @@ export class CongklakDriver {
         if (M.round >= 1 && !e.extra && this.isFirstTurn()) this.sfx('go');
         return;
       case 'move': {
-        const at = stepTimes(e.trace.steps).at;
         // A move that starts before the previous replay finished (should not happen) snaps it.
         this.counts = e.trace.before.slice();
-        this.anim = { move: { ...e }, at, applied: 0, board: e.trace.before.slice(), hand: 0 };
+        this.anim = {
+          move: { ...e },
+          replay: new SowReplay(e.trace.before, e.trace.steps, e.trace.side, e.startAt),
+        };
+        this.shownMove = {
+          n: (this.shownMove?.n ?? 0) + 1,
+          before: e.trace.before.slice(),
+          steps: e.trace.steps,
+          side: e.trace.side,
+          startAt: e.startAt,
+        };
         this.sfx('select');
         this.flash([e.trace.pit]);
         if (e.auto && e.playerId !== null) {
@@ -384,6 +395,7 @@ export class CongklakDriver {
     const M = this.match;
     const now = this.clock.now();
     this.anim = null;
+    this.shownMove = null;
     this.counts = M.board.slice();
     if (r.swept[0] + r.swept[1] > 0) {
       this.toast(STR.toastSweep(r.swept[0], r.swept[1]), 'info', 590, 200, now);
@@ -454,6 +466,7 @@ export class CongklakDriver {
       id,
       name: p?.name ?? STR.unknownPlayer,
       fruit: p?.fruit ?? 'semangka',
+      look: p?.look ?? lookOfFruit('semangka'),
       color: p?.color ?? '#C4C7CC',
       connected: p?.connected ?? false,
     };
@@ -462,12 +475,7 @@ export class CongklakDriver {
   private pushBoard(): void {
     const M = this.match;
     const a = this.anim;
-    let hand = null;
-    if (a && a.applied < a.move.trace.steps.length) {
-      const next = a.move.trace.steps[a.applied]!;
-      const prevAt = a.applied > 0 ? a.at[a.applied - 1]! : 0;
-      hand = { pos: next.pos, n: a.hand, ms: a.at[a.applied]! - prevAt };
-    }
+    const hand = a ? a.replay.handAt() : null;
     const activeSide = M.phase === 'turn' ? M.turnSide : a ? a.move.trace.side : null;
     this.tv.board.value = { ...this.tv.board.value, counts: this.counts.slice(), hand, activeSide };
   }
@@ -563,6 +571,41 @@ export class CongklakDriver {
       panels: [panel(0), panel(1)],
       banner,
     };
+    this.publish();
+  }
+
+  /**
+   * Long-distance play: what this screen shows, for far-away main screens (only while watched).
+   * Seeds landing do not change it: the far screen replays the move itself.
+   */
+  private publish(): void {
+    const hud = this.tv.hud.value;
+    if (!hud || !this.game.mirrored) return;
+    const M = this.match;
+    const board = this.tv.board.value;
+    const sum: [number, number] = [0, 0];
+    for (const r of M.results) {
+      sum[0] += r.stores[0];
+      sum[1] += r.stores[1];
+    }
+    this.game.publish(
+      toMirror({
+        hud,
+        counts: this.counts,
+        move: this.shownMove,
+        sum,
+        live: M.results.length < M.round,
+        tot: M.rounds > 1 && M.round > 1,
+        turn: M.phase === 'turn' ? M.turnSide : null,
+        flash: board.flash,
+        flashKey: board.flashKey,
+        toasts: this.tv.toasts.value,
+        bubbles: [this.tv.bubbles[0].value, this.tv.bubbles[1].value],
+        timer: M.phase === 'turn' && M.current !== null ? { side: M.turnSide, deadline: M.deadline } : null,
+        frozenAt: this.clock.paused ? this.clock.now() : null,
+        toServer: (t) => this.clock.toServer(t),
+      }),
+    );
   }
 
   private viewFor(id: number): ControllerView {

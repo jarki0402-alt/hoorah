@@ -4,6 +4,13 @@ Nov 12, 2026 · @Fajar
 
 Hoorah mengubah layar mana pun (PC, laptop, tablet, Smart TV) menjadi konsol game, dengan smartphone pemain sebagai kontroler — tanpa install aplikasi, cukup scan QR. Dokumen ini adalah acuan kerja tunggal untuk Product, UI/UX, Frontend, Backend, dan Game Developer.
 
+> **Keputusan pemilik 2026-11-24 (berlaku di atas isi dokumen ini):**
+> - **Nama produk: Kacawbalaw** (menggantikan Hoorah). **Hoorah Pass menjadi Kacaw Pass.** Nama di bawah ikon aplikasi: "Kacawbalaw". Domain baru ditunda. Nama internal (package `@hoorah/*`, repo, image, subdomain VM, kunci penyimpanan `hoorah.*`) tidak diubah.
+> - **Logo final:** tulisan "kacaw / balaw" dua baris rata kanan tanpa kotak, Baloo 2 ExtraBold dengan jarak antarhuruf sama, setiap w diganti satu bentuk w gelombang (tinggi = huruf a, lebar 1,44 x tinggi, tebal 1/3 tinggi). Warna: krem + w kuning di latar oranye/gelap, hitam + w oranye di latar terang. Ikon aplikasi: dua pita miring (kuning, krem) dengan w oranye; di 16 piksel satu pita. Sumber: `apps/web/src/shared/art/brand.ts`.
+> - **Avatar pemain:** 24 tokoh orisinal (bukan buah). Sebelum join pemain memilih tokoh, warna kulit (5), model rambut (24), warna rambut (8), warna baju (8), atau Acak; tersimpan di HP; bisa "Ubah" di lobi sebelum game mulai; server memvalidasi. Buah tetap dibagikan server per kursi, hanya dipakai karakter 3D Bajaj Rush dan Lari Terus (diganti nanti). Lawan komputer memakai tokoh yang tidak dipilih pemain.
+> - **Alamat `/`:** selalu landing page; perangkat yang pernah jadi layar utama mendapat tombol "Lanjutkan sebagai layar utama". `/?depan` dihapus. Logo di bilah atas layar utama membuka landing page di tab baru.
+> - **Game:** Hantu Tak Terlihat menampilkan kedipan merah posisi hantu di layar utama (Seram Ringan tiap 8 detik dan setiap ada yang tertangkap; Seram Beneran tiap 15 detik atau saat hantu dekat penghuni). Obby: kamera dari belakang menghadap ke depan; sampai 4 orang layar dibagi (1 penuh, 2 kiri-kanan, 3-4 empat bagian, 3 orang: bagian keempat rombongan), 5 orang ke atas satu kamera rombongan. Dapur Heboh: tutorial praktik langsung sebelum game pertama.
+
 ## 0. Info Dokumen & Glosarium
 
 | Atribut | Nilai |
@@ -295,6 +302,19 @@ Selama uji coba bersama teman, Hoorah Pass **belum** memakai akun, pembayaran, a
 - Pemilik bisa memperpanjang, mencabut, mengaktifkan lagi, atau menghapus kode; perubahan langsung berlaku di room yang sedang memakainya.
 - Server memeriksa semuanya (kode, waktu, batas room, batas percobaan salah 10 per menit per alamat); klien tidak dipercaya.
 - Penyimpanan: SQLite bawaan Node (`node:sqlite`, satu file `data/hoorah.db`, di Docker `/data/hoorah.db`). Admin dibuat lewat CLI server (`admin set <username>`), login dengan sesi cookie httpOnly.
+
+#### 3.4.2 Gratis, Coba gratis, kode Pass, dan iklan promo (keputusan pemilik 2026-11-23)
+
+Menggantikan sebagian 3.4.1. Pembayaran langsung (QRIS/Midtrans), login Google, dan nama baru menyusul.
+
+- **Akses room:** `gratis`, `coba` (Coba gratis), `pass`, atau `terbuka` (saklar admin "Mode uji coba: semua terbuka"). Server yang menentukan; layar utama dikenali dari id acak yang disimpan browsernya.
+- **Gratis:** 2 pemain. Game gratis: Tarik Tambang, Bajaj Rush, Kuis Nusantara, Catur, Kompak Gak?, Ular Tangga, Congklak, Rusun, Petualangan Warna dunia Hutan level 1–5, ditambah **Game Minggu Ini** (dipilih pemilik, atau bergilir otomatis tiap Senin 00:00 WIB dari game Pass). Game lain tampil dengan chip PASS; detail dan Cara main tetap bisa dibuka.
+- **Mode Pesta** khusus Pass (terbuka selama Coba gratis). **Acak** terbuka, tetapi bagi room gratis hanya berisi game yang bisa dimainkan.
+- **Coba gratis:** 60 menit (bisa diatur), 1x per layar utama, semua fitur Pass, tanpa iklan. Server membatasi per layar dan per alamat (maks 3 layar per jaringan per 30 hari).
+- **Kode Pass:** `bersama` (seperti 3.4.1), `sekali pakai` (berjalan N hari sejak pertama dipakai, menempel ke 1 layar, bisa dipindah ke layar lain maks 1x per 6 jam), `promo` (banyak layar dengan kuota, tiap layar N hari). Dibuat di admin, bisa sekaligus banyak dan diunduh CSV.
+- **Tawaran Pass** tampil di layar utama saat game terkunci, Mode Pesta, pemain ke-3 ditolak, atau Coba gratis habis: Coba gratis / Punya kode Pass? (diketik di HP) / Nanti saja.
+- **Iklan promo** (hanya room gratis): 15 detik, tidak bisa dilewati, sebelum game berikutnya setiap 2 game selesai (Main lagi ikut dihitung), jarak minimal 10 menit, tidak sebelum game pertama dan tidak di Mode Pesta. Isinya cuplikan game Pass dengan tombol Coba gratis dan Punya kode Pass. Game berikutnya dimuat selama iklan. Semua angka diatur di admin.
+- **Pengaduan dan galat:** tombol "Laporkan masalah" di HP (dan petunjuk di layar utama), kontak opsional, data teknis otomatis; galat perangkat tercatat otomatis. Keduanya di admin (tab Pengaduan dan Galat).
 
 ### 3.5 Hoorah Game SDK
 
@@ -769,7 +789,7 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
     - 2D: Game 26 · Juara Eja (1–8, lomba mengeja Indonesia/Inggris, versi sederhana, kata dibacakan suara browser), Game 27 · Petualangan Warna (1–8, teka-teki platform kerja sama berwarna; keputusan pemilik 2026-11-22: lompat tetap 2,5 petak, setengah kanan HP = tombol lompat, kabel tuas ke pintu, petunjuk bertahap, bantuan diam-diam, Host bisa lewati level setelah 3 menit; 5 dunia × 30 level (Hutan, Gua, Gurun, Salju, Awan) dikerjakan bertahap, batas peta: naik maks 2 petak, celah maks 3 petak, dicek otomatis), Game 28 · Hantu Tak Terlihat (1–8, horor tampak atas, satu pemain hantu dengan peta rahasia di HP, map Rumah Tua dan Kampung Malam).
     - Sosial (butuh Hoorah Pass): Game 29 · Kampung Siluman (5–16, werewolf dengan Mode Tutup Mata: layar memandu lewat bunyi, tanpa suara pemandu), Game 30 · Penyusup (3–16, undercover, petunjuk diucapkan, mode Ketik).
     - Bersama: setelan kontrol satu sumber + Lab Kontrol (`/lab/`), getar iPhone lewat trik saklar, musik adaptif (lapisan tensi 0–3, bunyi waktu standar detak jam + weker), pemain yang sudah keluar bisa bersorak lewat tombol reaksi platform.
-    - Beranda bertingkat (Pas untuk kalian, baris per suasana, kisi Semua game, label BARU), pilihan bergambar di HP dan layar, joystick pola mengambang (mendatar: separuh kiri + tombol bulat kanan bawah; tegak: tengah bawah), dan **Mode Pesta**: 3 game dengan suasana berbeda berurutan, poin 3/2/1 per game (game terakhir poin ganda, lawan komputer tidak masuk klasemen), klasemen antar game, lalu Juara Pesta dan "Pesta lagi"; keluar game atau kembali ke beranda membatalkan pesta (2026-11-22).
+    - Beranda bertingkat (Pas untuk kalian, baris per suasana, kisi Semua game, label BARU), pilihan bergambar di HP dan layar, joystick pola mengambang (mendatar: separuh kiri + tombol bulat kanan bawah; tegak: tengah bawah), dan **Mode Pesta**: 3 game dengan suasana berbeda berurutan, poin 3/2/1 per game (game terakhir poin ganda, lawan komputer tidak masuk klasemen), klasemen antar game, lalu Juara Pesta dan "Pesta lagi"; keluar game atau kembali ke beranda membatalkan pesta (2026-11-22). Diubah 2026-11-23 (keputusan pemilik): Mode Pesta **5 game** (game ke-5 Grand Final poin ganda), isinya diacak ulang setiap mulai dan diungkap satu per satu sebelum dimainkan, game panjang (Ular Tangga, Ludo, Catur, Juragan) tidak ikut; beranda dibuka di tab **Semua** (urutan per layar: cocok jumlah pemain, baru dimainkan, game baru), "Pas untuk kalian" tab kedua; Mode Pesta dan Acak jadi kartu besar di depan setiap baris, Acak memutar roda di layar utama.
   - Analitik dasar (PostHog), Sentry, dashboard latensi Grafana.
   - Batas gratis 2 pemain + placeholder upsell untuk mengukur minat (belum ada pembayaran).
 - Di luar cakupan: akun, pembayaran, iklan, WebRTC, SDK publik.
@@ -805,7 +825,7 @@ Setiap fase berakhir dengan gate berbasis metrik; fase berikutnya dimulai hanya 
 
 - **Main sendiri:** game otomatis menyiapkan lawan komputer. Tidak ada tombol "tambah bot", tidak ada pengaturan.
 - **Dua orang atau lebih:** tidak ada lawan komputer sama sekali.
-- **Tampilan:** lawan tampil seperti pemain biasa (nama + avatar buah), tanpa label BOT dan tanpa pengumuman. Tidak berpura-pura ada orang sungguhan bergabung.
+- **Tampilan:** lawan tampil seperti pemain biasa (nama + avatar tokoh, lihat keputusan 2026-11-24), tanpa label BOT dan tanpa pengumuman. Tidak berpura-pura ada orang sungguhan bergabung.
 - **Tingkat kesulitan menyesuaikan diri diam-diam:** layar utama mengingat tingkat per game; turun setelah pemain kalah, naik setelah menang. Lawan dibuat manusiawi: ada jeda berpikir dan kadang salah langkah.
 - **Jumlah lawan saat main sendiri:**
 

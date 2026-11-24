@@ -1,6 +1,6 @@
 import type { Fruit } from '@hoorah/protocol';
 import { kampungSvg } from '../../games/siluman/art';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { svgDoc } from './svg';
 
 /**
@@ -26,7 +26,7 @@ export function silumanSvg(): string {
   const heads = fruits
     .map(
       ([f, x, face]) =>
-        `<g transform="translate(${x - 34} 262) scale(1.06)">${fruitMarkup(f, face)}</g>${lantern(x + 34)}`,
+        `<g transform="translate(${x - 34} 262) scale(1.06)">${castHead(f, face)}</g>${lantern(x + 34)}`,
     )
     .join('');
   // The siluman shadow behind the middle of the row.

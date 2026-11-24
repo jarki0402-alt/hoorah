@@ -141,6 +141,6 @@ export const STR = {
   recordTie: (best: number) => `Menyamai rekor: ${num(best)} poin`,
   recordShort: (best: number, gap: number) => `Rekor: ${num(best)} poin, kurang ${num(gap)} lagi`,
 
-  noShell: 'Buka Makan Kerupuk dari aplikasi Hoorah di layar utama.',
+  noShell: 'Buka Makan Kerupuk dari aplikasi Kacawbalaw di layar utama.',
   loadError: 'Gagal memuat game. Coba buka ulang.',
 } as const;

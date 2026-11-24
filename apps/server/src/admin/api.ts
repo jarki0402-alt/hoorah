@@ -7,6 +7,7 @@ import type * as UWS from 'uWebSockets.js';
 import {
   ADMIN_HEADER,
   type AdminError,
+  type AdminErrorList,
   parseAdminLogin,
   parseAdminPassCreate,
   parseAdminPassUpdate,
@@ -17,6 +18,7 @@ import {
 import type { Logger } from '../log';
 import type { SecurityLog } from '../metrics/security';
 import type { CloudflareWatch } from '../metrics/traffic';
+import { isReportStatus } from '../reports';
 import { type AdminAuth, type AdminSession, SESSION_MS } from './auth';
 import type { AdminService } from './service';
 
@@ -107,11 +109,11 @@ function readReq(res: UWS.HttpResponse, req: UWS.HttpRequest): Req {
   };
 }
 
-const TOO_LARGE = Symbol('too_large');
-const BAD_JSON = Symbol('bad_json');
+export const TOO_LARGE = Symbol('too_large');
+export const BAD_JSON = Symbol('bad_json');
 
 /** Must be called before the handler returns (uWS drops body chunks that arrive unobserved). */
-function readJson(res: UWS.HttpResponse, max: number): Promise<unknown> {
+export function readJson(res: UWS.HttpResponse, max: number): Promise<unknown> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -153,7 +155,7 @@ function send(res: UWS.HttpResponse, reply: Reply): void {
   });
 }
 
-type Method = 'get' | 'post' | 'patch' | 'del';
+type Method = 'get' | 'post' | 'put' | 'patch' | 'del';
 
 export function registerAdminApi(app: UWS.TemplatedApp, deps: AdminApiDeps): void {
   const { auth, service, now, log, security } = deps;
@@ -247,8 +249,14 @@ export function registerAdminApi(app: UWS.TemplatedApp, deps: AdminApiDeps): voi
     if (!input) return fail(400, 'bad_request');
     const r = service.createPass(input, session.adminId);
     if (typeof r === 'string') return fail(r === 'code_taken' ? 409 : r === 'not_found' ? 404 : 400, r);
-    log.info('pass_created', { passId: r.id, by: session.username, expiresAt: r.expiresAt });
-    return { status: 201, body: { pass: r } };
+    log.info('pass_created', {
+      passIds: r.map((p) => p.id),
+      kind: input.kind ?? 'shared',
+      by: session.username,
+      expiresAt: input.expiresAt,
+    });
+    // `pass` (the first one) keeps dashboards from before 2026-11-23 working.
+    return { status: 201, body: { created: r, pass: r[0] } };
   });
 
   route('patch', '/api/admin/passes/:id', { login: true, body: true }, ({ req, session, body }) => {
@@ -303,4 +311,48 @@ export function registerAdminApi(app: UWS.TemplatedApp, deps: AdminApiDeps): voi
     status: 200,
     body: { events: service.events() },
   }));
+
+  route('get', '/api/admin/config', { login: true, body: false }, () => ({
+    status: 200,
+    body: service.config(),
+  }));
+
+  route('put', '/api/admin/config', { login: true, body: true }, ({ session, body }) => {
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) return fail(400, 'bad_request');
+    const next = service.setConfig(body);
+    if (!next) return fail(404, 'not_found');
+    log.info('config_changed', { by: session.username, openAll: next.openAll, adsEnabled: next.adsEnabled });
+    return { status: 200, body: next };
+  });
+
+  route('get', '/api/admin/reports', { login: true, body: false }, ({ req }) => {
+    const raw = new URLSearchParams(req.query).get('status');
+    if (raw && !isReportStatus(raw)) return fail(400, 'bad_request');
+    return { status: 200, body: service.reports(raw && isReportStatus(raw) ? raw : undefined) };
+  });
+
+  route('patch', '/api/admin/reports/:id', { login: true, body: true }, ({ req, body }) => {
+    const id = idOf(req);
+    if (id === null) return fail(404, 'not_found');
+    const status =
+      typeof body === 'object' && body !== null ? (body as { status?: unknown }).status : undefined;
+    if (!isReportStatus(status)) return fail(400, 'bad_request');
+    return service.setReportStatus(id, status) ? { status: 204 } : fail(404, 'not_found');
+  });
+
+  route('get', '/api/admin/errors', { login: true, body: false }, () => {
+    const body: AdminErrorList = { groups: service.errors() };
+    return { status: 200, body };
+  });
+
+  route('del', '/api/admin/errors/:id', { login: true, body: false }, ({ req }) => {
+    const id = idOf(req);
+    return id !== null && service.deleteError(id) ? { status: 204 } : fail(404, 'not_found');
+  });
+
+  route('del', '/api/admin/errors', { login: true, body: false }, ({ session }) => {
+    const n = service.clearErrors();
+    log.info('errors_cleared', { by: session.username, groups: n });
+    return { status: 204 };
+  });
 }

@@ -14,6 +14,7 @@ import {
   type PlayerInfo,
   type RelayedInput,
   STICK_OP,
+  sameLook,
   unpackStick,
 } from '@hoorah/protocol';
 import type { GameAward, GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
@@ -122,12 +123,12 @@ export class Director {
   }
 
   private info(p: PlayerInfo): ClimberInfo {
-    return { id: p.id, name: p.name, fruit: p.fruit, color: p.color };
+    return { id: p.id, name: p.name, fruit: p.fruit, look: p.look, color: p.color };
   }
 
   private chip(id: number): ClimberChip | null {
     const c = this.match?.climber(id);
-    return c ? { id, name: c.name, fruit: c.fruit, color: c.color } : null;
+    return c ? { id, name: c.name, fruit: c.fruit, look: c.look, color: c.color } : null;
   }
 
   /* ------------------------------------------------------------------ picker */
@@ -187,7 +188,7 @@ export class Director {
     const m = this.match;
     if (!m) return;
     this.scene.setPlayers(
-      m.climbers.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color })),
+      m.climbers.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color })),
     );
   }
 
@@ -210,8 +211,8 @@ export class Director {
           continue;
         }
         m.setOffline(p.id, !p.connected);
-        if (c.name !== p.name || c.color !== p.color || c.fruit !== p.fruit)
-          m.restyle(p.id, { name: p.name, color: p.color, fruit: p.fruit });
+        if (c.name !== p.name || c.color !== p.color || c.fruit !== p.fruit || !sameLook(c.look, p.look))
+          m.restyle(p.id, { name: p.name, color: p.color, fruit: p.fruit, look: p.look });
       }
       this.syncLooks();
     }

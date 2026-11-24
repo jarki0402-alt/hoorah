@@ -7,7 +7,7 @@
  *              phones draw their ring with and stamp every tap with, so a tap is judged by when it
  *              happened on the phone, never by when it arrived over a slow relay.
  */
-import { type Fruit, type PlayerInfo, u16Delta } from '@hoorah/protocol';
+import { type Fruit, type Look, type PlayerInfo, sameLook, u16Delta } from '@hoorah/protocol';
 import type { GameAward, GameResult } from '@hoorah/sdk';
 import { STR } from './strings';
 
@@ -104,6 +104,7 @@ export interface Racer {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
   /** No longer in the room's player list. */
@@ -251,9 +252,17 @@ export class KarungMatch {
         r.gone = false;
         changed = true;
       }
-      if (r.connected !== info.connected || r.name !== info.name || r.fruit !== info.fruit) changed = true;
+      if (
+        r.connected !== info.connected ||
+        r.name !== info.name ||
+        r.fruit !== info.fruit ||
+        !sameLook(r.look, info.look)
+      ) {
+        changed = true;
+      }
       r.name = info.name;
       r.fruit = info.fruit;
+      r.look = info.look;
       r.color = info.color;
       r.connected = info.connected;
     }
@@ -272,6 +281,7 @@ export class KarungMatch {
       id: info.id,
       name: info.name,
       fruit: info.fruit,
+      look: info.look,
       color: info.color,
       connected: info.connected,
       gone: false,

@@ -4,7 +4,7 @@
  * that carries seeds is a DOM node moved with CSS transitions, so a weak Smart TV only paints a
  * few small things per step.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { type Signal, signal } from '@preact/signals';
 import { memo } from 'preact/compat';
 import {
@@ -29,6 +29,7 @@ export interface PlayerCard {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
 }
@@ -277,7 +278,7 @@ function Panel({ p, store }: { p: PanelModel; store: TvStore }) {
           {p.members.slice(0, 5).map((m) => (
             <div key={m.id} class={`ck-av ${m.id === p.mover ? 'is-mover' : ''}`}>
               <Avatar
-                fruit={m.fruit}
+                look={m.look}
                 ring={m.color}
                 size={many ? (m.id === p.mover ? 66 : 50) : 66}
                 face={m.id === p.mover ? 'effort' : 'happy'}

@@ -1,6 +1,6 @@
 /**
- * Admin dashboard (`/admin/`): the owner signs in to hand out Hoorah Pass codes and watch rooms
- * and the server. Mobile first: most passes are made on a phone and shared over WhatsApp.
+ * Admin dashboard (`/admin/`): the owner signs in to hand out Hoorah Pass codes, change the app
+ * settings, read player reports and device errors, and watch rooms and the server. Mobile first: most passes are made on a phone and shared over WhatsApp.
  */
 import '@fontsource/baloo-2/latin-800.css';
 import '@fontsource/plus-jakarta-sans/latin-400.css';
@@ -13,16 +13,19 @@ import type { JSX } from 'preact';
 import { render } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { LogoMark } from '../shared/ui';
+import { LogoMark, Wordmark } from '../shared/ui';
 import { AccountTab } from './account-tab';
 import { api, errorCode, setUnauthorizedHandler } from './api';
+import { ErrorsTab } from './errors-tab';
 import { Login } from './login';
 import { PassTab } from './pass-tab';
+import { ReportsTab, useNewReportsBadge } from './reports-tab';
 import { RoomTab } from './room-tab';
 import { SecurityTab } from './security-tab';
 import { ServerTab } from './server-tab';
-import { openTab, session, TAB_IDS, type TabId, tab, toast } from './state';
-import { ERRORS, STR, TABS } from './strings';
+import { SettingsTab } from './settings-tab';
+import { newReports, openTab, session, TAB_IDS, type TabId, tab, toast } from './state';
+import { ERRORS, REPORTS, STR, TABS } from './strings';
 import { AdminIcon } from './ui';
 import { UsageTab } from './usage-tab';
 
@@ -54,6 +57,7 @@ function TabBar() {
     <div class="ad-tabs" role="tablist" aria-label={STR.tabsLabel} onKeyDown={onKey}>
       {TAB_IDS.map((id) => {
         const on = tab.value === id;
+        const badge = id === 'reports' ? (newReports.value ?? 0) : 0;
         return (
           <button
             key={id}
@@ -70,6 +74,12 @@ function TabBar() {
             onClick={() => openTab(id)}
           >
             {TABS[id]}
+            {badge > 0 && (
+              <span class="ad-tab-count" title={REPORTS.newCount(badge)}>
+                <span aria-hidden="true">{badge}</span>
+                <span class="sr-only">{REPORTS.newCount(badge)}</span>
+              </span>
+            )}
           </button>
         );
       })}
@@ -94,7 +104,7 @@ function TopBar({ username }: { username: string }) {
     <div class="ad-topbar">
       <div class="ad-brand">
         <LogoMark size={30} />
-        <span class="ad-wordmark display">hoorah</span>
+        <Wordmark height={20} class="ad-wordmark" />
         <span class="ad-pill">{STR.admin}</span>
       </div>
       <div class="ad-user">
@@ -119,6 +129,12 @@ function Panel({ username }: { username: string }) {
   switch (tab.value) {
     case 'pass':
       return <PassTab />;
+    case 'settings':
+      return <SettingsTab />;
+    case 'reports':
+      return <ReportsTab />;
+    case 'errors':
+      return <ErrorsTab />;
     case 'room':
       return <RoomTab />;
     case 'server':
@@ -134,6 +150,7 @@ function Panel({ username }: { username: string }) {
 
 function Dashboard({ username }: { username: string }) {
   const id = tab.value;
+  useNewReportsBadge(id === 'reports');
   return (
     <div class="ad-shell">
       <header class="ad-header">

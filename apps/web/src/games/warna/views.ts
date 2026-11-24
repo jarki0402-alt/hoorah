@@ -7,7 +7,16 @@
  */
 import type { ControllerView, MenuOption, PadButton } from '@hoorah/protocol';
 import { BIOMES, biomeOf, LEVELS, type Slot } from './levels';
-import { isOpen, type Progress, secondFruit, type WarnaMatch, worldStars } from './logic';
+import {
+  isOpen,
+  needsPass,
+  type Progress,
+  secondFruit,
+  secondLook,
+  type WarnaMatch,
+  worldNeedsPass,
+  worldStars,
+} from './logic';
 import { BIOME_TEXT, formatClock, levelName, SLOT_NAME, SLOT_SYMBOL, STR, stars } from './strings';
 
 /** Colours on the phone: the same four as the stage. */
@@ -67,6 +76,16 @@ export interface ViewContext {
 function worldMenu(m: WarnaMatch, progress: Progress): Extract<ControllerView, { kind: 'menu' }> {
   const options: MenuOption[] = BIOMES.map((b) => {
     const st = worldStars(b.id, progress);
+    if (b.ready && worldNeedsPass(b.id, m.limited)) {
+      return {
+        id: `w:${b.id}`,
+        label: BIOME_TEXT[b.id].name,
+        sub: STR.passSub,
+        thumb: `biome-${b.id}`,
+        disabled: true,
+        badge: STR.passBadge,
+      };
+    }
     return {
       id: `w:${b.id}`,
       label: BIOME_TEXT[b.id].name,
@@ -79,17 +98,29 @@ function worldMenu(m: WarnaMatch, progress: Progress): Extract<ControllerView, {
     kind: 'menu',
     eyebrow: STR.pickEyebrow,
     title: STR.pickTitle,
-    hint: STR.pickHint(m.stages),
+    hint: STR.pickHint,
     options,
     selected: `w:${m.world}`,
     confirm: { id: 'next', label: STR.pickNext, style: 'yellow' },
+    // Back on the map after some levels: the Host can also end the session here.
+    ...(m.scores.length > 0 ? { back: { id: 'go-done', label: STR.btnDone } } : {}),
   };
 }
 
 function levelMenu(m: WarnaMatch, progress: Progress): Extract<ControllerView, { kind: 'menu' }> {
   const options: MenuOption[] = biomeOf(m.world).levels.map((lv) => {
-    const open = isOpen(lv, progress);
     const best = progress[lv.id];
+    if (needsPass(lv, m.limited)) {
+      return {
+        id: lv.id,
+        label: STR.levelLabel(lv.number),
+        sub: STR.passSub,
+        thumb: `lvl-${lv.id}`,
+        disabled: true,
+        badge: STR.passBadge,
+      };
+    }
+    const open = isOpen(lv, progress);
     return {
       id: lv.id,
       label: STR.levelLabel(lv.number),
@@ -170,7 +201,7 @@ function padView(m: WarnaMatch, me: number, ctx: ViewContext): ControllerView {
     mode: 'stick',
     jumpZone: true,
     color: SLOT_HEX[slot],
-    ...(c.sub === 1 ? { fruit: secondFruit(m.person(me)?.fruit) } : {}),
+    ...(c.sub === 1 ? { fruit: secondFruit(m.person(me)?.fruit), look: secondLook(m.person(me)?.look) } : {}),
     title: `${SLOT_NAME[slot]} ${SLOT_SYMBOL[slot]}`,
     eyebrow,
     stats,
@@ -202,11 +233,13 @@ export function viewFor(m: WarnaMatch, me: number, ctx: ViewContext): Controller
     }
     case 'play':
       return m.inCast(me) ? padView(m, me, ctx) : watchView();
+    case 'next':
+      return nextView(m, me, ctx);
     case 'clear': {
       const s = m.lastScore();
       return {
         kind: 'message',
-        eyebrow: STR.stageOf(m.stage + 1, m.order.length).toUpperCase(),
+        eyebrow: STR.worldLevel(BIOME_TEXT[m.level.biome].name, m.level.number).toUpperCase(),
         title: s?.skipped ? STR.skippedTitle : STR.clearPhoneTitle,
         subtitle: s ? STR.clearPhoneSub(stars(s.stars), formatClock(s.time)) : undefined,
         tone: 'good',
@@ -223,6 +256,45 @@ export function viewFor(m: WarnaMatch, me: number, ctx: ViewContext): Controller
         avatarOf: me,
       };
   }
+}
+
+/**
+ * After a level: the Host chooses the next level (it also starts by itself), another level from
+ * the map, or Selesai; everyone else waits with the reactions.
+ */
+function nextView(m: WarnaMatch, me: number, ctx: ViewContext): ControllerView {
+  const s = m.lastScore();
+  const next = m.nextLevel();
+  const eyebrow = STR.worldLevel(BIOME_TEXT[m.level.biome].name, m.level.number).toUpperCase();
+  const summary = s ? STR.clearPhoneSub(stars(s.stars), formatClock(s.time)) : undefined;
+  if (me !== ctx.hostId) {
+    return {
+      kind: 'message',
+      eyebrow,
+      title: STR.nextWaiting(ctx.hostName),
+      ...(summary ? { subtitle: summary } : {}),
+      tone: 'good',
+      avatarOf: me,
+      reactions: true,
+    };
+  }
+  return {
+    kind: 'message',
+    eyebrow,
+    title: next ? STR.nextTitle : m.nextNeedsPass() ? STR.passDoneTitle : STR.worldDoneTitle,
+    subtitle: next
+      ? STR.nextAuto(next.number, Math.ceil(m.nextLeft()))
+      : m.nextNeedsPass()
+        ? STR.passNext
+        : STR.worldDoneSub,
+    tone: 'good',
+    avatarOf: me,
+    actions: [
+      ...(next ? [{ id: 'go-next', label: STR.btnNextLevel(next.number), style: 'yellow' as const }] : []),
+      { id: 'go-map', label: STR.btnMap, style: next ? ('secondary' as const) : ('yellow' as const) },
+      { id: 'go-done', label: STR.btnDone, style: 'secondary' as const },
+    ],
+  };
 }
 
 /** Phone result once the session is over. */

@@ -5,8 +5,15 @@
  * fruit chefs on a 64x84 sprite. Text is never baked into SVG (images cannot use the page fonts);
  * labels are returned separately and drawn on canvas with the brand font.
  */
-import type { Fruit } from '@hoorah/protocol';
-import { type Face, FRUIT_ART, fruitMarkup } from '../../shared/art/fruits';
+import { type Fruit, type Look, lookOfFruit } from '@hoorah/protocol';
+import {
+  type GameFace,
+  PERSON_VIEWBOX,
+  personMarkup,
+  resolveLook,
+  SKIN_PALETTE,
+  toPersonFace,
+} from '../../shared/art/people';
 import type { ItemLook, StainKind } from './items';
 import { COLS, type KitchenDef, ROWS, type StationKind } from './kitchens';
 
@@ -558,16 +565,31 @@ export const CHEF_APRON =
   '<path d="M22 52 h20 v13 a4 4 0 0 1 -4 4 h-12 a4 4 0 0 1 -4 -4 z" fill="#FFFFFF"/><path d="M24 52 l-3 -5 M40 52 l3 -5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/><rect x="27" y="58" width="10" height="5" rx="2" fill="#EEF0F2"/>';
 export const CHEF_HAT =
   '<path d="M17 16 a7 7 0 0 1 8 -9 a9 9 0 0 1 14 0 a7 7 0 0 1 8 9 v4 h-30 z" fill="#FFFFFF"/><rect x="17" y="17" width="30" height="6" rx="3" fill="#E4E6EA"/>';
-/** A white hand (tinted with the fruit colour). */
+/** A white hand (tinted with the cook's skin tone). */
 export const CHEF_HAND = '<circle cx="6" cy="6" r="5" fill="#FFFFFF"/>';
 
-/** The fruit head on the chef sprite (the 64x64 avatar art squeezed into a 40 px circle). */
-export function chefHead(fruit: Fruit, face: Face): string {
-  return `<g transform="translate(12 9) scale(0.625)">${fruitMarkup(fruit, face)}</g>`;
+/** Rows of the 200x222 cast grid kept on the chef: the head down to the collar (no shoulders). */
+const HEAD_ROWS = 160;
+const PERSON_W = Number(PERSON_VIEWBOX.split(' ')[2]);
+
+/**
+ * The player's character as the chef's head: the cast art cut off at the collar and scaled so the
+ * face fills about the same 36 px circle the fruit heads used, under the chef hat.
+ */
+export function chefHead(look: Look, face: GameFace, uid?: string): string {
+  const h = (64 * HEAD_ROWS) / PERSON_W;
+  const inner = personMarkup(look, { face: toPersonFace(face), uid });
+  return `<svg x="0" y="0" width="64" height="${h.toFixed(1)}" viewBox="0 0 ${PERSON_W} ${HEAD_ROWS}">${inner}</svg>`;
 }
 
-export function fruitColor(fruit: Fruit): string {
-  return FRUIT_ART[fruit].back?.[1] ?? FRUIT_ART[fruit].body[1];
+/** The skin tone of a look (the chef's hands). */
+export function skinColor(look: Look): string {
+  return SKIN_PALETTE[resolveLook(look).skin - 1] ?? SKIN_PALETTE[1];
+}
+
+/** Stable text id of a look, for texture keys and caches. */
+export function lookId(look: Look): string {
+  return [look.c, look.s ?? '', look.h ?? '', look.hc ?? '', look.oc ?? ''].join('.');
 }
 
 /**
@@ -575,14 +597,15 @@ export function fruitColor(fruit: Fruit): string {
  * sprite, `arms` 'up' for a throw, 'catch' for both hands out front.
  */
 export function chefMarkup(
-  fruit: Fruit,
+  who: Fruit | Look,
   color: string,
   x: number,
   y: number,
   s: number,
-  opts: { face?: Face; flip?: boolean; arms?: 'down' | 'up' | 'catch'; stains?: StainKind[] } = {},
+  opts: { face?: GameFace; flip?: boolean; arms?: 'down' | 'up' | 'catch'; stains?: StainKind[] } = {},
 ): string {
-  const hand = fruitColor(fruit);
+  const look = typeof who === 'string' ? lookOfFruit(who) : who;
+  const hand = skinColor(look);
   const arms = opts.arms ?? 'down';
   const hands =
     arms === 'up'
@@ -594,7 +617,7 @@ export function chefMarkup(
     .map((k, i) => `<g transform="translate(${22 + (i % 2) * 8} ${52 + i * 4}) scale(0.5)">${STAIN[k]}</g>`)
     .join('');
   const flip = opts.flip ? ' scale(-1 1) translate(-64 0)' : '';
-  return `<g transform="translate(${x - 32 * s} ${y - 80 * s}) scale(${s})${flip}">${CHEF_LEGS}${CHEF_SHIRT.replace('#FFFFFF', color)}${hands}${CHEF_APRON}${stains}${chefHead(fruit, opts.face ?? 'happy')}${CHEF_HAT}</g>`;
+  return `<g transform="translate(${x - 32 * s} ${y - 80 * s}) scale(${s})${flip}">${CHEF_LEGS}${CHEF_SHIRT.replace('#FFFFFF', color)}${hands}${CHEF_APRON}${stains}${chefHead(look, opts.face ?? 'happy')}${CHEF_HAT}</g>`;
 }
 
 /** Splats on an apron, 24x20, centred. */

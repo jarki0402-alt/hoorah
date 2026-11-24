@@ -9,8 +9,8 @@ import type { ReadonlySignal } from '@preact/signals';
 import type { JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { Avatar } from '../../shared/ui';
-import { type Color, findMove, opposite, san } from './chess';
-import { type CaturMatch, LOW_TIME_S, type PlayedMove, VOTE_MS } from './logic';
+import { type Color, opposite } from './chess';
+import { LOW_TIME_S, type Mode, type Outcome, type Phase, VOTE_MS } from './logic';
 import { BOARD, pieceUrl } from './pieces';
 import { index64, type Sprite } from './sprites';
 import { formatClock, STR } from './strings';
@@ -34,8 +34,51 @@ export class FrameBus {
   }
 }
 
+/** A move as the move list draws it (`uci` is only needed for the last one). */
+export interface ShownMove {
+  uci: string;
+  san: string;
+  color: Color;
+}
+
+export interface ShownVote {
+  move: string;
+  count: number;
+  voters: number[];
+}
+
+/**
+ * What the view reads from the match: `CaturMatch` itself on the Host's main screen, a replica
+ * built from the published display state on a far-away one (long-distance play).
+ */
+export interface MatchView {
+  readonly mode: Mode;
+  readonly minutes: number;
+  /** Ms added per move. */
+  readonly increment: number;
+  readonly phase: Phase;
+  readonly sides: { readonly w: number[]; readonly b: number[] };
+  readonly outcome: Outcome | null;
+  readonly turn: Color;
+  readonly running: boolean;
+  readonly held: boolean;
+  /** Server ms. */
+  readonly phaseUntil: number;
+  readonly voteUntil: number;
+  readonly history: readonly ShownMove[];
+  lastMove(): ShownMove | undefined;
+  checkSquare(): string | undefined;
+  /** Team mode: current proposals, most votes first. */
+  tally(): readonly ShownVote[];
+  captures(): { w: string[]; b: string[] };
+  material(): number;
+  timeLeft(c: Color, now: number): number;
+  isConnected(id: number): boolean;
+  sanOf(move: string): string;
+}
+
 export interface TvModel {
-  match: CaturMatch;
+  match: MatchView;
   version: ReadonlySignal<number>;
   frame: FrameBus;
   sprites: Sprite[];
@@ -122,7 +165,7 @@ export function CaturTv({ model, size }: { model: TvModel; size: ReadonlySignal<
   );
 }
 
-function Header({ match }: { match: CaturMatch }) {
+function Header({ match }: { match: MatchView }) {
   const inc = Math.round(match.increment / 1000);
   return (
     <div class="ct-head">
@@ -200,7 +243,7 @@ function Board({ model, size }: { model: TvModel; size: number }) {
   );
 }
 
-function Arrows({ tally }: { tally: ReturnType<CaturMatch['tally']> }) {
+function Arrows({ tally }: { tally: readonly ShownVote[] }) {
   const total = tally.reduce((s, t) => s + t.count, 0) || 1;
   // Leader drawn last, on top.
   const list = tally.slice(0, 6).reverse();
@@ -281,7 +324,7 @@ function Faces({
         if (!p) return null;
         return (
           <div key={id} class={`ct-face ${voted?.has(id) ? 'is-voted' : ''}`}>
-            <Avatar fruit={p.fruit} ring={p.color} size={size} dim={!p.connected} />
+            <Avatar look={p.look} ring={p.color} size={size} dim={!p.connected} />
           </div>
         );
       })}
@@ -445,7 +488,7 @@ function VotePanel({ model }: { model: TvModel }) {
         <div class="ct-vote-list">
           {tally.slice(0, 3).map((t, i) => (
             <div key={t.move} class={`ct-vote-row ${i === 0 ? 'is-lead' : ''}`}>
-              <Figurine san={sanFor(match, t.move)} color={match.turn} />
+              <Figurine san={match.sanOf(t.move)} color={match.turn} />
               <Faces model={model} ids={t.voters} size={26} />
               <span class="ct-vote-n">{STR.voteCount(t.count)}</span>
             </div>
@@ -455,11 +498,6 @@ function VotePanel({ model }: { model: TvModel }) {
       <div class="ct-vote-foot">{STR.voted(Math.min(votes, voters), voters)}</div>
     </div>
   );
-}
-
-function sanFor(match: CaturMatch, move: string): string {
-  const m = findMove(match.moves, move);
-  return m ? san(match.pos, m, match.moves) : move;
 }
 
 /** SAN with the piece letter drawn as a little piece (light pieces on the dark move list). */
@@ -477,8 +515,8 @@ function Figurine({ san: text, color }: { san: string; color: Color }) {
   return <span class="ct-san">{text}</span>;
 }
 
-function MoveList({ history, rows }: { history: PlayedMove[]; rows: number }) {
-  const pairs: { n: number; w?: PlayedMove; b?: PlayedMove }[] = [];
+function MoveList({ history, rows }: { history: readonly ShownMove[]; rows: number }) {
+  const pairs: { n: number; w?: ShownMove; b?: ShownMove }[] = [];
   for (const m of history) {
     if (m.color === 'w' || pairs.length === 0)
       pairs.push({ n: pairs.length + 1, ...(m.color === 'w' ? { w: m } : { b: m }) });

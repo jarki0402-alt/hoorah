@@ -54,6 +54,23 @@ async function passTutorial(tv: Page, host: Page): Promise<void> {
   await expect(overlay).toBeHidden();
 }
 
+/**
+ * The e2e server starts with "Mode uji coba: semua terbuka" (OPEN_ALL=1) so every game can be
+ * played; the free-tier checks switch it off through the admin API and back on afterwards.
+ */
+async function setOpenAll(on: boolean): Promise<void> {
+  const owner = await chrome.newContext({ baseURL: BASE });
+  const H = { 'x-hoorah-admin': '1' };
+  const login = await owner.request.post('/api/admin/login', {
+    headers: H,
+    data: { username: 'admin', password: 'e2e-admin-pass' },
+  });
+  expect(login.ok()).toBe(true);
+  const put = await owner.request.put('/api/admin/config', { headers: H, data: { openAll: on } });
+  expect(put.ok()).toBe(true);
+  await owner.close();
+}
+
 async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: `${SHOTS}/${name}.png` });
 }
@@ -94,10 +111,22 @@ test.afterAll(async () => {
   await safari?.close();
 });
 
+/**
+ * Right after "Masuk" the phone shows the avatar maker; this picks a character (optional) and
+ * taps "Siap" to go on to the lobby.
+ */
+async function ready(p: Page, who?: string): Promise<void> {
+  const siap = p.getByRole('button', { name: 'Siap', exact: true });
+  await siap.waitFor();
+  if (who) await p.getByRole('button', { name: who, exact: true }).click();
+  await siap.click();
+  await expect(siap).toBeHidden();
+}
+
 test('full flow on TV + iPhone (WebKit) + Android (Chromium)', async () => {
   test.setTimeout(600_000); // every game in turn: longer than the default as the catalog grows
   // ---- TV (desktop/TV browser at 1080p) ----
-  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/`, 'tv'); // desktop browser: auto-detected as the big screen
+  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/main`, 'tv'); // desktop browser: auto-detected as the big screen
   const codeEl = tv.locator('.room-code');
   await expect(codeEl).toHaveText(/^\d{3} \d{3}$/);
   const code = (await codeEl.textContent())!.replace(/\s/g, '');
@@ -105,20 +134,29 @@ test('full flow on TV + iPhone (WebKit) + Android (Chromium)', async () => {
   // ---- iPhone joins by QR link ----
   const rina = await open(safari, { ...devices['iPhone 15'] }, `${BASE}/?r=${code}`, 'iphone');
   await rina.getByPlaceholder('Contoh: Rina').fill('Rina');
-  await rina.getByRole('button', { name: /Semangka/ }).click();
   await rina.getByRole('button', { name: 'Masuk' }).click();
+  // In the room the avatar maker comes first: a character, another outfit colour, then Siap.
+  // The main screen marks the seat while the phone is choosing.
+  await expect(rina.getByRole('button', { name: 'Siap', exact: true })).toBeVisible();
+  await expect(tv.locator('.player-row', { hasText: 'Rina' }).getByText(/memilih tokoh/i)).toBeVisible();
+  await rina.getByRole('button', { name: 'Mia', exact: true }).click();
+  await rina.getByRole('tab', { name: 'Baju' }).click();
+  await rina.getByRole('button', { name: 'Warna 3', exact: true }).click();
+  await shot(rina, '01-iphone-pick');
+  await ready(rina);
   await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
+  await expect(tv.locator('.player-row', { hasText: 'Rina' }).getByText(/memilih tokoh/i)).toBeHidden();
 
   // ---- Android joins by typing the code ----
-  const budi = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/`, 'android');
+  const budi = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/main`, 'android');
   await budi
     .getByLabel('Kode room')
     .first()
     .fill(`${code.slice(0, 3)} ${code.slice(3)}`);
   await budi.getByRole('button', { name: 'Lanjut' }).click();
   await budi.getByPlaceholder('Contoh: Rina').fill('Budi');
-  await budi.getByRole('button', { name: /Alpukat/ }).click();
   await budi.getByRole('button', { name: 'Masuk' }).click();
+  await ready(budi, 'Bram');
   await expect(budi.getByText('Halo, Budi!')).toBeVisible();
 
   await expect(tv.locator('.player-row', { hasText: 'Rina' })).toBeVisible();
@@ -128,11 +166,13 @@ test('full flow on TV + iPhone (WebKit) + Android (Chromium)', async () => {
   await shot(budi, '01-android-lobby');
 
   // ---- A third phone is turned away (free tier: 2 players) ----
+  await setOpenAll(false);
   const third = await open(chrome, { ...devices['Galaxy S9+'] }, `${BASE}/?r=${code}`, 'third');
   await third.getByPlaceholder('Contoh: Rina').fill('Sari');
   await third.getByRole('button', { name: 'Masuk' }).click();
   await expect(third.getByText('Room penuh')).toBeVisible();
   await third.context().close();
+  await setOpenAll(true);
 
   // ---- Host goes to the home screen ----
   await tv.locator('button', { hasText: /mulai|beranda/i }).click(); // a real click unlocks TV audio
@@ -439,7 +479,7 @@ test('full flow on TV + iPhone (WebKit) + Android (Chromium)', async () => {
     if (g.id === 'kuis') {
       // A non-Host opens their own menu from the pill; the game keeps running.
       await budi.getByRole('button', { name: 'Menu', exact: true }).click();
-      await expect(budi.getByText('Hanya Host yang bisa menjeda.')).toBeVisible();
+      await expect(budi.getByText('Game tetap jalan')).toBeVisible();
       await tv.waitForTimeout(600);
       await shot(budi, '11-player-menu');
       await budi.getByRole('button', { name: 'Lanjut main' }).click();
@@ -457,7 +497,7 @@ test('full flow on TV + iPhone (WebKit) + Android (Chromium)', async () => {
       // "Tambah pemain" puts the join QR on the main screen.
       await rina.getByRole('button', { name: 'Tambah pemain' }).click();
       await expect(tv.getByText('Scan untuk ikut main')).toBeVisible();
-      await expect(rina.getByText('QR tampil di layar utama')).toBeVisible();
+      await expect(rina.getByText('Teman scan QR di layar utama')).toBeVisible();
       await tv.waitForTimeout(600);
       await shot(tv, '11-tv-invite');
       await shot(rina, '11-host-invite');
@@ -481,15 +521,15 @@ test('full flow on TV + iPhone (WebKit) + Android (Chromium)', async () => {
 
 test('solo: one phone gets a computer opponent (Ludo)', async () => {
   errors.length = 0;
-  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/`, 'tv-solo');
+  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/main`, 'tv-solo');
   const codeEl = tv.locator('.room-code');
   await expect(codeEl).toHaveText(/^\d{3} \d{3}$/);
   const code = (await codeEl.textContent())!.replace(/\s/g, '');
 
   const rina = await open(safari, { ...devices['iPhone 15'] }, `${BASE}/?r=${code}`, 'iphone-solo');
   await rina.getByPlaceholder('Contoh: Rina').fill('Rina');
-  await rina.getByRole('button', { name: /Semangka/ }).click();
   await rina.getByRole('button', { name: 'Masuk' }).click();
+  await ready(rina, 'Mia');
   await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
 
   await tv.locator('button', { hasText: /mulai|beranda/i }).click();
@@ -501,7 +541,8 @@ test('solo: one phone gets a computer opponent (Ludo)', async () => {
   await rina.getByRole('tab', { name: 'Semua' }).click();
   // The main screen jumps to the same group: the "Semua" shelf, its tab in focus.
   await expect(tv.locator('.home-shelf-tab.focused .home-shelf-label')).toHaveText('Semua');
-  await expect(rina.locator('.picker-group').first()).toHaveText('Papan');
+  // The same order as the main screen: games for one player first, one that needs more at the end.
+  await expect(rina.locator('.pick-card').last()).not.toHaveText(/Ludo/);
   await shot(rina, '19-solo-picker');
   await shot(tv, '19-solo-tv-papan');
   await rina.locator('.pick-card', { hasText: 'Ludo' }).click();
@@ -553,7 +594,7 @@ test('solo: one phone gets a computer opponent (Ludo)', async () => {
 
 test('same Wi-Fi: direct WebRTC link with relay fallback (laptop screen, Android + iPhone)', async () => {
   errors.length = 0;
-  const tv = await open(chrome, { viewport: { width: 1280, height: 720 } }, `${BASE}/`, 'tv-rtc');
+  const tv = await open(chrome, { viewport: { width: 1280, height: 720 } }, `${BASE}/main`, 'tv-rtc');
   const codeEl = tv.locator('.room-code');
   await expect(codeEl).toHaveText(/^\d{3} \d{3}$/);
   const code = (await codeEl.textContent())!.replace(/\s/g, '');
@@ -561,6 +602,7 @@ test('same Wi-Fi: direct WebRTC link with relay fallback (laptop screen, Android
   const rina = await open(safari, { ...devices['iPhone 15'] }, `${BASE}/?r=${code}`, 'iphone-rtc');
   await rina.getByPlaceholder('Contoh: Rina').fill('Rina');
   await rina.getByRole('button', { name: 'Masuk' }).click();
+  await ready(rina);
   await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
   const budi = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/?r=${code}`, 'android-rtc');
   await budi.getByPlaceholder('Contoh: Rina').fill('Budi');
@@ -569,6 +611,7 @@ test('same Wi-Fi: direct WebRTC link with relay fallback (laptop screen, Android
     .getByRole('button', { name: 'Nanti saja' })
     .click({ timeout: 5_000 })
     .catch(() => {});
+  await ready(budi);
 
   // The main screen offers each phone a direct link; both ends report it (debug attributes).
   for (const p of [rina, budi]) {
@@ -584,7 +627,8 @@ test('same Wi-Fi: direct WebRTC link with relay fallback (laptop screen, Android
   // working), then the link comes back. The Android phone keeps its own link all along.
   await rina.evaluate(() => (window as unknown as { __hoorahRtc: { close(): void } }).__hoorahRtc.close());
   await expect(rina.locator('html')).toHaveAttribute('data-link', 'relay');
-  await pad(rina, 'Kanan');
+  // Home opens on the Mode Pesta card; past the Acak card sits the first game, OK opens its detail.
+  await pad(rina, 'Kanan', 2);
   await pad(rina, 'OK');
   await expect(tv.locator('.side-panel')).toBeVisible();
   await expect(rina.locator('html')).toHaveAttribute('data-link', 'direct', { timeout: 15_000 });
@@ -598,7 +642,12 @@ test('same Wi-Fi: direct WebRTC link with relay fallback (laptop screen, Android
 
 test('same Wi-Fi: direct WebRTC link with a Safari main screen (Mac/iPad) and an Android phone', async () => {
   errors.length = 0;
-  const tv = await open(safari, { viewport: { width: 1280, height: 800 } }, `${BASE}/`, 'safari-screen-rtc');
+  const tv = await open(
+    safari,
+    { viewport: { width: 1280, height: 800 } },
+    `${BASE}/main`,
+    'safari-screen-rtc',
+  );
   const codeEl = tv.locator('.room-code');
   await expect(codeEl).toHaveText(/^\d{3} \d{3}$/);
   const code = (await codeEl.textContent())!.replace(/\s/g, '');
@@ -610,6 +659,7 @@ test('same Wi-Fi: direct WebRTC link with a Safari main screen (Mac/iPad) and an
     .getByRole('button', { name: 'Nanti saja' })
     .click({ timeout: 5_000 })
     .catch(() => {});
+  await ready(budi);
   await expect(budi.locator('html')).toHaveAttribute('data-link', 'direct', { timeout: 15_000 });
   await expect(tv.locator('html')).toHaveAttribute('data-direct', '1');
   await pad(budi, 'OK');
@@ -622,17 +672,18 @@ test('same Wi-Fi: direct WebRTC link with a Safari main screen (Mac/iPad) and an
 
 test('nearby screen, banner follows the focused card, add-player panel', async () => {
   errors.length = 0;
-  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/`, 'tv-nearby');
+  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/main`, 'tv-nearby');
   await expect(tv.locator('.room-code')).toHaveText(/^\d{3} \d{3}$/);
   const code = (await tv.locator('.room-code').textContent())!.replace(/\s/g, '');
 
   // A phone on the same network opens the plain address: the screen is offered, one tap joins.
-  const budi = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/`, 'android-nearby');
+  const budi = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/main`, 'android-nearby');
   const offer = budi.locator('.nearby-room', { hasText: `${code.slice(0, 3)} ${code.slice(3)}` });
   await expect(offer).toBeVisible({ timeout: 10_000 });
   await offer.click();
   await budi.getByPlaceholder('Contoh: Rina').fill('Budi');
   await budi.getByRole('button', { name: 'Masuk' }).click();
+  await ready(budi);
   await expect(budi.getByText('HOST', { exact: true })).toBeVisible();
   await budi
     .getByRole('button', { name: 'Nanti saja' })
@@ -683,7 +734,8 @@ test('graphics diagnostics page: GPU test, level and manual choice', async () =>
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
-test('Hoorah Pass: a third phone opens a full room with a code made in the admin dashboard', async () => {
+test('Kacaw Pass: a third phone opens a full room with a code made in the admin dashboard', async () => {
+  await setOpenAll(false);
   // ---- The owner makes a code (API here; the dashboard UI is checked at the end) ----
   const owner = await chrome.newContext({ baseURL: BASE });
   const H = { 'x-hoorah-admin': '1' };
@@ -705,7 +757,7 @@ test('Hoorah Pass: a third phone opens a full room with a code made in the admin
   expect(made.status()).toBe(201);
 
   // ---- A main screen and two phones fill the free room ----
-  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/`, 'pass-tv');
+  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/main`, 'pass-tv');
   const codeEl = tv.locator('.room-code');
   await expect(codeEl).toHaveText(/^\d{3} \d{3}$/);
   const code = (await codeEl.textContent())!.replace(/\s/g, '');
@@ -716,8 +768,10 @@ test('Hoorah Pass: a third phone opens a full room with a code made in the admin
     return p;
   };
   const rina = await joinAs(safari, 'iPhone 15', 'Rina');
+  await ready(rina);
   await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
   const budi = await joinAs(chrome, 'Pixel 7', 'Budi');
+  await ready(budi);
   await expect(budi.getByText('Halo, Budi!')).toBeVisible();
 
   // ---- The third phone is turned away, a wrong code is refused, the right one gets in ----
@@ -730,8 +784,9 @@ test('Hoorah Pass: a third phone opens a full room with a code made in the admin
   // Typed in lower case with a dash: the phone tidies it up.
   await sari.getByLabel('Kode Pass').fill('e2e-pass');
   await sari.getByRole('button', { name: 'Pakai Pass & masuk' }).click();
+  await ready(sari);
   await expect(sari.getByText('Halo, Sari!')).toBeVisible();
-  await expect(tv.locator('.pass-chip')).toBeVisible();
+  await expect(tv.locator('.access-chip.is-pass')).toBeVisible();
   await expect(tv.getByText(/3\s*\/\s*4/)).toBeVisible();
   await shot(tv, '30-pass-tv-join');
   await shot(sari, '30-pass-android-in');
@@ -759,20 +814,21 @@ test('Hoorah Pass: a third phone opens a full room with a code made in the admin
 
   for (const p of [tv, rina, budi, sari, dash]) await p.context().close();
   await owner.close();
+  await setOpenAll(true);
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
 test('solo: Dapur Heboh with a computer helper, floating stick and three buttons', async () => {
   errors.length = 0;
-  const tv = await open(chrome, { viewport: { width: 1280, height: 720 } }, `${BASE}/`, 'tv-dapur');
+  const tv = await open(chrome, { viewport: { width: 1280, height: 720 } }, `${BASE}/main`, 'tv-dapur');
   const codeEl = tv.locator('.room-code');
   await expect(codeEl).toHaveText(/^\d{3} \d{3}$/);
   const code = (await codeEl.textContent())!.replace(/\s/g, '');
 
   const rina = await open(chrome, { ...devices['Pixel 7 landscape'] }, `${BASE}/?r=${code}`, 'android-dapur');
   await rina.getByPlaceholder('Contoh: Rina').fill('Rina');
-  await rina.getByRole('button', { name: /Semangka/ }).click();
   await rina.getByRole('button', { name: 'Masuk' }).click();
+  await ready(rina, 'Mia');
   await rina
     .getByRole('button', { name: 'Nanti saja' })
     .click({ timeout: 2500 })
@@ -801,9 +857,21 @@ test('solo: Dapur Heboh with a computer helper, floating stick and three buttons
   await rina.locator('.menu-opt', { hasText: 'Santai' }).first().dispatchEvent('pointerdown');
   await rina.getByRole('button', { name: 'Mulai masak', exact: true }).click();
 
-  // The phone turns into the kitchen pad: floating stick plus Ambil / Kerja / Lempar.
+  // The first game on this screen starts with the hands-on practice: a step card on the main
+  // screen, the button to press lit on the phone, Lewati (tap twice) skips to the real round.
   const zone = rina.locator('.pad-stick-zone');
   await expect(zone).toBeVisible({ timeout: 15_000 });
+  await expect(frame.locator('.dp-guide')).toBeVisible({ timeout: 15_000 });
+  await shot(tv, '30-dapur-practice');
+  const skip = rina.locator('.pad-btn', { hasText: 'Lewati' });
+  await expect(skip).toBeVisible();
+  await skip.dispatchEvent('pointerdown');
+  const sure = rina.locator('.pad-btn', { hasText: 'Yakin?' });
+  await expect(sure).toBeVisible();
+  await sure.dispatchEvent('pointerdown');
+  await expect(frame.locator('.dp-guide')).toBeHidden({ timeout: 15_000 });
+
+  // Then the kitchen pad: floating stick plus Ambil / Kerja / Lempar.
   for (const label of ['Ambil', 'Kerja', 'Lempar']) {
     await expect(rina.locator('.pad-btn', { hasText: label })).toBeVisible();
   }
@@ -835,5 +903,81 @@ test('solo: Dapur Heboh with a computer helper, floating stick and three buttons
   await rina.getByRole('button', { name: 'Ya, keluar' }).click();
   await tv.context().close();
   await rina.context().close();
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('free tier: a locked game offers the Pass, the trial opens everything once', async () => {
+  await setOpenAll(false);
+  const tv = await open(chrome, { viewport: { width: 1920, height: 1080 } }, `${BASE}/main`, 'free-tv');
+  const codeEl = tv.locator('.room-code');
+  await expect(codeEl).toHaveText(/^\d{3} \d{3}$/);
+  const code = (await codeEl.textContent())!.replace(/\s/g, '');
+  const rina = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/?r=${code}`, 'free-rina');
+  await rina.getByPlaceholder('Contoh: Rina').fill('Rina');
+  await rina.getByRole('button', { name: 'Masuk' }).click();
+  await ready(rina);
+  await expect(rina.getByText('HOST', { exact: true })).toBeVisible();
+  await tv.locator('button', { hasText: /mulai|beranda/i }).click();
+  await tv.mouse.move(2, 2);
+  // Let the home page settle first, like the other tests: an early click can be lost.
+  await tv.waitForTimeout(800);
+
+  // A Pass game carries the PASS chip; its detail page offers the Pass instead of starting.
+  await expect(tv.locator('.card', { hasText: 'Obby' }).getByText('PASS')).toBeVisible();
+  // A click while the home rows are still settling can be lost: retry until the detail page opens.
+  const unlock = tv.getByRole('button', { name: /Buka dengan Pass/ });
+  try {
+    await expect(async () => {
+      if (!(await unlock.isVisible())) await tv.locator('.card', { hasText: 'Obby' }).first().click();
+      await expect(unlock).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
+  } catch (e) {
+    // Kept on purpose: this step fails now and then in full runs only; the picture shows why.
+    await shot(tv, 'free-tier-detail-failed');
+    throw e;
+  }
+  await unlock.click();
+  await expect(tv.locator('.offer-panel')).toBeVisible();
+  await expect(tv.getByText('Obby butuh Kacaw Pass')).toBeVisible();
+  await shot(tv, '40-free-offer');
+
+  // The trial starts once: everything opens and the top bar counts down.
+  await tv.getByRole('button', { name: /Coba gratis \d+ menit/ }).click();
+  await expect(tv.locator('.offer-panel')).toBeHidden();
+  await expect(tv.getByRole('button', { name: /^Main$/ })).toBeVisible();
+  // Back on the home screen the top bar counts the trial down.
+  await tv.keyboard.press('Escape');
+  await expect(tv.getByText(/Coba gratis · \d+/)).toBeVisible();
+  await shot(tv, '41-free-trial-home');
+
+  for (const p of [tv, rina]) await p.context().close();
+  await setOpenAll(true);
+  expect(errors, errors.join('\n')).toEqual([]);
+});
+
+test('landing page: the big screen starts at /main and comes back to /, a phone joins with a code', async () => {
+  // A fresh big screen sees the landing page; the start button opens the main screen.
+  const desk = await open(chrome, { viewport: { width: 1440, height: 900 } }, `${BASE}/`, 'landing-desk');
+  await expect(desk.getByRole('link', { name: 'Mulai main sekarang' })).toBeVisible();
+  await shot(desk, '50-landing');
+  await desk.getByRole('link', { name: 'Mulai main sekarang' }).click();
+  await expect(desk).toHaveURL(/\/main$/);
+  const codeEl = desk.locator('.room-code');
+  await expect(codeEl).toHaveText(/^\d{3} \d{3}$/);
+  const code = (await codeEl.textContent())!.replace(/\s/g, '');
+  // Back at / this device still sees the landing page, now with "continue as the main screen".
+  await desk.goto(`${BASE}/`);
+  await expect(desk).toHaveURL(new RegExp(`${BASE}/$`));
+  await expect(desk.getByRole('link', { name: 'Lanjutkan sebagai layar utama' })).toBeVisible();
+
+  // A phone opening the site types the code at the top of the landing page.
+  const phone = await open(chrome, { ...devices['Pixel 7'] }, `${BASE}/`, 'landing-phone');
+  await phone.getByLabel('Kode room').fill(code);
+  await phone.getByRole('button', { name: 'Gabung', exact: true }).click();
+  await expect(phone).toHaveURL(new RegExp(`(R/|\\?r=)${code}`));
+  await expect(phone.getByPlaceholder('Contoh: Rina')).toBeVisible();
+  await shot(phone, '51-landing-phone-join');
+
+  for (const p of [desk, phone]) await p.context().close();
   expect(errors, errors.join('\n')).toEqual([]);
 });

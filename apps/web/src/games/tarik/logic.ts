@@ -5,7 +5,7 @@
  *   - `t`      game time in ms (frozen while paused), drives physics and phases;
  *   - `server` synced server time in ms, only used for the super-pull ring that phones also draw.
  */
-import { type Fruit, type PlayerInfo, u16Delta } from '@hoorah/protocol';
+import { type Fruit, type Look, type PlayerInfo, sameLook, u16Delta } from '@hoorah/protocol';
 import type { GameAward, GameResult } from '@hoorah/sdk';
 import { formatRate, STR } from './strings';
 
@@ -139,6 +139,7 @@ export interface Member {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
   /** No longer in the room's player list. */
@@ -255,9 +256,17 @@ export class TarikMatch {
         m.gone = false;
         changed = true;
       }
-      if (m.connected !== info.connected || m.name !== info.name || m.fruit !== info.fruit) changed = true;
+      if (
+        m.connected !== info.connected ||
+        m.name !== info.name ||
+        m.fruit !== info.fruit ||
+        !sameLook(m.look, info.look)
+      ) {
+        changed = true;
+      }
       m.name = info.name;
       m.fruit = info.fruit;
+      m.look = info.look;
       m.color = info.color;
       m.connected = info.connected;
       if (this.teamsAssigned && m.team === null && m.connected) {
@@ -280,6 +289,7 @@ export class TarikMatch {
       id: info.id,
       name: info.name,
       fruit: info.fruit,
+      look: info.look,
       color: info.color,
       connected: info.connected,
       gone: false,

@@ -4,7 +4,7 @@
  * ghost whose phone dropped), sounds, adaptive music by how close the ghost is, phone views
  * (throttled and deduplicated; the ghost's carries the secret map) and the result.
  */
-import type { PlayerInfo, RelayedInput } from '@hoorah/protocol';
+import { lookOfFruit, type PlayerInfo, type RelayedInput } from '@hoorah/protocol';
 import type { GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
 import type * as Phaser from 'phaser';
 import { celebrate } from '../../shared/confetti';
@@ -242,7 +242,7 @@ export class Driver {
     const p = this.info(id);
     return {
       name: p?.name ?? '',
-      fruit: p?.fruit ?? 'jeruk',
+      look: p?.look ?? lookOfFruit('jeruk'),
       color: Number.parseInt((p?.color ?? '#FFFFFF').slice(1), 16),
     };
   }
@@ -454,7 +454,7 @@ export class Driver {
 
   private who(id: number): Who {
     const p = this.info(id);
-    return { id, name: p?.name ?? '', fruit: p?.fruit ?? 'jeruk', color: p?.color ?? '#FFFFFF' };
+    return { id, name: p?.name ?? '', look: p?.look ?? lookOfFruit('jeruk'), color: p?.color ?? '#FFFFFF' };
   }
 
   private overlay(): Overlay {

@@ -4,12 +4,12 @@
  * signals; per-frame values (token positions, dice face, timers) are written straight to the DOM
  * by the driver, so nothing re-renders at 60 fps.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { useMemo } from 'preact/hooks';
 import { Avatar } from '../../shared/ui';
 import { boardMarkup, diePips, FRAME, tokenMarkup } from './art';
-import type { Board } from './board';
+import { type Board, crowdOffset, type Pt } from './board';
 import { computeLayout, type Layout } from './layout';
 import { type CardId, DUEL_BACK } from './logic';
 import { CARD_TEXT, STR } from './strings';
@@ -18,6 +18,7 @@ export interface PlayerCard {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -90,6 +91,27 @@ export interface Bubble {
 const RING_R = 20;
 const RING_LEN = 2 * Math.PI * RING_R;
 
+/** One token for one frame: where its pose puts it, and the square it rests on. */
+export interface TokenFrame {
+  id: number;
+  /** Cell units. */
+  p: Pt;
+  lift: number;
+  moving: boolean;
+  /** Square it rests on (resting tokens on one square share it). */
+  sq: number;
+}
+
+interface TokenState {
+  /** Smoothed crowd offset (cell units). */
+  ox: number;
+  oy: number;
+  /** Last written transform, to skip identical writes. */
+  css: string;
+  z: number;
+  active: boolean | null;
+}
+
 export class HudStore {
   readonly layout = signal<Layout>(computeLayout(50, 1280, 720));
   readonly model = signal<HudModel>({
@@ -120,6 +142,7 @@ export class HudStore {
   duelBar: HTMLDivElement | null = null;
   duelCount: HTMLDivElement | null = null;
 
+  private readonly tokenState = new Map<number, TokenState>();
   private face = -1;
   private rolling: boolean | null = null;
   private ringFrac = -1;
@@ -128,6 +151,64 @@ export class HudStore {
   private duelText = '';
 
   constructor(readonly board: Board) {}
+
+  /** Rewrite every token transform on the next paint (after a layout change). */
+  resetTokens(): void {
+    for (const t of this.tokenState.values()) t.css = '';
+  }
+
+  /**
+   * Writes the tokens for one frame: moving ones follow their pose (lifted, a bit bigger),
+   * resting ones fan out over a shared square. `cell` is the layout's square size in px.
+   */
+  paintTokens(cell: number, frames: readonly TokenFrame[], active: number | null): void {
+    const size = Math.round(cell * 0.66);
+    const resting = new Map<number, number[]>();
+    for (const f of frames) {
+      if (f.moving) continue;
+      const list = resting.get(f.sq);
+      if (list) list.push(f.id);
+      else resting.set(f.sq, [f.id]);
+    }
+    for (const f of frames) {
+      const el = this.tokens.get(f.id);
+      if (!el) continue;
+      let st = this.tokenState.get(f.id);
+      if (!st) {
+        st = { ox: 0, oy: 0, css: '', z: 0, active: null };
+        this.tokenState.set(f.id, st);
+      }
+      let tx = 0;
+      let ty = 0;
+      const list = f.moving ? null : resting.get(f.sq)!;
+      if (list) {
+        const o = crowdOffset(list.indexOf(f.id), list.length);
+        tx = o.x;
+        ty = o.y;
+      }
+      st.ox += (tx - st.ox) * 0.2;
+      st.oy += (ty - st.oy) * 0.2;
+      const crowd = list?.length ?? 1;
+      const scale = f.moving ? 1.12 : crowd >= 4 ? 0.64 : crowd > 1 ? 0.78 : 1;
+      const x = FRAME + (f.p.x + st.ox) * cell - size / 2;
+      const y = FRAME + (f.p.y + st.oy - f.lift) * cell - size / 2;
+      const css = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale})`;
+      if (css !== st.css) {
+        st.css = css;
+        el.style.transform = css;
+      }
+      const z = f.moving ? 1000 : Math.round(y);
+      if (z !== st.z) {
+        st.z = z;
+        el.style.zIndex = String(z);
+      }
+      const isActive = f.id === active;
+      if (isActive !== st.active) {
+        st.active = isActive;
+        el.classList.toggle('is-active', isActive);
+      }
+    }
+  }
 
   /** face 0 = blank die ("?"). */
   setDie(face: number, rolling: boolean): void {
@@ -231,7 +312,7 @@ function Tokens({ store, cell }: { store: HudStore; cell: number }) {
             height={size}
             viewBox="0 0 64 64"
             aria-hidden="true"
-            dangerouslySetInnerHTML={{ __html: tokenMarkup(p.fruit, p.color) }}
+            dangerouslySetInnerHTML={{ __html: tokenMarkup(p.look, p.color, `ul-tok-${p.id}`) }}
           />
         </div>
       ))}
@@ -261,7 +342,7 @@ function CardOverlay({ store }: { store: HudStore }) {
       <div key={c.key} class={`ul-card ${t.good ? 'is-good' : 'is-bad'}`}>
         <div class="ul-card-eyebrow">{STR.cardEyebrow}</div>
         <div class="ul-card-who">
-          <Avatar fruit={c.who.fruit} ring={c.who.color} size={40} />
+          <Avatar look={c.who.look} ring={c.who.color} size={40} />
           <span>{c.who.name}</span>
         </div>
         <div class="display ul-card-title">{t.title}</div>
@@ -276,7 +357,7 @@ function DuelSide({ p, taps, state }: { p: PlayerCard; taps: number; state: 'win
   return (
     <div class={`ul-duel-side ${state ? `is-${state}` : ''}`}>
       <Avatar
-        fruit={p.fruit}
+        look={p.look}
         ring={p.color}
         size={104}
         face={state === 'win' ? 'wow' : state === 'lose' ? 'sad' : 'effort'}
@@ -359,7 +440,7 @@ function TurnPanel({ store }: { store: HudStore }) {
         <div class="ul-eyebrow">{m.eyebrow}</div>
         {who ? (
           <div class="ul-who-row" key={who.id}>
-            <Avatar fruit={who.fruit} ring={who.color} size={L.mode === 'side' ? 72 : 64} face="effort" />
+            <Avatar look={who.look} ring={who.color} size={L.mode === 'side' ? 72 : 64} face="effort" />
             <div class="display ul-who-name">{who.name}</div>
           </div>
         ) : (
@@ -446,7 +527,7 @@ function PlayersPanel({ store }: { store: HudStore }) {
         >
           <span class={`ul-rank r${p.rank}`}>{p.rank}</span>
           <Avatar
-            fruit={p.fruit}
+            look={p.look}
             ring={p.color}
             size={compact ? 42 : 50}
             face={p.active ? 'effort' : 'happy'}
@@ -509,13 +590,7 @@ function BannerView({ store }: { store: HudStore }) {
     <div class="ul-banner-wrap">
       <div class={`ul-banner is-${b.kind}`} key={b.key}>
         {b.kind === 'finale' && b.winner && (
-          <Avatar
-            fruit={b.winner.fruit}
-            ring={b.winner.color}
-            size={140}
-            face="wow"
-            class="ul-banner-avatar"
-          />
+          <Avatar look={b.winner.look} ring={b.winner.color} size={140} face="wow" class="ul-banner-avatar" />
         )}
         <div class="display outline-text ul-banner-title">{b.title}</div>
         <div class="ul-banner-sub">{b.sub}</div>

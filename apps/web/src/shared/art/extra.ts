@@ -1,4 +1,4 @@
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { svgDoc } from './svg';
 
 /** Key art for games that are "coming soon". 640x360 each. */
@@ -16,7 +16,7 @@ export function bajajSvg(): string {
       '<g stroke="#FFF7F0" stroke-width="4" stroke-linecap="round" opacity="0.7"><path d="M90 236 H170"/><path d="M70 262 H160"/><path d="M110 290 H190"/></g>',
       '<path d="M200 312 V256 Q202 214 248 210 H318 Q354 212 362 252 L368 312Z" fill="#2F8CFF"/><path d="M222 214 H330 Q338 202 326 196 H234 Q220 202 222 214Z" fill="#1F6FD6"/>',
       '<path d="M250 224 h50 v36 h-50Z" fill="#BFE6FF"/><path d="M310 224 h24 q12 10 14 36 h-38Z" fill="#BFE6FF"/>',
-      `<g transform="translate(262 222) scale(0.5)">${fruitMarkup('jeruk', 'wow')}</g>`,
+      `<g transform="translate(262 222) scale(0.5)">${castHead('jeruk', 'wow')}</g>`,
       '<rect x="206" y="272" width="156" height="8" fill="#FFC928"/><circle cx="364" cy="268" r="6" fill="#FFE38A"/>',
       '<circle cx="236" cy="314" r="18" fill="#111214"/><circle cx="236" cy="314" r="7" fill="#9AA0A6"/><circle cx="338" cy="314" r="18" fill="#111214"/><circle cx="338" cy="314" r="7" fill="#9AA0A6"/>',
       '<path d="M520 316 L534 278 L548 316Z" fill="#FF5A1F"/><rect x="516" y="314" width="36" height="5" fill="#111214"/><rect x="527" y="294" width="14" height="5" fill="#fff"/>',
@@ -61,7 +61,7 @@ export function masakSvg(): string {
       '<g fill="#C77DA0"><ellipse cx="200" cy="300" rx="14" ry="11"/><ellipse cx="222" cy="306" rx="11" ry="9"/></g><g fill="#F3C6D9"><ellipse cx="200" cy="300" rx="7" ry="5"/></g>',
       '<path d="M120 268 L222 262 L226 270 L122 276Z" fill="#DADCE0"/><rect x="226" y="259" width="26" height="12" rx="4" fill="#2A2B30"/>',
       // Chef with a hat.
-      `<g transform="translate(500 176) scale(0.95)">${fruitMarkup('semangka', 'wow')}</g>`,
+      `<g transform="translate(500 176) scale(0.95)">${castHead('semangka', 'wow')}</g>`,
       '<path d="M516 170 q-14 -36 16 -38 q14 -22 36 -6 q28 -8 26 20 q16 14 -4 24Z" fill="#FFFFFF"/><rect x="516" y="160" width="74" height="16" rx="5" fill="#F2F2F2"/>',
       '<path d="M0 340 h640 v20 h-640Z" fill="#8A5A2B"/>',
     ].join(''),

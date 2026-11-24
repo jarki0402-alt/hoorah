@@ -12,6 +12,7 @@ import {
   type PlayerInfo,
   type RelayedInput,
   STICK_OP,
+  sameLook,
   unpackStick,
 } from '@hoorah/protocol';
 import type { GameAward, GameResult, HoorahGame, MusicIntensity } from '@hoorah/sdk';
@@ -57,7 +58,7 @@ export function lineup(game: Pick<GameLike, 'players'>): { seats: Seat[]; cpus: 
   const cpus = soloOpponents(humans, SOLO_OPPONENTS);
   const seats = [...humans, ...cpus]
     .slice(0, 8)
-    .map((p) => ({ id: p.id, name: p.name, fruit: p.fruit, color: p.color, cpu: isCpu(p.id) }));
+    .map((p) => ({ id: p.id, name: p.name, fruit: p.fruit, look: p.look, color: p.color, cpu: isCpu(p.id) }));
   return { seats, cpus };
 }
 
@@ -115,17 +116,17 @@ export class Director {
   }
 
   private guests(): GuestPlayer[] {
-    return this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color }));
+    return this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, look: c.look, color: c.color }));
   }
 
   private chip(id: number): Chip | null {
     const p = this.m.player(id);
-    return p ? { id, name: p.name, fruit: p.fruit, color: p.color } : null;
+    return p ? { id, name: p.name, fruit: p.fruit, look: p.look, color: p.color } : null;
   }
 
   private syncLooks(): void {
     this.scene.setPlayers(
-      this.m.players.map((p) => ({ id: p.id, name: p.name, fruit: p.fruit, color: p.color })),
+      this.m.players.map((p) => ({ id: p.id, name: p.name, fruit: p.fruit, look: p.look, color: p.color })),
     );
   }
 
@@ -157,7 +158,7 @@ export class Director {
       const c = m.player(p.id);
       if (!c) {
         if (p.connected && m.phase !== 'final' && m.phase !== 'done' && m.players.length < 8)
-          m.addPlayer({ id: p.id, name: p.name, fruit: p.fruit, color: p.color, cpu: false });
+          m.addPlayer({ id: p.id, name: p.name, fruit: p.fruit, look: p.look, color: p.color, cpu: false });
         continue;
       }
       if (p.connected && this.takeover.delete(p.id)) m.setPilot(p.id, null);
@@ -165,8 +166,8 @@ export class Director {
         this.takeover.add(p.id);
         m.setPilot(p.id, new ContestantBrain(TAKEOVER_SKILL));
       }
-      if (c.name !== p.name || c.color !== p.color || c.fruit !== p.fruit)
-        m.restyle(p.id, { name: p.name, color: p.color, fruit: p.fruit });
+      if (c.name !== p.name || c.color !== p.color || c.fruit !== p.fruit || !sameLook(c.look, p.look))
+        m.restyle(p.id, { name: p.name, color: p.color, fruit: p.fruit, look: p.look });
     }
     this.syncLooks();
     this.lastHud = Number.NEGATIVE_INFINITY;
@@ -424,6 +425,7 @@ export class Director {
       id: p.id,
       name: p.name,
       fruit: p.fruit,
+      look: p.look,
       color: p.color,
       score: p.total + (m.phase === 'play' ? m.roundPoints(p) : 0),
       out: m.phase === 'play' && p.out,

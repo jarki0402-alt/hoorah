@@ -4,7 +4,15 @@
  * only advances through `step()`, so pausing is simply not stepping. The renderer reads kart state
  * (prev* fields for interpolation) and the driver drains `events` for sounds, phones and the HUD.
  */
-import { DRIVE_BRAKE, DRIVE_GAS, DRIVE_LEFT, DRIVE_RIGHT, type Fruit, u16Delta } from '@hoorah/protocol';
+import {
+  DRIVE_BRAKE,
+  DRIVE_GAS,
+  DRIVE_LEFT,
+  DRIVE_RIGHT,
+  type Fruit,
+  type Look,
+  u16Delta,
+} from '@hoorah/protocol';
 import { type AiState, aiControl, newAiState } from './ai';
 import { type Arena, getArena } from './arena';
 import type { CircuitId } from './maps/types';
@@ -89,6 +97,8 @@ export interface RacerSetup {
   name: string;
   color: string;
   fruit: Fruit;
+  /** The player's avatar on the main screen HUD (the 3D driver stays the fruit). */
+  look: Look;
 }
 
 export interface Controls {
@@ -117,6 +127,7 @@ export interface Kart {
   name: string;
   color: string;
   fruit: Fruit;
+  look: Look;
   /** AI drives: CPUs always, humans while disconnected or after finishing. */
   autopilot: boolean;
   connected: boolean;
@@ -440,6 +451,7 @@ export class Race {
       name: r.name,
       color: r.color,
       fruit: r.fruit,
+      look: r.look,
       autopilot: !r.human,
       connected: true,
       x,

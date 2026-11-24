@@ -1,0 +1,279 @@
+/* Promo break between games (AdBreak.tsx), on the 1280×720 stage. One centred column, so 16:10
+   and 4:3 (taller stages) only add air above and below. */
+
+.adb {
+  z-index: 90;
+  flex-direction: column;
+  gap: 26px;
+  padding: 32px 64px;
+  background: var(--ink);
+  animation: fade-in 0.35s var(--ease-out);
+}
+
+.adb-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1104px;
+}
+
+.adb-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.adb-eyebrow {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--yellow);
+}
+
+.adb-title {
+  margin: 0;
+  font-size: 60px;
+  color: #fff;
+  text-shadow: 0 3px 0 #000;
+}
+
+/* ------------------------------------------------------------ countdown ring */
+
+.adb-ring {
+  position: relative;
+  width: 128px;
+  height: 128px;
+  flex: none;
+}
+
+.adb-ring svg {
+  display: block;
+  transform: rotate(-90deg);
+}
+
+.adb-ring circle {
+  fill: none;
+  stroke-width: 12;
+}
+
+.adb-ring-track {
+  stroke: var(--surface-2);
+}
+
+/* Circumference 2π × 52 ≈ 327: the ring empties over the break (duration set inline). */
+.adb-ring-fill {
+  stroke: var(--yellow);
+  stroke-linecap: round;
+  stroke-dasharray: 327;
+  stroke-dashoffset: 0;
+  animation-name: adb-ring;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes adb-ring {
+  to {
+    stroke-dashoffset: 327;
+  }
+}
+
+.adb-ring-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52px;
+  color: #fff;
+}
+
+/* ------------------------------------------------------------ showcase */
+
+.adb-show {
+  display: flex;
+  gap: 32px;
+}
+
+.adb-card {
+  position: relative;
+  animation: adb-slide 0.7s var(--ease-pop) both;
+}
+
+.adb-card:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.adb-card:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.adb-art {
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.45);
+  animation: adb-float 3.2s ease-in-out 0.9s infinite;
+}
+
+.adb-card:nth-child(2) .adb-art {
+  animation-delay: 1.4s;
+}
+
+.adb-card:nth-child(3) .adb-art {
+  animation-delay: 1.9s;
+}
+
+/* Over the card's top edge, clear of the game logos inside the art. */
+.adb-new {
+  position: absolute;
+  top: -12px;
+  right: 16px;
+  z-index: 1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  background: var(--yellow);
+}
+
+/* A fruit character peeks over the card's bottom corner and hops. */
+.adb-fruit {
+  position: absolute;
+  left: -18px;
+  bottom: -26px;
+  display: block;
+  animation:
+    adb-pop 0.5s var(--ease-pop) 0.7s both,
+    adb-hop 1.6s ease-in-out 1.3s infinite;
+}
+
+.adb-card:nth-child(2) .adb-fruit {
+  left: 50%;
+  margin-left: -42px;
+  animation-delay: 0.85s, 1.7s;
+}
+
+.adb-card:nth-child(3) .adb-fruit {
+  left: auto;
+  right: -18px;
+  animation-delay: 1s, 2.1s;
+}
+
+@keyframes adb-slide {
+  0% {
+    opacity: 0;
+    transform: translateX(120px) scale(0.92);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(-10px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes adb-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes adb-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes adb-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  20% {
+    transform: translateY(-22px) rotate(-6deg);
+  }
+  40% {
+    transform: translateY(0) rotate(4deg);
+  }
+}
+
+/* ------------------------------------------------------------ offer and actions */
+
+.adb-offer {
+  margin: 8px 0 0;
+  max-width: 1060px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.adb-actions {
+  display: flex;
+  gap: 18px;
+}
+
+.adb-btn {
+  gap: 10px;
+  min-width: 260px;
+  padding: 16px 28px;
+  border-radius: 16px;
+  font-size: 20px;
+}
+
+.adb-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 1104px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.adb-foot > :first-child {
+  border-radius: 8px;
+}
+
+.adb-next-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.adb-next-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.adb-foot-note {
+  margin-left: auto;
+  font-size: 15px;
+  color: var(--text-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adb,
+  .adb-card,
+  .adb-art,
+  .adb-fruit {
+    animation: none;
+  }
+}

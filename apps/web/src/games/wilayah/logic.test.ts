@@ -1,4 +1,12 @@
-import { FRUITS, INPUT_OP, PAD_UP, type PlayerInfo, packStick, STICK_OP } from '@hoorah/protocol';
+import {
+  FRUITS,
+  INPUT_OP,
+  lookOfFruit,
+  PAD_UP,
+  type PlayerInfo,
+  packStick,
+  STICK_OP,
+} from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { Field } from './field';
 import { type Arena, arenaFor, type MatchEvent, parseMinutes, type Runner, WilayahMatch } from './logic';
@@ -11,6 +19,7 @@ function players(n: number, from = 1): PlayerInfo[] {
     id: from + i,
     name: `P${from + i}`,
     fruit: FRUITS[(from + i - 1) % FRUITS.length]!,
+    look: lookOfFruit(FRUITS[(from + i - 1) % FRUITS.length]!),
     color: COLORS[(from + i - 1) % COLORS.length]!,
     connected: true,
     isHost: i === 0,
@@ -520,12 +529,13 @@ describe('players, scoring and the clock', () => {
     expect(leave[0]?.cleared).toHaveLength(home);
   });
 
-  it('follows a player changing colour or fruit', () => {
+  it('follows a player changing colour, fruit or look', () => {
     const { m, t } = playing(2);
     const list = players(2);
-    list[1] = { ...list[1]!, color: '#14B8A6', fruit: 'durian' };
+    expect(m.runner(2)!.look).toEqual(list[1]!.look);
+    list[1] = { ...list[1]!, color: '#14B8A6', fruit: 'durian', look: { c: 'rio', hc: 1 } };
     m.setPlayers(list, t);
-    expect(m.runner(2)).toMatchObject({ color: '#14B8A6', fruit: 'durian' });
+    expect(m.runner(2)).toMatchObject({ color: '#14B8A6', fruit: 'durian', look: { c: 'rio', hc: 1 } });
   });
 
   it('puts people beyond eight into the stands', () => {

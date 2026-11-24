@@ -1,7 +1,7 @@
 /**
  * The Phaser world of Dapur Heboh: the static kitchen backdrop (one pre-rendered texture, or two
  * carts that slide on Heboh), every station as its own image (so Jam Sibuk can move them),
- * fruit chefs built from tinted parts, items, throws, rings, bars, fire and smoke. It only
+ * chefs (each player's own character as the head) built from tinted parts, items, throws, rings, bars, fire and smoke. It only
  * renders; rules live in logic.ts.
  *
  * Coordinates: the 1280x720 world is centred on the stage; the kitchen sits at (KX, KY). Logic
@@ -11,31 +11,35 @@
  * Per frame there are no allocations in the hot paths: images come from pools, three Graphics
  * objects are cleared and redrawn.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Look } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
-import type { Face } from '../../shared/art/fruits';
+import type { GameFace } from '../../shared/art/people';
 import {
   contentSpot,
   feetY,
-  fruitColor,
   heatSpot,
   KITCHEN_H,
   KITCHEN_W,
+  lookId,
   rowTop,
+  ST_H,
   ST_INSET,
   ST_MARGIN,
+  skinColor,
   TILE_W,
 } from './art';
 import { type Item, plateDish, type StainKind } from './items';
-import { CLEAN_MS, cartGap, DOUSE_MS, type Side, sideOfX, WARN_MS, WASH_MS } from './kitchens';
+import { CLEAN_MS, DOUSE_MS, type Side, sideOfX, WARN_MS, WASH_MS } from './kitchens';
 import type { Chef, DapurMatch, MatchEvent, Station } from './logic';
 import { STR } from './strings';
 import {
   BACKDROP_PAD,
+  BLANK_KEY,
   backdropKey,
   cartKey,
   headKey,
   iconKey,
+  loadHeads,
   pillCanvas,
   RENDER_SCALE,
   stainKey,
@@ -53,6 +57,8 @@ const DEPTH_TAGS = 9500;
 const HIT_BUBBLE_MS = 1_800;
 const THROW_PILL_MS = 700;
 const ARC_LIFT = 34;
+/** Height above a cook's feet that clears the name tag (practice arrow). */
+const CHEF_TOP = 108;
 
 interface ChefSprite {
   id: number;
@@ -68,8 +74,10 @@ interface ChefSprite {
   hat: Phaser.GameObjects.Image;
   tag: Phaser.GameObjects.Image;
   tagKey: string;
-  fruit: Fruit;
-  face: Face;
+  /** Head texture now shown (BLANK_KEY until the look is rasterized). */
+  headKey: string;
+  /** `lookId` of the look the hands were tinted for. */
+  look: string;
   flip: number;
   stainCount: number;
 }
@@ -109,6 +117,8 @@ export class DapurScene extends Phaser.Scene {
   private readonly pops: Pop[] = [];
   private moveWarnAt = Number.NEGATIVE_INFINITY;
   private readonly scratch = { x: 0, y: 0 };
+  /** Looks whose heads are being rasterized (a failed one stays here so it is not retried). */
+  private readonly headsPending = new Set<string>();
 
   constructor(sources: Map<string, HTMLCanvasElement>) {
     super({ key: 'dapur' });
@@ -153,6 +163,32 @@ export class DapurScene extends Phaser.Scene {
 
   addCanvases(map: Map<string, HTMLCanvasElement>): void {
     for (const [key, canvas] of map) if (!this.textures.exists(key)) this.textures.addCanvas(key, canvas);
+  }
+
+  /** Rasterizes the heads of these looks before the round shows them (no blank heads at the start). */
+  async preloadHeads(looks: readonly Look[]): Promise<void> {
+    const todo = looks.filter((l) => !this.textures.exists(headKey(l, 'happy')));
+    const maps = await Promise.all(todo.map((l) => loadHeads(l)));
+    for (const map of maps) this.addCanvases(map);
+  }
+
+  /** Texture key of a cook's head, or BLANK_KEY while it is still rasterizing (a newcomer). */
+  private headTexture(look: Look, face: GameFace): string {
+    const key = headKey(look, face);
+    if (this.textures.exists(key)) return key;
+    const id = lookId(look);
+    if (!this.headsPending.has(id)) {
+      this.headsPending.add(id);
+      loadHeads(look).then(
+        (map) => {
+          this.addCanvases(map);
+          this.headsPending.delete(id);
+        },
+        // A failed head stays pending so it is not retried every frame; the blank stand-in remains.
+        () => undefined,
+      );
+    }
+    return BLANK_KEY;
   }
 
   private makePill(key: string, text: string, opts: Parameters<typeof pillCanvas>[1]): void {
@@ -252,7 +288,7 @@ export class DapurScene extends Phaser.Scene {
   private shift(side: Side, t: number): number {
     const m = this.match;
     if (!m?.def.carts) return 0;
-    const g = cartGap(m.def, m.difficulty, t - m.goAt) * 40;
+    const g = m.gap(t) * 40;
     return side === 0 ? -g : g;
   }
 
@@ -269,6 +305,35 @@ export class DapurScene extends Phaser.Scene {
 
   private stationTop(s: Station): number {
     return KY + rowTop(s.y);
+  }
+
+  /**
+   * Where the practice arrow points (world px, like the HUD) for a station or a cook: the tip just
+   * above it pointing down, or just below it pointing up when there is no room above (the top row,
+   * under the order bar). False when the target is gone.
+   */
+  anchorOf(
+    target: { kind: 'station' | 'chef'; id: number },
+    out: { x: number; y: number; up: boolean },
+  ): boolean {
+    const m = this.match;
+    if (!m) return false;
+    if (target.kind === 'station') {
+      const s = m.stations[target.id];
+      if (!s) return false;
+      const top = this.stationTop(s);
+      out.x = this.stationLeft(s, this.frameT) + (s.w * TILE_W) / 2;
+      out.up = s.y === 0;
+      out.y = out.up ? top + ST_H - ST_MARGIN + 6 : top - ST_MARGIN + 4;
+      return true;
+    }
+    const c = m.chef(target.id);
+    if (!c) return false;
+    const p = this.toWorld(c.x, c.y, this.scratch);
+    out.x = p.x;
+    out.up = p.y - CHEF_TOP < KY + 20;
+    out.y = out.up ? p.y + 8 : p.y - CHEF_TOP;
+    return true;
   }
 
   /* ------------------------------------------------------------------ events */
@@ -630,7 +695,7 @@ export class DapurScene extends Phaser.Scene {
     const legs = part('dp-legs');
     const shirt = part('dp-shirt');
     const apron = part('dp-apron');
-    const head = part(headKey(c.fruit, 'happy'));
+    const head = part(BLANK_KEY);
     const hat = part('dp-hat');
     const hand = () => this.add.image(0, 0, 'dp-hand').setScale(1 / TEX);
     const handL = hand();
@@ -652,8 +717,8 @@ export class DapurScene extends Phaser.Scene {
       hat,
       tag: this.add.image(0, 0, '__DEFAULT').setDepth(DEPTH_TAGS),
       tagKey: '',
-      fruit: c.fruit,
-      face: 'happy',
+      headKey: BLANK_KEY,
+      look: '',
       flip: 1,
       stainCount: -1,
     };
@@ -674,17 +739,21 @@ export class DapurScene extends Phaser.Scene {
     const wx = p.x;
     const wy = p.y;
     sp.root.setPosition(wx, wy).setDepth(wy);
-    // Colours and fruit (a restyled computer cook can change them).
+    // Colours and look (a restyled computer cook can change them).
     sp.shirt.setTint(hex(c.color));
-    const hand = hex(fruitColor(c.fruit));
-    sp.handL.setTint(hand);
-    sp.handR.setTint(hand);
+    const look = lookId(c.look);
+    if (sp.look !== look) {
+      sp.look = look;
+      const hand = hex(skinColor(c.look));
+      sp.handL.setTint(hand);
+      sp.handR.setTint(hand);
+    }
     const staggered = m.staggered(c);
-    const face: Face = staggered ? 'wow' : c.busy ? 'effort' : 'happy';
-    if (sp.face !== face || sp.fruit !== c.fruit) {
-      sp.face = face;
-      sp.fruit = c.fruit;
-      sp.head.setTexture(headKey(c.fruit, face));
+    const face: GameFace = staggered ? 'wow' : c.busy ? 'effort' : 'happy';
+    const headTex = this.headTexture(c.look, face);
+    if (sp.headKey !== headTex) {
+      sp.headKey = headTex;
+      sp.head.setTexture(headTex);
     }
     if (Math.abs(c.faceX) > 0.25) sp.flip = c.faceX < 0 ? -1 : 1;
     sp.root.scaleX = sp.flip;

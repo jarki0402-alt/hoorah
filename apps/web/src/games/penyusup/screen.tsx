@@ -88,7 +88,7 @@ function Token({ info, n, state, face }: { info: PlayerInfo; n: number; state: T
     <div class={`ps-token is-${state}`}>
       <span class="ps-token-n">{n}</span>
       <Avatar
-        fruit={info.fruit}
+        look={info.look}
         ring={info.color}
         size={46}
         face={face ?? (state === 'out' ? 'sad' : 'happy')}
@@ -337,16 +337,11 @@ function TallyView({ model }: { model: ScreenModel }) {
               <div class="ps-tally-votes">
                 {c.from.map((f) => {
                   const fi = model.info(f);
-                  return fi ? <Avatar key={f} fruit={fi.fruit} ring={fi.color} size={30} /> : null;
+                  return fi ? <Avatar key={f} look={fi.look} ring={fi.color} size={30} /> : null;
                 })}
               </div>
               <div class="ps-tally-n">{c.votes}</div>
-              <Avatar
-                fruit={info.fruit}
-                ring={info.color}
-                size={72}
-                face={c.id === t.out ? 'wow' : 'happy'}
-              />
+              <Avatar look={info.look} ring={info.color} size={72} face={c.id === t.out ? 'wow' : 'happy'} />
               <div class="ps-tally-name">{info.name}</div>
             </div>
           );
@@ -370,12 +365,7 @@ function Reveal({ model }: { model: ScreenModel }) {
         <div class="ps-flip-in">
           <div class="ps-flip-back">?</div>
           <div class={`ps-flip-face is-${s.role}`}>
-            <Avatar
-              fruit={info.fruit}
-              ring={info.color}
-              size={84}
-              face={s.role === 'warga' ? 'sad' : 'wow'}
-            />
+            <Avatar look={info.look} ring={info.color} size={84} face={s.role === 'warga' ? 'sad' : 'wow'} />
             <div class="ps-flip-name">{info.name}</div>
             <div class="ps-flip-was">{STR.revealWas}</div>
             <div class="ps-flip-role">{ROLE_NAME[s.role].toUpperCase()}</div>
@@ -457,7 +447,7 @@ function GainRow({ seat, info }: { seat: Seat; info: PlayerInfo | undefined }) {
   if (!info) return null;
   return (
     <div class={`ps-gain is-${seat.role}`}>
-      <Avatar fruit={info.fruit} ring={info.color} size={34} />
+      <Avatar look={info.look} ring={info.color} size={34} />
       <span class="ps-gain-name">{info.name}</span>
       <span class="ps-gain-role">{ROLE_NAME[seat.role]}</span>
       <span class="ps-gain-pts">{STR.gained(seat.gained)}</span>
@@ -478,7 +468,7 @@ function Final({ model }: { model: ScreenModel }) {
             <div key={seat.id} class={`ps-pod ${rank === 1 ? 'is-top' : ''}`}>
               <span class="ps-pod-rank">{rank}</span>
               <Avatar
-                fruit={info.fruit}
+                look={info.look}
                 ring={info.color}
                 size={rank === 1 ? 56 : 40}
                 face={rank === 1 ? 'wow' : 'happy'}

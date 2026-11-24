@@ -15,7 +15,7 @@ export const NEAR_TEXT: Record<NearKind, string> = {
 
 export const STR = {
   logo: 'Juara Eja',
-  noShell: 'Buka Juara Eja dari layar utama Hoorah.',
+  noShell: 'Buka Juara Eja dari layar utama Kacawbalaw.',
 
   // Setup
   menuEyebrow: 'Juara Eja',

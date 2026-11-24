@@ -1,5 +1,5 @@
 /**
- * The Phaser world of Rebut Wilayah: trail ribbons, fruit markers, beacons and effects, on a
+ * The Phaser world of Rebut Wilayah: trail ribbons, player markers, beacons and effects, on a
  * transparent canvas over the ground layer (ground.ts: courtyard, frame, floor and the smooth
  * painted territories). It only renders; rules live in logic.ts and field.ts.
  *
@@ -13,12 +13,13 @@
  *   rows that changed are sent to the ground layer.
  * - No allocations per frame in the drawing paths: scratch buffers are reused.
  */
+import { type Look, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
 import { Ground } from './ground';
 import { FIELD_W, FIELD_X, FIELD_Y, WORLD_H, WORLD_W } from './layout';
 import type { MatchEvent, Runner, WilayahMatch } from './logic';
-import { headKey, RENDER_SCALE } from './textures';
+import { HeadBank, RENDER_SCALE } from './textures';
 import { hexToInt, mix } from './tiles';
 import { wrapAngle } from './trail';
 
@@ -50,9 +51,11 @@ interface Marker {
   pointer: Phaser.GameObjects.Graphics;
   shield: Phaser.GameObjects.Graphics;
   label: Phaser.GameObjects.Text;
-  fruit: Runner['fruit'];
+  look: Look;
   color: string;
   face: Face;
+  /** Displayed head size (world px). */
+  headSize: number;
   angle: number;
   alive: boolean;
   /** Pop-in / knock-out animation in progress: leave scale alone. */
@@ -73,7 +76,7 @@ export class WilayahScene extends Phaser.Scene {
   alpha = 1;
 
   private resolveReady!: () => void;
-  private readonly images: Map<string, HTMLImageElement>;
+  private heads!: HeadBank;
   private readonly groundHost: HTMLElement;
   private ground: Ground | null = null;
   private match: WilayahMatch | null = null;
@@ -102,9 +105,8 @@ export class WilayahScene extends Phaser.Scene {
   private pts = new Float64Array(512);
   private readonly at = { x: 0, y: 0 };
 
-  constructor(images: Map<string, HTMLImageElement>, groundHost: HTMLElement) {
+  constructor(groundHost: HTMLElement) {
     super({ key: 'wilayah' });
-    this.images = images;
     this.groundHost = groundHost;
     this.ready = new Promise((resolve) => {
       this.resolveReady = resolve;
@@ -112,9 +114,7 @@ export class WilayahScene extends Phaser.Scene {
   }
 
   create(): void {
-    for (const [key, img] of this.images) {
-      if (!this.textures.exists(key)) this.textures.addImage(key, img);
-    }
+    this.heads = new HeadBank(this.textures, (look) => this.headsReady(look));
     this.makeTextures();
     this.setViewSize(this.viewW, this.viewH);
     this.trailG = this.add.graphics().setDepth(5);
@@ -481,13 +481,22 @@ export class WilayahScene extends Phaser.Scene {
 
   /* ------------------------------------------------------------------ markers */
 
+  private showHead(mk: Marker): void {
+    mk.img.setTexture(this.heads.key(mk.look, mk.face)).setDisplaySize(mk.headSize, mk.headSize);
+  }
+
+  /** A look's head textures finished rasterizing: swap them in for its markers. */
+  private headsReady(look: Look): void {
+    for (const mk of this.markers.values()) if (sameLook(mk.look, look)) this.showHead(mk);
+  }
+
   private markerSize(): number {
     return Math.min(38, Math.max(30, this.unitPx * 3));
   }
 
   private marker(r: Runner): Marker {
     let mk = this.markers.get(r.id);
-    if (mk && mk.fruit === r.fruit && mk.color === r.color) return mk;
+    if (mk && sameLook(mk.look, r.look) && mk.color === r.color) return mk;
     mk?.root.destroy();
     const d = this.markerSize();
     const rad = d / 2;
@@ -513,8 +522,9 @@ export class WilayahScene extends Phaser.Scene {
     disc.fillCircle(0, 0, rad);
     disc.fillStyle(0xfffaf0, 1);
     disc.fillCircle(0, 0, rad - 3.2);
-    const img = this.add.image(0, 0, headKey(r.fruit, 'happy'));
-    img.setDisplaySize((rad - 1.6) * 2, (rad - 1.6) * 2);
+    const headSize = (rad - 1.6) * 2;
+    const img = this.add.image(0, 0, this.heads.key(r.look, 'happy'));
+    img.setDisplaySize(headSize, headSize);
     body.add([pointer, disc, img]);
     const label = this.add
       .text(0, rad + 9, r.name, {
@@ -536,9 +546,10 @@ export class WilayahScene extends Phaser.Scene {
       pointer,
       shield,
       label,
-      fruit: r.fruit,
+      look: r.look,
       color: r.color,
       face: 'happy',
+      headSize,
       angle: r.angle,
       alive: r.alive,
       busy: false,
@@ -621,7 +632,7 @@ export class WilayahScene extends Phaser.Scene {
       const face: Face = shielded ? 'wow' : outside ? 'effort' : 'happy';
       if (face !== mk.face) {
         mk.face = face;
-        mk.img.setTexture(headKey(r.fruit, face));
+        this.showHead(mk);
       }
       // Whoever is out on a trail draws above those at home.
       mk.root.setDepth(outside ? 7 : 6);

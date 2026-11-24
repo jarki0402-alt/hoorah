@@ -4,6 +4,7 @@
  */
 import type { ControllerView, GuestPlayer, MenuOption, PadButton } from '@hoorah/protocol';
 import { LOOK_COLOR } from './art';
+import type { Guide, GuideButton } from './guide';
 import { CHOPS_TO, type Item, isFull, itemLook } from './items';
 import { DIFFICULTIES, KITCHENS, recommended, type Side, sideOfX } from './kitchens';
 import type { Chef, DapurMatch } from './logic';
@@ -215,7 +216,68 @@ function alertFor(
   return undefined;
 }
 
-export function padView(m: DapurMatch, c: Chef, t: number): ControllerView {
+/** The phone's line for the shown practice step. */
+function guideLine(g: Guide, c: Chef): string {
+  if (!g.canAct(c)) return STR.guide.watch;
+  if (g.waiting) return STR.guide.waitPhone;
+  if (g.step === 'throw' && g.buttonFor(c) === 'throw') return STR.guide.throwNow;
+  return STR.guide.steps[g.step].phone;
+}
+
+/**
+ * Practice buttons: the one to press marked (`pulse`, and a "ketuk/tahan sekarang" second line
+ * that the Dapur phone theme also lights up), and Lewati in the third slot, except for the cooks
+ * who need Lempar right now.
+ */
+function guideButtons(g: Guide, c: Chef, t: number): PadButton[] {
+  const want: GuideButton | null = g.buttonFor(c);
+  const out = PAD_BUTTONS.map((b): PadButton => {
+    if (b.id !== want) return b;
+    return { ...b, pulse: true, sub: b.press === 'hold' ? STR.guide.holdNow : STR.guide.tapNow };
+  });
+  if (g.step === 'throw' && g.canAct(c)) return out;
+  const armed = g.armed(c.id, t);
+  out[2] = {
+    id: 'skip',
+    label: armed ? STR.guide.skipSure : STR.guide.skip,
+    sub: armed ? STR.guide.skipSureSub : STR.guide.skipSub,
+    icon: 'skip',
+    tone: 'cream',
+    press: 'tap',
+    ...(armed ? { pulse: true } : {}),
+  };
+  return out;
+}
+
+function guidePad(m: DapurMatch, c: Chef, t: number, g: Guide): ControllerView {
+  const view: ControllerView = {
+    kind: 'pad',
+    mode: 'stick',
+    color: c.color,
+    eyebrow: STR.guide.phoneEyebrow(g.index + 1, g.total),
+    title: g.finished ? STR.guide.doneTitle : guideLine(g, c),
+    stats: [{ label: STR.guide.statStep, value: `${g.index + 1}/${g.total}` }],
+    buttons: guideButtons(g, c, t),
+  };
+  if (c.held) view.carry = { label: itemLabel(c.held), color: itemColor(c.held) };
+  const alert = alertFor(m, c, t);
+  const want = g.buttonFor(c);
+  if (alert) view.alert = alert;
+  else if (want) {
+    const b = PAD_BUTTONS.find((x) => x.id === want);
+    if (b) {
+      view.alert = {
+        title: `${b.press === 'hold' ? STR.guide.hold : STR.guide.press} ${b.label.toUpperCase()}`,
+        body: STR.guide.steps[g.step].title,
+        tone: 'yellow',
+      };
+    }
+  }
+  return view;
+}
+
+export function padView(m: DapurMatch, c: Chef, t: number, guide: Guide | null = null): ControllerView {
+  if (guide && m.practice) return guidePad(m, c, t, guide);
   const view: ControllerView = {
     kind: 'pad',
     mode: 'stick',
@@ -239,7 +301,11 @@ function countdownView(m: DapurMatch, c: Chef, guests: GuestPlayer[]): Controlle
     kind: 'countdown',
     value: String(Math.max(1, m.countValue)),
     title: STR.countdownTitle,
-    subtitle: m.def.split ? STR.countdownSub(STR.sideName[c.side]) : STR.countdownSubOpen,
+    subtitle: m.practice
+      ? STR.guide.countSub
+      : m.def.split
+        ? STR.countdownSub(STR.sideName[c.side])
+        : STR.countdownSubOpen,
     color: c.color,
     opponents: m.chefs.filter((o) => o.id !== c.id).map((o) => o.id),
   };
@@ -281,6 +347,8 @@ export interface PlayViewContext {
   t: number;
   summary: RoundSummary | null;
   guests: GuestPlayer[];
+  /** The practice before the first game, while it runs. */
+  guide?: Guide | null;
 }
 
 export function playViewFor(ctx: PlayViewContext): ControllerView {
@@ -300,7 +368,7 @@ export function playViewFor(ctx: PlayViewContext): ControllerView {
     case 'countdown':
       return countdownView(m, c, ctx.guests);
     case 'play':
-      return padView(m, c, t);
+      return padView(m, c, t, ctx.guide ?? null);
     case 'over':
     case 'done':
       return summary ? resultView(m, c, summary) : padView(m, c, t);

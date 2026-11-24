@@ -4,7 +4,7 @@
  * holder's card turns yellow), call-outs over heads, the arena picker, the round card and the
  * scoreboard between rounds.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { THUMBS } from '../../controller/thumbs/bom';
 import { svgUrl } from '../../shared/art/svg';
@@ -17,6 +17,7 @@ export interface RunnerChip {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -40,6 +41,7 @@ export interface Toast {
   key: number;
   text: string;
   fruit?: Fruit;
+  look?: Look;
   color?: string;
 }
 
@@ -97,7 +99,11 @@ export class HudStore {
   }
 
   toast(text: string, who?: RunnerChip): void {
-    const t: Toast = { key: ++this.key, text, ...(who ? { fruit: who.fruit, color: who.color } : {}) };
+    const t: Toast = {
+      key: ++this.key,
+      text,
+      ...(who ? { fruit: who.fruit, look: who.look, color: who.color } : {}),
+    };
     this.toasts.value = [...this.toasts.value.slice(-2), t];
     window.setTimeout(() => {
       this.toasts.value = this.toasts.value.filter((o) => o.key !== t.key);
@@ -167,7 +173,7 @@ export function Hud({ store }: { store: HudStore }) {
               class={`bo-card ${c.bomb ? 'is-bomb' : ''} ${c.out ? 'is-out' : ''} ${c.offline ? 'is-off' : ''}`}
               style={{ ['--c' as string]: c.color }}
             >
-              <Avatar fruit={c.fruit} ring={c.color} size={34} dim={c.out || c.offline} />
+              <Avatar look={c.look} fruit={c.fruit} ring={c.color} size={34} dim={c.out || c.offline} />
               <span class="bo-card-text">
                 <b class="bo-card-name">{c.name}</b>
                 <Hearts n={c.lives} />
@@ -191,7 +197,7 @@ export function Hud({ store }: { store: HudStore }) {
       <div class="bo-toasts">
         {store.toasts.value.map((t) => (
           <div key={t.key} class="bo-toast">
-            {t.fruit && t.color && <Avatar fruit={t.fruit} ring={t.color} size={28} />}
+            {t.fruit && t.color && <Avatar look={t.look} fruit={t.fruit} ring={t.color} size={28} />}
             <span>{t.text}</span>
           </div>
         ))}
@@ -232,7 +238,7 @@ export function Hud({ store }: { store: HudStore }) {
           <div class="bo-score-rows">
             {score.rows.map((r) => (
               <div key={r.id} class={`bo-srow ${r.lost ? 'is-lost' : ''} ${r.out ? 'is-out' : ''}`}>
-                <Avatar fruit={r.fruit} ring={r.color} size={36} dim={r.out} />
+                <Avatar look={r.look} fruit={r.fruit} ring={r.color} size={36} dim={r.out} />
                 <b class="bo-srow-name">{r.name}</b>
                 <Hearts n={r.lives} />
               </div>

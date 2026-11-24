@@ -31,6 +31,28 @@ function modeOf(rule: Rule): Mode {
   return 'color';
 }
 
+/**
+ * A crescent moon on its own small canvas: a disc with a second disc cut out of it. Cut on the tile
+ * itself, the hole went through the tile's colour too and showed as a dark round spot (owner
+ * 2026-11-23); drawn here first, only the crescent lands on the tile.
+ */
+function crescent(r: number, fill: string): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = c.height = Math.ceil(r * 2 + 2);
+  const g = c.getContext('2d');
+  if (!g) return c;
+  const m = r + 1;
+  g.fillStyle = fill;
+  g.beginPath();
+  g.arc(m, m, r, 0, Math.PI * 2);
+  g.fill();
+  g.globalCompositeOperation = 'destination-out';
+  g.beginPath();
+  g.arc(m + r * 0.45, m - r * 0.25, r * 0.85, 0, Math.PI * 2);
+  g.fill();
+  return c;
+}
+
 function drawSymbol(
   g: CanvasRenderingContext2D,
   symbol: TileFace['symbol'],
@@ -53,13 +75,7 @@ function drawSymbol(
       g.fill();
       break;
     case 'bulan':
-      g.arc(cx, cy, r, 0, Math.PI * 2);
-      g.fill();
-      g.globalCompositeOperation = 'destination-out';
-      g.beginPath();
-      g.arc(cx + r * 0.45, cy - r * 0.25, r * 0.85, 0, Math.PI * 2);
-      g.fill();
-      g.globalCompositeOperation = 'source-over';
+      g.drawImage(crescent(r, String(g.fillStyle)), cx - r - 1, cy - r - 1);
       break;
     case 'hati':
       g.moveTo(cx, cy + r * 0.85);

@@ -1,3 +1,4 @@
+import { lookAt, lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { food, glass, plate } from './items';
 import { COUNTDOWN_MS, type KitchenId, type Side } from './kitchens';
@@ -15,6 +16,7 @@ function match(kitchen: KitchenId = 'terbelah', sides: Side[] = [0, 1]) {
       id: i + 1,
       name: ['Rina', 'Sari', 'Budi'][i]!,
       fruit: 'jeruk' as const,
+      look: lookAt(i),
       color: '#FF5A1F',
       side,
     })),
@@ -153,7 +155,7 @@ describe('play views', () => {
     const m = new DapurMatch({
       kitchen: 'warung',
       difficulty: 'normal',
-      cooks: [{ id: 1, name: 'Rina', fruit: 'jeruk', color: '#FF5A1F', side: 0 }],
+      cooks: [{ id: 1, name: 'Rina', fruit: 'jeruk', look: lookAt(1), color: '#FF5A1F', side: 0 }],
       now: 0,
     });
     m.step(10);
@@ -205,7 +207,17 @@ describe('results', () => {
       m,
       s,
       [],
-      [{ id: -1, name: 'X', fruit: 'nanas', color: '#fff', connected: true, isHost: false }],
+      [
+        {
+          id: -1,
+          name: 'X',
+          fruit: 'nanas',
+          look: lookOfFruit('nanas'),
+          color: '#fff',
+          connected: true,
+          isHost: false,
+        },
+      ],
     );
     expect(r.ranking.every((x) => x.rank === 1 && x.score === 640)).toBe(true);
     expect(r.title).toBe(STR.shellTitle(2));

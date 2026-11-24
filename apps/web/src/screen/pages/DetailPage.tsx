@@ -1,12 +1,25 @@
 import type { ComponentChild } from 'preact';
 import { useEffect } from 'preact/hooks';
-import { GAMES, MOODS } from '../../shared/games';
+import { GAMES, MOODS, playsRemote } from '../../shared/games';
 import { cardTag } from '../../shared/homeRows';
 import { KeyArt } from '../../shared/keyart';
 import { Avatar, Icon, type IconName } from '../../shared/ui';
-import { FocusButton } from '../components';
+import { AccessTag, FocusButton } from '../components';
 import { setFocusMap } from '../nav';
-import { connected, goHome, openTutorial, selected, sfx, startGame, tutorial } from '../store';
+import {
+  canPlayGame,
+  connected,
+  goHome,
+  offer,
+  openTutorial,
+  remoteOn,
+  selected,
+  sfx,
+  startGame,
+  tutorial,
+} from '../store';
+import { OFFER, REMOTE } from '../strings';
+import { OfferLayer } from './OfferOverlay';
 
 export function DetailPage() {
   const id = selected.value;
@@ -15,13 +28,20 @@ export function DetailPage() {
   const tag = cardTag(id);
 
   const reading = tutorial.value !== null;
+  const offerOpen = offer.value !== null;
+  // A locked game still shows its page and "Cara main"; its play button opens the Pass offer.
+  const locked = !canPlayGame(id);
+  // A far-away main screen watches and cannot show this game yet (long-distance play).
+  const remote = remoteOn.value;
+  const farOff = remote && !playsRemote(id);
   useEffect(() => {
-    // "Cara main" open on top: it owns the remote until it closes.
-    if (reading) return;
+    // "Cara main" or the Pass offer open on top: it owns the remote until it closes.
+    if (reading || offerOpen) return;
     return setFocusMap(
       {
         rows: [['play'], ['howto'], ['back']],
         onOk: (fid) => {
+          // startGame opens the offer for a game this room cannot start.
           if (fid === 'play') return startGame(id);
           if (fid === 'howto') return openTutorial(id);
           if (fid === 'back') {
@@ -37,7 +57,7 @@ export function DetailPage() {
       },
       'play',
     );
-  }, [id, reading]);
+  }, [id, reading, offerOpen]);
 
   const mood = MOODS[g.mood];
   const list = connected.value;
@@ -73,6 +93,8 @@ export function DetailPage() {
       <div class="detail-copy">
         <div style={{ display: 'flex', gap: 8 }}>
           {tag && <span class={`tag card-badge-${tag.toLowerCase()}`}>{tag}</span>}
+          <AccessTag game={id} />
+          {farOff && <span class="tag remote-tag">{REMOTE.tag}</span>}
         </div>
         <h1
           class="display outline-text hero-title"
@@ -112,12 +134,18 @@ export function DetailPage() {
         <div style={{ fontSize: 15, fontWeight: 800 }}>
           {enough ? 'Siap main' : `Butuh minimal ${g.minPlayers} pemain`}
         </div>
+        {remote && (
+          <div class={`remote-detail ${farOff ? 'is-off' : ''}`}>
+            <Icon name="wifi" size={16} stroke={2.6} />
+            {farOff ? REMOTE.detailNote : REMOTE.detailOk}
+          </div>
+        )}
         {list.length === 0 && (
           <div style={{ fontSize: 13, color: 'var(--text-3)' }}>Belum ada pemain. Scan QR di layar awal.</div>
         )}
         {list.slice(0, 4).map((p) => (
           <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Avatar fruit={p.fruit} ring={p.color} size={40} />
+            <Avatar look={p.look} ring={p.color} size={40} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 800 }}>{p.name}</div>
               <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{p.isHost ? 'Host' : 'Pemain'}</div>
@@ -144,10 +172,15 @@ export function DetailPage() {
         <FocusButton
           id="play"
           class="btn primary"
-          style={{ marginTop: 4, fontSize: 17, padding: 13, opacity: enough ? 1 : 0.6 }}
+          style={{
+            marginTop: 4,
+            fontSize: 17,
+            padding: 13,
+            opacity: (enough || locked) && !farOff ? 1 : 0.6,
+          }}
         >
-          <Icon name="play" size={16} color="#111214" />
-          Main
+          <Icon name={locked || farOff ? 'lock' : 'play'} size={16} color="#111214" />
+          {farOff ? REMOTE.tag : locked ? OFFER.playLocked : 'Main'}
         </FocusButton>
         <FocusButton id="howto" class="btn" style={{ padding: 9, fontSize: 14 }}>
           <Icon name="tap" size={14} />
@@ -158,6 +191,7 @@ export function DetailPage() {
         </FocusButton>
         <div style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>{g.tips[0]}</div>
       </div>
+      <OfferLayer />
     </div>
   );
 }

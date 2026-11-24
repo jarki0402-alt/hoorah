@@ -464,7 +464,7 @@ export class Director {
   private syncRoster(): void {
     const entries: RosterEntry[] = this.shownRacers().map((r) => ({
       id: r.id,
-      fruit: r.fruit,
+      look: r.look,
       color: r.color,
       connected: this.shownConnected(r),
       dist: r.dist,
@@ -485,7 +485,7 @@ export class Director {
       return {
         id: r.id,
         name: r.name,
-        fruit: r.fruit,
+        look: r.look,
         color: r.color,
         connected: this.shownConnected(r),
         place: this.match.phase === 'raceEnd' ? (r.place ?? 0) : idx >= 0 && moved ? idx + 1 : 0,
@@ -508,7 +508,7 @@ export class Director {
       return {
         id: r.id,
         name: r.name,
-        fruit: r.fruit,
+        look: r.look,
         color: r.color,
         rank,
         racePlace: r.place,
@@ -528,7 +528,7 @@ export class Director {
           players: m
             .all()
             .filter((x) => x.connected)
-            .map((x) => ({ id: x.id, fruit: x.fruit, color: x.color })),
+            .map((x) => ({ id: x.id, look: x.look, color: x.color })),
         };
       case 'countdown':
         return { kind: 'count', value: Math.max(1, m.countValue), label: STR.raceOf(m.race, m.totalRaces) };
@@ -542,7 +542,7 @@ export class Director {
             kind: 'raceEnd',
             title: STR.notFinished,
             sub: STR.raceNoFinish(m.race),
-            fruit: null,
+            look: null,
             color: '#FFC928',
             photo: false,
           };
@@ -557,7 +557,7 @@ export class Director {
           kind: 'raceEnd',
           title: STR.raceWinner(w.name),
           sub,
-          fruit: w.fruit,
+          look: w.look,
           color: w.color,
           photo: m.lastPhoto,
         };
@@ -577,7 +577,7 @@ export class Director {
           .map((r) => m.racer(r.playerId))
           .filter((r): r is Racer => r !== undefined)
           .slice(0, 4)
-          .map((r) => ({ id: r.id, fruit: r.fruit, color: r.color }));
+          .map((r) => ({ id: r.id, look: r.look, color: r.color }));
         return { kind: 'matchEnd', title: res.title, sub: res.subtitle ?? '', winners };
       }
     }

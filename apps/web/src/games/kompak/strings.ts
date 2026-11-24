@@ -80,7 +80,7 @@ export const STR = {
   finalRow: (kompak: number, played: number) => `${kompak}/${played} kompak`,
   waitingTitle: 'Menunggu pemain…',
   waitingText: 'Permainan lanjut otomatis begitu ada pemain yang tersambung lagi.',
-  noShell: 'Buka Kompak Gak? dari aplikasi Hoorah di layar utama.',
+  noShell: 'Buka Kompak Gak? dari aplikasi Kacawbalaw di layar utama.',
   winnerCaption: 'JUARA',
 
   /* Coop titles by percentage (2 players). */

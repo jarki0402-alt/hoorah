@@ -1,11 +1,23 @@
 /**
- * Entering a Hoorah Pass code on the phone (trial stage, see packages/protocol/src/pass.ts):
- * inline on the "room full" page (joins with it), or in a sheet from the invite card in the room.
+ * Entering a Hoorah Pass code on the phone (see packages/protocol/src/pass.ts): inline on the
+ * "room full" page (joins with it), or in a sheet in the room (Host pad, lobby, in-game menus),
+ * which also offers the main screen's free trial while it is unused.
  */
-import { isPassCode, normalizePassCode, PASS_CODE_MAX } from '@hoorah/protocol';
+import { isPassCode, isPremium, normalizePassCode, PASS_CODE_MAX } from '@hoorah/protocol';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { formatUntil } from '../shared/when';
-import { passState, resetPassState, roomSeats, submitPass } from './store';
+import {
+  appConfig,
+  haptic,
+  passState,
+  requestTrial,
+  resetPassState,
+  resetTrialState,
+  roomAccess,
+  roomSeats,
+  submitPass,
+  trialState,
+} from './store';
 import { STR } from './strings';
 
 /** How long the "Pass aktif" confirmation stays before the sheet closes by itself. */
@@ -60,14 +72,48 @@ export function PassForm({ joining }: { joining: boolean }) {
   );
 }
 
+/** "Coba gratis N menit" in the Pass sheet: only on a free room whose main screen has not used it. */
+function TrialOffer() {
+  const access = roomAccess.value;
+  const st = trialState.value;
+  if (access.kind !== 'free' || access.trialUsed) {
+    return st.s === 'error' && st.reason === 'used' ? (
+      <div class="pass-msg is-error" role="alert">
+        {STR.trialErr.used}
+      </div>
+    ) : null;
+  }
+  return (
+    <>
+      <div class="muted">{STR.passOr}</div>
+      {st.s === 'error' && (
+        <div class="pass-msg is-error" role="alert">
+          {STR.trialErr[st.reason]}
+        </div>
+      )}
+      <button type="button" class="big-btn yellow" disabled={st.s === 'sending'} onClick={requestTrial}>
+        {st.s === 'sending' ? STR.trialSending : STR.trialGo(appConfig.value.trialMinutes)}
+      </button>
+    </>
+  );
+}
+
 export function PassSheet({ onClose }: { onClose: () => void }) {
-  const ok = passState.value.s === 'ok';
+  // Closes by itself once a Pass works or the trial starts from here (a Pass can still be typed
+  // during a trial that was already running).
+  const trialAtOpen = useRef(roomAccess.peek().kind === 'trial');
+  const trialOn = !trialAtOpen.current && roomAccess.value.kind === 'trial';
+  const ok = passState.value.s === 'ok' || trialOn;
   // The parent re-renders with a new callback on every player update; keep the timer steady.
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
     resetPassState();
-    return resetPassState;
+    resetTrialState();
+    return () => {
+      resetPassState();
+      resetTrialState();
+    };
   }, []);
   useEffect(() => {
     if (!ok) return;
@@ -80,10 +126,41 @@ export function PassSheet({ onClose }: { onClose: () => void }) {
         <h2 class="title sheet-title">{STR.passTitle}</h2>
         <div class="muted">{STR.passBody}</div>
         <PassForm joining={false} />
+        {trialOn ? (
+          <div class="pass-msg is-ok" role="status">
+            {STR.trialOk}
+          </div>
+        ) : (
+          <TrialOffer />
+        )}
         <button type="button" class="big-btn secondary" onClick={onClose}>
           {STR.passClose}
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * "Punya kode Hoorah Pass?" in the room (Host pad, lobby): opens the Pass sheet. Hidden while the
+ * room has everything already (Pass, trial or open mode).
+ */
+export function PassEntry({ class: cls = '' }: { class?: string }) {
+  const [open, setOpen] = useState(false);
+  if (isPremium(roomAccess.value) && !open) return null;
+  return (
+    <>
+      <button
+        type="button"
+        class={`report-link pass-entry ${cls}`}
+        onClick={() => {
+          haptic(10);
+          setOpen(true);
+        }}
+      >
+        {STR.passEntry}
+      </button>
+      {open && <PassSheet onClose={() => setOpen(false)} />}
+    </>
   );
 }

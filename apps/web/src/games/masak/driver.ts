@@ -3,7 +3,7 @@
  * (frozen while paused), turns logic events into sounds, chef reactions, phone views and HUD
  * state, and runs the render loop.
  */
-import type { ControllerView, PlayerInfo } from '@hoorah/protocol';
+import { type ControllerView, type Look, lookOfFruit, type PlayerInfo } from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import type { Sfx } from '../../shared/audio';
 import { celebrate, confetti } from '../../shared/confetti';
@@ -29,6 +29,8 @@ import * as V from './views';
 const TICK_MS = 100;
 /** Key for the solo records (PRD 6.4); the variant is the number of dishes. */
 const GAME_ID = 'masak';
+/** Look of a cook who has left the room (their station and HUD row stay). */
+const UNKNOWN_LOOK: Look = lookOfFruit('mangga');
 /** Phones get progress updates at most this often. */
 const VIEW_SYNC_MS = 200;
 const SHOWCASE_FOCUS: Record<DishId, Focus> = { nasgor: 'plate', sate: 'plate', martabak: 'board' };
@@ -431,7 +433,7 @@ export class MasakDriver {
     return {
       id,
       name: p?.name ?? STR.unknownPlayer,
-      fruit: p?.fruit ?? 'mangga',
+      look: p?.look ?? UNKNOWN_LOOK,
       color: p?.color ?? '#C4C7CC',
       connected: L.isConnected(id),
       score: L.stats.get(id)?.score ?? 0,

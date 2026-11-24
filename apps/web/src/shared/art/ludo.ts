@@ -1,6 +1,6 @@
 import { boardBody, pawnBody } from '../../games/ludo/board-art';
 import { boardFor } from '../../games/ludo/logic';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { seeded, svgDoc } from './svg';
 
 /** A white die (size s, centred on cx, cy) showing `n`, tilted by `rot` degrees. */
@@ -58,8 +58,8 @@ function table(): string {
 export function ludoSvg(): string {
   const pawn = (x: number, y: number, k: number, c: 0 | 1 | 2 | 3, label: string) =>
     `<g transform="translate(${x} ${y}) scale(${k})">${pawnBody(c, label)}</g>`;
-  const fan = (x: number, y: number, size: number, fruit: Parameters<typeof fruitMarkup>[0], rot: number) =>
-    `<g transform="translate(${x} ${y}) rotate(${rot} ${size / 2} ${size / 2}) scale(${size / 64})">${fruitMarkup(fruit, 'wow')}</g>`;
+  const fan = (x: number, y: number, size: number, fruit: Parameters<typeof castHead>[0], rot: number) =>
+    `<g transform="translate(${x} ${y}) rotate(${rot} ${size / 2} ${size / 2}) scale(${size / 64})">${castHead(fruit, 'wow')}</g>`;
   const body = [
     table(),
     // The board, tilted on the right.

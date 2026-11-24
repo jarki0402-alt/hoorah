@@ -428,6 +428,7 @@
 }
 
 .wa-wcard {
+  position: relative;
   border-radius: 20px;
   overflow: hidden;
   background: #0b1f26;
@@ -446,6 +447,20 @@
 
 .wa-wcard.soon {
   filter: saturate(0.35) brightness(0.7);
+}
+
+.wa-wcard-pass {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: #ff5a1f;
+  color: #111214;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 .wa-wcard-text {
@@ -552,6 +567,19 @@
   fill: none;
   stroke: #7b8a8f;
   stroke-width: 2.5;
+}
+
+.wa-node-pass rect {
+  fill: #ff5a1f;
+}
+
+.wa-node-pass text {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-anchor: middle;
+  fill: #111214;
 }
 
 .wa-node-stars {

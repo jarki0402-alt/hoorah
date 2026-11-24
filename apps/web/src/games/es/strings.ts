@@ -8,7 +8,7 @@ export function formatGap(m: number): string {
 
 export const STR = {
   gameTitle: 'SELUNCUR ES',
-  noShell: 'Seluncur Es harus dibuka dari aplikasi Hoorah.',
+  noShell: 'Seluncur Es harus dibuka dari aplikasi Kacawbalaw.',
   loadFailed: 'Gagal memuat Seluncur Es. Periksa koneksi lalu buka lagi.',
 
   /* Main screen */

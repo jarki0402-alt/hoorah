@@ -12,7 +12,7 @@ export function formatClock(ms: number): string {
 
 export const STR = {
   gameTitle: 'ULAR ARENA',
-  loadError: 'Buka Ular Arena dari layar Hoorah.',
+  loadError: 'Buka Ular Arena dari layar Kacawbalaw.',
 
   /* Main screen HUD */
   timeLabel: 'SISA WAKTU',

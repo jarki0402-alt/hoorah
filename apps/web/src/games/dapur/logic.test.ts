@@ -1,3 +1,4 @@
+import { lookAt } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { canAddToPlate, food, glass, type Item, itemLook, plate, plateDish, stainOf } from './items';
 import {
@@ -30,6 +31,7 @@ const cook = (id: number, side: Side, name = `P${id}`) => ({
   id,
   name,
   fruit: 'jeruk' as const,
+  look: lookAt(id),
   color: '#FF5A1F',
   side,
 });
@@ -561,7 +563,10 @@ describe('joining and leaving', () => {
     m.removeChef(3);
     expect(m.floor).toHaveLength(1);
     expect(m.smallerSide()).toBe(1);
-    const c = m.addChef({ id: 9, name: 'Baru', fruit: 'nanas', color: '#22B35E' }, m.smallerSide());
+    const c = m.addChef(
+      { id: 9, name: 'Baru', fruit: 'nanas', look: lookAt(9), color: '#22B35E' },
+      m.smallerSide(),
+    );
     expect(sideOfX(c.x)).toBe(1);
   });
 });

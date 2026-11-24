@@ -1,4 +1,4 @@
-import type { Fruit } from '@hoorah/protocol';
+import { type Fruit, lookAt, lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { rng } from '../../shared/kotak/math';
 import {
@@ -25,6 +25,7 @@ function players(n: number, cpu = false): PlayerInfo[] {
     id: i + 1,
     name: `P${i + 1}`,
     fruit: FRUITS[i]!,
+    look: lookOfFruit(FRUITS[i]!),
     color: '#2F8CFF',
     cpu,
   }));
@@ -71,6 +72,14 @@ describe('stage layouts', () => {
 });
 
 describe('lantai runtuh rounds', () => {
+  it('carries each player look and restyles it', () => {
+    const m = new RuntuhMatch({ players: players(2), seed: 1 });
+    expect(m.player(1)!.look).toEqual(lookOfFruit('jeruk'));
+    m.restyle(1, { look: lookAt(5) });
+    expect(m.player(1)!.look).toEqual(lookAt(5));
+    expect(m.player(2)!.look).toEqual(lookOfFruit('semangka'));
+  });
+
   it('plays seven rules in order with the dark final last', () => {
     const m = new RuntuhMatch({ players: players(2), seed: 1 });
     expect(m.rules).toEqual([...RULES]);

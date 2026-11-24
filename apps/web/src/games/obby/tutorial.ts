@@ -31,7 +31,7 @@ function flag(x: number, y: number): string {
 
 export const TUTORIAL: Tutorial = {
   origin:
-    'Terinspirasi dari obby, lintasan rintangan ala Roblox. Bedanya: balapan bareng di satu layar dan kamera mengikuti rombongan.',
+    'Terinspirasi dari obby, lintasan rintangan ala Roblox. Bedanya: balapan bareng, layar dibagi per pemain, kamera di belakangmu.',
   steps: [
     {
       text: 'Joystick untuk lari, ketuk LOMPAT untuk melewati celah.',

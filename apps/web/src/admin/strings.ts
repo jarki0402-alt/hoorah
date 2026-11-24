@@ -4,7 +4,10 @@ import {
   type AdminError,
   type AdminEventKind,
   type FreeTierCheckId,
+  type PassKind,
   type PassStatus,
+  type ReportKind,
+  type ReportStatus,
   type SystemHistoryHours,
   type UsageDays,
 } from '@hoorah/protocol';
@@ -14,7 +17,7 @@ export type ErrorCode = AdminError | 'network' | 'server';
 
 export const STR = {
   admin: 'Admin',
-  pageTitle: 'Hoorah Admin',
+  pageTitle: 'Kacawbalaw Admin',
   loading: 'Memuat…',
   retry: 'Coba lagi',
   cancel: 'Batal',
@@ -40,9 +43,12 @@ export const STR = {
   loadFailed: 'Gagal memuat data.',
 
   // Pass list
-  passTitle: 'Hoorah Pass',
-  passLead: 'Kode bersama untuk membuka room sampai lebih dari 2 pemain.',
+  passTitle: 'Kacaw Pass',
+  passLead: 'Kode untuk membuka semua game dan lebih dari 2 pemain.',
+  kindFiltersLabel: 'Saring jenis Pass',
+  allKinds: 'Semua jenis',
   createPass: 'Buat Pass',
+  createCodes: (n: number) => `Buat ${n} kode`,
   filtersLabel: 'Saring Pass',
   copyCode: (code: string) => `Salin kode ${code}`,
   copyMessage: 'Salin pesan',
@@ -63,9 +69,43 @@ export const STR = {
   usage: (rooms: number, peak: number) =>
     rooms === 0 ? 'Belum pernah dipakai' : `Total ${rooms} room, paling ramai ${peak} pemain`,
   lastUsed: (rel: string) => `Terakhir dipakai ${rel}`,
+  useBy: (date: string) => `Pakai sebelum ${date}`,
+  usedBefore: (date: string) => `Batas pakai lewat ${date}`,
+  runsDays: (days: number) => `${days} hari sejak pertama dipakai`,
+  usesPromo: (uses: number, max: number | null) =>
+    max === null ? `Dipakai di ${uses} layar` : `Dipakai ${uses}/${max} layar`,
+  usesSingle: (uses: number) => (uses === 0 ? 'Belum dipakai' : `Dipakai di ${uses} layar`),
+  runWindow: (from: string, to: string) => `Mulai ${from}, habis ${to}`,
+  firstRun: (at: string) => `Pertama dipakai ${at}`,
 
   // Create form
   createTitle: 'Buat Pass baru',
+  kindField: 'Jenis',
+  kindHelp: {
+    shared: 'Satu kode untuk banyak layar sampai tanggal berakhir.',
+    single: 'Setiap kode hanya untuk satu layar utama, berjalan sejak pertama dipakai.',
+    promo: 'Satu kode untuk beberapa layar, masing-masing berjalan sejak pertama dipakai.',
+  } satisfies Record<PassKind, string>,
+  durationDaysField: 'Durasi',
+  durationDaysHelp: (min: number, max: number) =>
+    `Dalam hari, ${min} sampai ${max}. Dihitung sejak kode pertama dipakai di layar utama.`,
+  durationDaysPromoHelp: (min: number, max: number) =>
+    `Dalam hari per layar, ${min} sampai ${max}. Dihitung sejak kode pertama dipakai di layar itu.`,
+  fewerDays: 'Kurangi hari',
+  moreDays: 'Tambah hari',
+  useByField: 'Berlaku dipakai sampai',
+  useByLabel: 'Bisa dipakai sampai',
+  countField: 'Jumlah kode',
+  countHelp: (max: number) => `1 sampai ${max} kode acak sekaligus.`,
+  fewerCodes: 'Kurangi kode',
+  moreCodes: 'Tambah kode',
+  quotaField: 'Kuota layar',
+  quotaHelp: 'Berapa layar utama boleh memakai kode ini.',
+  quotaLimited: 'Tentukan',
+  quotaCount: 'Jumlah layar',
+  fewerScreens: 'Kurangi layar',
+  moreScreens: 'Tambah layar',
+  quotaValue: (max: number | null) => (max === null ? 'Layar tanpa batas' : `Kuota ${max} layar`),
   labelField: 'Catatan',
   labelPlaceholder: 'Contoh: Main bareng Sabtu',
   labelHelp: 'Hanya terlihat di sini, tidak ditampilkan ke pemain.',
@@ -89,6 +129,13 @@ export const STR = {
   // Success
   createdTitle: 'Pass siap dibagikan',
   createdLead: 'Kirim kode ini ke teman. Mereka mengetiknya di HP saat masuk room.',
+  createdBatchTitle: (n: number) => `${n} kode siap dibagikan`,
+  createdBatchLead: 'Salin atau unduh daftarnya sekarang. Semua kode juga ada di daftar Pass.',
+  copyAll: 'Salin semua',
+  allCopied: 'Semua kode tersalin',
+  downloadCsv: 'Unduh CSV',
+  downloadFailed: 'Gagal mengunduh file. Pakai Salin semua.',
+  codesLabel: 'Kode yang dibuat',
   copied: 'Tersalin',
   codeCopied: 'Kode tersalin',
   messageCopied: 'Pesan tersalin',
@@ -153,6 +200,9 @@ export const STR = {
 
 export const TABS = {
   pass: 'Pass',
+  settings: 'Pengaturan',
+  reports: 'Pengaduan',
+  errors: 'Galat',
   room: 'Room',
   server: 'Server',
   usage: 'Pemakaian',
@@ -198,7 +248,7 @@ export const MON = {
   notProc: 'RAM dibaca dari Node, bukan dari Linux: ini angka perangkat ini, bukan VM.',
   withPct: (text: string, pct: string) => `${text} (${pct})`,
 
-  appCard: 'Aplikasi Hoorah',
+  appCard: 'Aplikasi Kacawbalaw',
   rss: 'Memori proses',
   rssValue: (rss: string, target: string) => `${rss} dari target ${target}`,
   heap: 'Heap JavaScript',
@@ -250,7 +300,7 @@ export const HISTORY_RANGES: Record<SystemHistoryHours, string> = {
 export const TABLE_LABELS: Record<string, string> = {
   admins: 'Admin',
   admin_sessions: 'Sesi admin',
-  passes: 'Hoorah Pass',
+  passes: 'Kacaw Pass',
   pass_uses: 'Pemakaian Pass',
   system_samples: 'Sampel sistem',
   net_counter: 'Penghitung kartu jaringan',
@@ -387,6 +437,137 @@ export const STATUS: Record<PassStatus, string> = {
   revoked: 'Dicabut',
 };
 
+/** Pass kinds as chips on the cards and in the create form. */
+export const PASS_KINDS: Record<PassKind, string> = {
+  shared: 'Kode bersama',
+  single: 'Kode sekali pakai',
+  promo: 'Kode promo',
+};
+
+/** The kind filter above the Pass list (short, so the row fits a phone). */
+export const KIND_FILTER_LABEL: Record<PassKind, string> = {
+  shared: 'Bersama',
+  single: 'Sekali pakai',
+  promo: 'Promo',
+};
+
+/** The `jenis` column of the CSV download. */
+export const CSV_KINDS: Record<PassKind, string> = {
+  shared: 'bersama',
+  single: 'sekali pakai',
+  promo: 'promo',
+};
+
+/** "Pengaturan" tab. */
+export const SETTINGS = {
+  title: 'Pengaturan',
+  lead: 'Berlaku untuk semua layar utama tanpa perlu deploy. Layar yang sedang terbuka mengikuti saat room berikutnya dibuat.',
+  openAll: 'Mode uji coba: semua terbuka',
+  openAllHelp: 'Semua room mendapat semua game dan Mode Pesta, tanpa iklan dan tanpa perlu Pass.',
+  openAllOn: 'Sedang aktif: pemain tidak melihat batasan versi gratis.',
+  adsTitle: 'Iklan promo',
+  adsEnabled: 'Tampilkan iklan promo',
+  adsEnabledHelp: 'Jeda singkat di antara game, hanya di room gratis.',
+  adSeconds: 'Durasi iklan (detik)',
+  adEveryGames: 'Iklan setiap berapa game',
+  adMinGapMin: 'Jarak minimal antar iklan (menit)',
+  trialTitle: 'Coba gratis',
+  trialMinutes: 'Lama Coba gratis (menit)',
+  trialHelp: 'Sekali per layar utama: semua game, Mode Pesta, tanpa iklan.',
+  weeklyTitle: 'Game Minggu Ini',
+  weeklyField: 'Pilih game',
+  weeklyAuto: 'Otomatis (berganti tiap minggu)',
+  weeklyHelp: 'Game ini bisa dimainkan gratis selama seminggu.',
+  between: (min: number, max: number) => `Antara ${min} dan ${max}.`,
+  less: (what: string) => `Kurangi ${what}`,
+  more: (what: string) => `Tambah ${what}`,
+  save: 'Simpan pengaturan',
+  reset: 'Batalkan perubahan',
+  saved: 'Pengaturan disimpan',
+  savedAt: (time: string) => `Tersimpan ${time}`,
+  unsaved: 'Ada perubahan yang belum disimpan.',
+} as const;
+
+export const REPORT_KINDS_LABEL: Record<ReportKind, string> = {
+  teknis: 'Masalah teknis',
+  pass: 'Pass dan pembayaran',
+  saran: 'Saran',
+  lainnya: 'Lainnya',
+};
+
+export const REPORT_STATUS_LABEL: Record<ReportStatus, string> = {
+  baru: 'Baru',
+  diproses: 'Diproses',
+  selesai: 'Selesai',
+};
+
+/** "Pengaduan" tab. */
+export const REPORTS = {
+  title: 'Pengaduan',
+  lead: 'Laporan dari pemain lewat "Laporkan masalah". Diperbarui setiap menit.',
+  filtersLabel: 'Saring pengaduan',
+  all: 'Semua',
+  contact: 'Kontak',
+  copyContact: 'Salin kontak',
+  noContact: 'Tanpa kontak',
+  statusField: 'Status',
+  statusChanged: (label: string) => `Ditandai ${label.toLowerCase()}`,
+  context: 'Detail teknis',
+  newCount: (n: number) => `${n} pengaduan baru`,
+  empty: {
+    all: { title: 'Belum ada pengaduan', body: 'Laporan dari layar utama dan HP pemain muncul di sini.' },
+    baru: { title: 'Tidak ada pengaduan baru', body: 'Semua pengaduan sudah ditangani.' },
+    diproses: {
+      title: 'Tidak ada yang sedang diproses',
+      body: 'Tandai pengaduan sebagai Diproses saat kamu menanganinya.',
+    },
+    selesai: { title: 'Belum ada yang selesai', body: 'Pengaduan yang sudah beres muncul di sini.' },
+  } satisfies Record<ReportStatus | 'all', { title: string; body: string }>,
+} as const;
+
+export const ROLE_LABEL: Record<'screen' | 'controller', string> = {
+  screen: 'Layar utama',
+  controller: 'HP',
+};
+
+/** Rows of the technical context under a report or an error. */
+export const CONTEXT = {
+  role: 'Perangkat',
+  page: 'Halaman',
+  game: 'Game',
+  room: 'Room',
+  version: 'Versi aplikasi',
+  userAgent: 'Browser',
+  viewport: 'Ukuran layar',
+  rtt: 'Ping ke server',
+  rttValue: (ms: number) => `${ms} ms`,
+  link: 'Jalur',
+  links: { direct: 'Langsung (WebRTC)', relay: 'Lewat server' } as Record<string, string>,
+} as const;
+
+/** "Galat" tab. */
+export const GALAT = {
+  title: 'Galat',
+  lead: 'Error dari layar utama dan HP, digabung per pesan. Diperbarui setiap menit.',
+  times: (n: string) => `${n} kali`,
+  first: 'Pertama',
+  last: 'Terakhir',
+  stack: 'Stack',
+  noStack: 'Tidak ada stack.',
+  latest: 'Konteks terakhir',
+  remove: 'Hapus',
+  removed: 'Galat dihapus',
+  removeAll: 'Hapus semua',
+  removeAllTitle: 'Hapus semua galat?',
+  removeAllBody:
+    'Semua catatan galat dihapus dan tidak bisa dikembalikan. Galat yang terjadi lagi akan muncul lagi.',
+  removeAllConfirm: 'Hapus semua',
+  removedAll: 'Semua galat dihapus',
+  emptyTitle: 'Tidak ada galat',
+  emptyBody: 'Error yang terjadi di layar utama atau HP pemain muncul di sini.',
+  summary: (groups: string, total: string) => `${groups} jenis, ${total} kejadian`,
+} as const;
+
 export const FILTERS = {
   active: 'Aktif',
   expired: 'Habis',
@@ -407,6 +588,15 @@ export const CREATE_PRESETS = {
   '3d': '3 hari',
   '7d': '7 hari',
   '30d': '30 hari',
+} as const;
+
+/** "Berlaku dipakai sampai" chips of single and promo codes. */
+export const USE_BY_PRESETS = {
+  '7d': '7 hari',
+  '30d': '30 hari',
+  '90d': '90 hari',
+  '180d': '6 bulan',
+  '365d': '1 tahun',
 } as const;
 
 export const EXTEND_STEPS = {
@@ -432,7 +622,7 @@ export const ERRORS: Record<ErrorCode, string> = {
   invalid_login: 'Username atau kata sandi salah',
   rate_limited: 'Terlalu banyak percobaan. Coba lagi dalam 15 menit.',
   bad_request: 'Isian belum benar. Periksa lagi.',
-  not_found: 'Pass ini sudah tidak ada. Muat ulang daftar.',
+  not_found: 'Data ini sudah tidak ada. Muat ulang daftar.',
   code_taken: 'Kode sudah dipakai Pass lain',
   wrong_password: 'Kata sandi sekarang salah',
   weak_password: `Kata sandi baru minimal ${ADMIN_PASSWORD_MIN} karakter.`,
@@ -454,11 +644,24 @@ export const TIME = {
   days: (n: number) => `${n} hari`,
 } as const;
 
+const HOW_TO_USE =
+  'Cara pakai: masuk room dari HP, lalu ketik kode ini saat diminta (atau di menu "Tambah pemain").';
+
 /** The text friends receive on WhatsApp. */
 export function shareMessage(code: string, until: string, maxPlayers: number): string {
   return [
-    `Kode Hoorah Pass: ${code}`,
+    `Kode Kacaw Pass: ${code}`,
     `Berlaku sampai ${until}, sampai ${maxPlayers} pemain.`,
-    'Cara pakai: masuk room dari HP, lalu ketik kode ini saat diminta (atau di menu "Tambah pemain").',
+    HOW_TO_USE,
+  ].join('\n');
+}
+
+/** The share text of a single-use or promo code: it runs `days` from its first use on a screen. */
+export function shareMessageRunning(code: string, days: number, useBy: string, maxPlayers: number): string {
+  return [
+    `Kode Kacaw Pass: ${code}`,
+    `Berlaku ${days} hari sejak pertama dipakai di layar utama, sampai ${maxPlayers} pemain.`,
+    `Pakai sebelum ${useBy}.`,
+    HOW_TO_USE,
   ].join('\n');
 }

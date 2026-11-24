@@ -13,7 +13,7 @@
  *   is dragged along, holds you when you fall, and LEMPAR throws it across a gap first.
  */
 
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { DEFAULT_RIG, GroupCamera } from '../../shared/kotak/camera';
 import { type SavePoint, SaveTrail } from '../../shared/kotak/checkpoints';
 import { clamp, rotY, type V3, v3 } from '../../shared/kotak/math';
@@ -26,6 +26,7 @@ export interface ClimberInfo {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -358,7 +359,7 @@ export class TaliMatch {
     }
   }
 
-  restyle(id: number, look: Partial<Pick<ClimberInfo, 'name' | 'fruit' | 'color'>>): void {
+  restyle(id: number, look: Partial<Pick<ClimberInfo, 'name' | 'fruit' | 'look' | 'color'>>): void {
     const c = this.climber(id);
     if (c) Object.assign(c, look);
   }

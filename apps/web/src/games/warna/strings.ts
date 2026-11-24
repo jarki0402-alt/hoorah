@@ -219,7 +219,7 @@ export const STR = {
   // Stage picker: world, then stage
   pickEyebrow: 'PILIH DUNIA',
   pickTitle: 'Mau main di dunia mana?',
-  pickHint: (n: number) => `Kalian main ${n} level berturut-turut.`,
+  pickHint: 'Setelah tiap level, Host memilih lanjut, ganti level, atau selesai.',
   pickNext: 'Pilih level',
   pickStart: 'Mulai',
   pickBack: 'Ganti dunia',
@@ -228,6 +228,12 @@ export const STR = {
   levelHint: 'Level terbuka berurutan. Selesaikan untuk membuka berikutnya.',
   levelLabel: (n: number) => `Level ${n}`,
   levelLocked: 'Terkunci',
+  /** Stages and worlds behind Kacaw Pass on a free main screen. */
+  passBadge: 'PASS',
+  passSub: 'Butuh Kacaw Pass',
+  passNext: 'Level berikutnya butuh Kacaw Pass',
+  passDoneTitle: 'Level gratis selesai!',
+  passNextHost: (host: string) => `Level berikutnya butuh Kacaw Pass. ${host} memilih level atau selesai`,
   soon: 'Segera hadir',
   worldStars: (got: number, of: number) => `${got}/${of} bintang`,
   pickWaiting: (host: string) => `${host} sedang memilih level…`,
@@ -238,7 +244,6 @@ export const STR = {
   journeyNext: 'Level berikutnya',
 
   // Intro
-  stageOf: (i: number, n: number) => `Level ${i} dari ${n}`,
   worldLevel: (world: string, n: number) => `${world} · Level ${n}`,
   goal: 'Bawa semua ke pintu warnanya',
   introSolo: 'Main sendiri: kendalikan 2 karakter, tekan TUKAR untuk pindah.',
@@ -282,7 +287,18 @@ export const STR = {
   starGems: 'Semua permata',
   starTime: (par: string) => `Di bawah ${par}`,
   nextStage: (name: string) => `Berikutnya: ${name}`,
-  lastStage: 'Petualangan selesai',
+  lastStage: 'Level terakhir dunia ini!',
+  nextIn: (n: number, s: number, host: string) =>
+    `Level ${n} mulai dalam ${s} detik · ${host} bisa memilih lain`,
+  worldDone: (host: string) => `Dunia ini tamat! ${host} memilih level atau selesai`,
+  nextTitle: 'Lanjut main?',
+  nextAuto: (n: number, s: number) => `Level ${n} mulai sendiri dalam ${s} detik.`,
+  nextWaiting: (host: string) => `Menunggu ${host} memilih…`,
+  worldDoneTitle: 'Dunia ini tamat!',
+  worldDoneSub: 'Pilih level lain atau selesai.',
+  btnNextLevel: (n: number) => `Lanjut ke Level ${n}`,
+  btnMap: 'Pilih level lain',
+  btnDone: 'Selesai',
 
   // Restart vote
   voteTitle: 'Ulang level?',

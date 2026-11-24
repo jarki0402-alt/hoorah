@@ -9,7 +9,7 @@
  * so two players never feel lost and eight are never cramped. Bodies are a trail of points spaced
  * `spacing` apart; one unit of length is one trail point, so "Panjang 42" is 42 points of body.
  */
-import type { Fruit, PlayerInfo } from '@hoorah/protocol';
+import type { Fruit, Look, PlayerInfo } from '@hoorah/protocol';
 
 export type Phase = 'intro' | 'countdown' | 'play' | 'over' | 'podium' | 'done';
 export type KoCause = 'body' | 'head' | 'wall';
@@ -260,6 +260,7 @@ export class Snake {
     readonly id: number,
     public name: string,
     public fruit: Fruit,
+    public look: Look,
     public color: string,
     readonly joinIndex: number,
   ) {
@@ -570,7 +571,7 @@ export class ArenaMatch {
       let s = this.byId.get(p.id);
       if (!s) {
         if (this.list.length >= MAX_SNAKES) continue;
-        s = new Snake(p.id, p.name, p.fruit, p.color, this.joins++);
+        s = new Snake(p.id, p.name, p.fruit, p.look, p.color, this.joins++);
         this.list.push(s);
         this.byId.set(p.id, s);
         s.connected = p.connected;
@@ -581,6 +582,7 @@ export class ArenaMatch {
       }
       s.name = p.name;
       s.fruit = p.fruit;
+      s.look = p.look;
       if (s.color !== p.color) {
         s.color = p.color;
         s.colorNum = colorNumber(p.color);

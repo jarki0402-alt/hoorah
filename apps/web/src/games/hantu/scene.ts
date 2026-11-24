@@ -8,13 +8,13 @@
  *
  * Coordinates: map px (tile 40); the camera scrolls so the 1280×720 map sits centred in the stage.
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Look, lookOfFruit, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
 import { conePolygon } from './light';
 import { COLS, ROWS } from './maps';
-import { drawMap, faceKey, GLOW, GRAIN, KEY, makeSprites, RENDER_SCALE, skinKey, TILE } from './textures';
-import { type HauntWorld, TUNE } from './world';
+import { drawMap, GLOW, GRAIN, HeadBank, KEY, makeSprites, RENDER_SCALE, skinKey, TILE } from './textures';
+import { type HauntWorld, PING_S, TUNE } from './world';
 
 const MAP_W = COLS * TILE;
 const MAP_H = ROWS * TILE;
@@ -23,7 +23,7 @@ const RAYS = 28;
 
 export interface ResidentLook {
   name: string;
-  fruit: Fruit;
+  look: Look;
   color: number;
 }
 
@@ -32,7 +32,7 @@ interface ResidentView {
   ring: Phaser.GameObjects.Image;
   tag: Phaser.GameObjects.Text;
   face: Face;
-  fruit: Fruit;
+  look: Look;
 }
 
 export class HantuScene extends Phaser.Scene {
@@ -41,9 +41,13 @@ export class HantuScene extends Phaser.Scene {
   ox = 0;
   oy = 0;
   private resolveReady!: () => void;
-  private readonly faces: Map<string, HTMLImageElement>;
+  private heads!: HeadBank;
   private world: HauntWorld | null = null;
-  private look: (id: number) => ResidentLook = () => ({ name: '', fruit: 'jeruk', color: 0xffffff });
+  private look: (id: number) => ResidentLook = () => ({
+    name: '',
+    look: lookOfFruit('jeruk'),
+    color: 0xffffff,
+  });
   private mapImg: Phaser.GameObjects.Image | null = null;
   private mapSeq = 0;
   private under!: Phaser.GameObjects.Graphics;
@@ -58,6 +62,8 @@ export class HantuScene extends Phaser.Scene {
   private residents = new Map<number, ResidentView>();
   private grain!: Phaser.GameObjects.TileSprite;
   private flashRect!: Phaser.GameObjects.Rectangle;
+  /** The red blink over the ghost's spot (above the darkness). */
+  private pingG!: Phaser.GameObjects.Graphics;
   private outside!: Phaser.GameObjects.Graphics;
   private readonly poly: number[] = [];
   private frame = 0;
@@ -65,16 +71,16 @@ export class HantuScene extends Phaser.Scene {
   /** A short white flash (catch, fuse): seconds left. */
   private pop = 0;
 
-  constructor(faces: Map<string, HTMLImageElement>) {
+  constructor() {
     super('hantu');
-    this.faces = faces;
     this.ready = new Promise((r) => {
       this.resolveReady = r;
     });
   }
 
   create(): void {
-    makeSprites(this.textures, this.faces);
+    makeSprites(this.textures);
+    this.heads = new HeadBank(this.textures, (look) => this.headsReady(look));
     const cam = this.cameras.main;
     cam.setOrigin(0, 0);
     cam.setZoom(RENDER_SCALE);
@@ -98,6 +104,7 @@ export class HantuScene extends Phaser.Scene {
       .setDepth(10);
     this.lightG = this.make.graphics({}, false);
     this.beams = this.add.graphics().setDepth(11).setBlendMode(Phaser.BlendModes.ADD);
+    this.pingG = this.add.graphics().setDepth(12);
     this.outside = this.add.graphics().setDepth(30);
     this.grain = this.add.tileSprite(0, 0, 64, 64, GRAIN).setOrigin(0, 0).setDepth(31).setAlpha(0.12);
     this.flashRect = this.add.rectangle(0, 0, MAP_W, MAP_H, 0xfff6dc, 0).setOrigin(0, 0).setDepth(32);
@@ -161,7 +168,7 @@ export class HantuScene extends Phaser.Scene {
         .setDepth(12)
         .setAlpha(0.6)
         .setDisplaySize(60, 60);
-      const body = this.add.image(0, 0, faceKey(l.fruit, 'happy')).setDepth(13);
+      const body = this.add.image(0, 0, this.heads.key(l.look, 'happy')).setDepth(13);
       body.setDisplaySize(36, 36);
       const tag = this.add
         .text(0, 0, l.name, {
@@ -175,7 +182,7 @@ export class HantuScene extends Phaser.Scene {
         .setOrigin(0.5, 1)
         .setDepth(14)
         .setResolution(RENDER_SCALE);
-      this.residents.set(r.id, { body, ring, tag, face: 'happy', fruit: l.fruit });
+      this.residents.set(r.id, { body, ring, tag, face: 'happy', look: l.look });
     }
     this.ghost.setTexture(skinKey(world.ghost.skin));
     this.ghost.setMask(this.mask);
@@ -206,6 +213,7 @@ export class HantuScene extends Phaser.Scene {
     this.drawGhost(w, now);
     this.drawLights(w, now);
     this.drawResidents(w, now);
+    this.drawPing(w);
     const flash = Math.max(w.flash > 0 ? Math.min(1, w.flash / 1.2) * 0.35 : 0, this.pop);
     this.flashRect.setFillStyle(0xfff6dc, flash);
   }
@@ -241,6 +249,23 @@ export class HantuScene extends Phaser.Scene {
       img.setVisible(!k.taken);
       img.y = k.y * TILE + 20 + Math.sin(now * 3 + i) * 2;
     });
+  }
+
+  /** Three red blinks with a growing ring where the ghost was when the ping fired. */
+  private drawPing(w: HauntWorld): void {
+    const g = this.pingG;
+    g.clear();
+    const p = w.ping;
+    if (!p) return;
+    const phase = ((p.age / PING_S) * 3) % 1;
+    if (phase > 0.62) return;
+    const grow = phase / 0.62;
+    const x = p.x * TILE;
+    const y = p.y * TILE;
+    g.fillStyle(0xff2d2d, 0.5 * (1 - grow * 0.5));
+    g.fillCircle(x, y, 20);
+    g.lineStyle(5, 0xff3b30, 0.95 * (1 - grow * 0.6));
+    g.strokeCircle(x, y, 26 + grow * 22);
   }
 
   private drawGhost(w: HauntWorld, now: number): void {
@@ -335,6 +360,13 @@ export class HantuScene extends Phaser.Scene {
     g.fillCircle(x, y, r * 0.4);
   }
 
+  /** A look's faces finished rasterizing: swap them in for its residents. */
+  private headsReady(look: Look): void {
+    for (const v of this.residents.values()) {
+      if (sameLook(v.look, look)) v.body.setTexture(this.heads.key(v.look, v.face));
+    }
+  }
+
   private drawResidents(w: HauntWorld, now: number): void {
     for (const r of w.residents) {
       const v = this.residents.get(r.id);
@@ -349,10 +381,10 @@ export class HantuScene extends Phaser.Scene {
       const y = r.y * TILE + (fly ? Math.sin(now * 4 + r.id) * 4 : 0);
       const look = this.look(r.id);
       const face: Face = fly ? 'sad' : r.heart >= 0.7 ? 'wow' : 'happy';
-      if (face !== v.face || look.fruit !== v.fruit) {
+      if (face !== v.face || !sameLook(look.look, v.look)) {
         v.face = face;
-        v.fruit = look.fruit;
-        v.body.setTexture(faceKey(look.fruit, face));
+        v.look = look.look;
+        v.body.setTexture(this.heads.key(look.look, face));
       }
       const size = fly ? 22 : 36;
       v.body

@@ -1,6 +1,6 @@
 /**
- * Petualangan Warna entry: connect to the shell, rasterize the fruit faces, start Phaser (canvas
- * 1.5x the stage) under a Preact HUD, then hand control to the driver.
+ * Petualangan Warna entry: connect to the shell, start Phaser (canvas 1.5x the stage) under a
+ * Preact HUD, then hand control to the driver. The scene rasterizes player faces as looks show up.
  */
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import * as Phaser from 'phaser';
@@ -10,10 +10,7 @@ import { Driver } from './driver';
 import { Hud } from './hud';
 import { WarnaScene } from './scene';
 import { STR } from './strings';
-import { loadFaces, RENDER_SCALE } from './textures';
-
-/** Stages per session when the shell does not say (`settings.rounds`). */
-const DEFAULT_STAGES = 4;
+import { RENDER_SCALE } from './textures';
 
 function layer(stage: HTMLElement, className: string): HTMLDivElement {
   const el = document.createElement('div');
@@ -29,18 +26,12 @@ function showError(stage: HTMLElement): void {
   el.textContent = STR.loadError;
 }
 
-function stagesFrom(raw: unknown): number {
-  const n = typeof raw === 'number' ? raw : Number(raw);
-  return Number.isFinite(n) && n >= 1 ? Math.min(6, Math.floor(n)) : DEFAULT_STAGES;
-}
-
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 async function boot(): Promise<void> {
   const root = document.getElementById('app');
   if (!root) return;
   const { stage, width: stageWidth, height: stageHeight, onResize } = mountStage(root);
-  const faces = loadFaces();
   const fonts = fontsReady();
   let game: HoorahGame;
   try {
@@ -49,12 +40,11 @@ async function boot(): Promise<void> {
     showError(stage);
     return;
   }
-  const images = await faces;
   await fonts;
 
   const world = layer(stage, 'wa-world');
   const hudHost = layer(stage, 'wa-hud-host');
-  const scene = new WarnaScene(images);
+  const scene = new WarnaScene();
   const width = stageWidth() * RENDER_SCALE;
   const height = stageHeight() * RENDER_SCALE;
   const phaser = new Phaser.Game({
@@ -73,7 +63,7 @@ async function boot(): Promise<void> {
   });
   await scene.ready;
   const hud = new Hud(hudHost);
-  const driver = new Driver(game, scene, hud, phaser, stagesFrom(game.settings.rounds));
+  const driver = new Driver(game, scene, hud, phaser);
   scene.setViewSize(stageWidth(), stageHeight());
   onResize((h, w) => {
     phaser.scale.resize(w * RENDER_SCALE, h * RENDER_SCALE);

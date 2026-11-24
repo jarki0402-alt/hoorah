@@ -5,6 +5,7 @@
  */
 import type { Fruit } from '@hoorah/protocol';
 import { type Face, fruitMarkup } from '../art/fruits';
+import { castHead, type GameFace } from '../art/people';
 
 export const W = 640;
 export const H = 360;
@@ -17,8 +18,17 @@ export function scene(bg: string, body: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="${bg}"/>${body}</svg>`;
 }
 
-/** A fruit avatar centred at (x, y), `size` px tall. */
-export function fruit(f: Fruit, x: number, y: number, size = 64, face: Face = 'happy'): string {
+/**
+ * A player avatar centred at (x, y), `size` px tall: the cast character matching the fruit (the
+ * tutorials name players by fruit, which keeps every scene the same).
+ */
+export function fruit(f: Fruit, x: number, y: number, size = 64, face: GameFace = 'happy'): string {
+  const s = size / 64;
+  return `<g transform="translate(${n(x - size / 2)} ${n(y - size / 2)}) scale(${n(s * 100) / 100})">${castHead(f, face)}</g>`;
+}
+
+/** The fruit head itself, for the 3D racers that still race as fruits (Bajaj Rush, Lari Terus). */
+export function fruitHead(f: Fruit, x: number, y: number, size = 64, face: Face = 'happy'): string {
   const s = size / 64;
   return `<g transform="translate(${n(x - size / 2)} ${n(y - size / 2)}) scale(${n(s * 100) / 100})">${fruitMarkup(f, face)}</g>`;
 }

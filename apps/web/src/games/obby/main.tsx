@@ -1,12 +1,13 @@
 /**
- * Obby bootstrap. Normal mode connects to the Hoorah shell. `?demo=N` runs offline with N
- * computer runners (layout and performance checks on any screen, no phones needed).
+ * Obby bootstrap. Normal mode connects to the shell. `?demo=N` runs offline with N computer
+ * runners (layout and performance checks on any screen, no phones needed); `&people=1` counts
+ * them as people instead (they stand still), to check the split screen for 1-4 players.
  *
  * Graphics: the shared device profile (common/gfx.ts, `?gfx=low|medium|high` forces a level)
  * picks MSAA, shadows and pixel ratio (bajaj/quality.ts levels); the quality ladder steps down
  * while racing if frames run slow. Debug pins: `?q=0..3` shadow tier, `?k=` pixel ratio.
  */
-import { FRUITS, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
+import { FRUITS, lookAt, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
 import { connect, type GameResult } from '@hoorah/sdk';
 import { render } from 'preact';
 import { LEVELS, QualityLadder, readOverrides, startRatio } from '../bajaj/quality';
@@ -28,10 +29,12 @@ class DemoGame implements GameLike {
 
   constructor(n: number) {
     const names = ['Rina', 'Budi', 'Sari', 'Joko', 'Dewi', 'Agus', 'Wati', 'Yudi'];
+    const people = new URLSearchParams(location.search).has('people');
     this.allPlayers = Array.from({ length: n }, (_, i) => ({
-      id: -(i + 1),
+      id: people ? i + 1 : -(i + 1),
       name: names[i]!,
       fruit: FRUITS[i % FRUITS.length]!,
+      look: lookAt(i * 5),
       color: PLAYER_COLORS[i % PLAYER_COLORS.length]!,
       connected: true,
       isHost: i === 0,

@@ -22,7 +22,7 @@ export function formatTime(ms: number): string {
 
 export const STR = {
   gameTitle: 'BALAP KARUNG',
-  loadError: 'Buka Balap Karung dari layar Hoorah.',
+  loadError: 'Buka Balap Karung dari layar Kacawbalaw.',
 
   /* Main screen HUD */
   raceOf: (race: number, total: number) => `BALAPAN ${race} / ${Math.max(race, total)}`,

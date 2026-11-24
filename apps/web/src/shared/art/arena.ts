@@ -4,7 +4,8 @@
  * and the phone theme. No violet anywhere: deep greens, warm lights, cream flowers.
  */
 import type { Fruit } from '@hoorah/protocol';
-import { type Face, fruitMarkup } from './fruits';
+import type { Face } from './fruits';
+import { castHead } from './people';
 import { f1, seeded, svgDoc } from './svg';
 
 export const ARENA = {
@@ -170,7 +171,7 @@ export function snakeMarkup(
   const [hx, hy] = pts[0]!;
   const hr = r * 1.32;
   const fs = (r * 2.3) / 64;
-  const head = `<circle cx="${f1(hx)}" cy="${f1(hy)}" r="${f1(hr + o)}" fill="${dark}"/><circle cx="${f1(hx)}" cy="${f1(hy)}" r="${f1(hr)}" fill="${color}"/><g transform="translate(${f1(hx - 32 * fs)} ${f1(hy - 32 * fs)}) scale(${f1(fs * 100) / 100})">${fruitMarkup(fruit, face)}</g>`;
+  const head = `<circle cx="${f1(hx)}" cy="${f1(hy)}" r="${f1(hr + o)}" fill="${dark}"/><circle cx="${f1(hx)}" cy="${f1(hy)}" r="${f1(hr)}" fill="${color}"/><g transform="translate(${f1(hx - 32 * fs)} ${f1(hy - 32 * fs)}) scale(${f1(fs * 100) / 100})">${castHead(fruit, face)}</g>`;
   return `<g fill="${dark}">${outline}</g>${body}${head}`;
 }
 

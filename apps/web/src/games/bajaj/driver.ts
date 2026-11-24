@@ -10,6 +10,7 @@ import {
   type ControllerView,
   FRUITS,
   type Fruit,
+  PERSON_IDS,
   PLAYER_COLORS,
   type PlayerInfo,
   type RelayedInput,
@@ -76,20 +77,27 @@ export function cpuCount(mode: Mode, humans: number): number {
   }
 }
 
-/** Humans (join order, with their picked colours) behind the CPUs; CPUs get unused colours and fruits. */
+/** Humans (join order, with their picked colours) behind the CPUs; CPUs get unused colours, fruits and characters. */
 export function buildRacers(
   players: readonly PlayerInfo[],
   mode: Mode,
   cpuNames: readonly string[],
   picks: ReadonlyMap<number, string> = new Map(),
 ): RacerSetup[] {
-  const humans = players
-    .slice(0, 8)
-    .map((p) => ({ id: p.id, human: true, name: p.name, color: picks.get(p.id) ?? p.color, fruit: p.fruit }));
+  const humans = players.slice(0, 8).map((p) => ({
+    id: p.id,
+    human: true,
+    name: p.name,
+    color: picks.get(p.id) ?? p.color,
+    fruit: p.fruit,
+    look: p.look,
+  }));
   const usedColors = new Set(humans.map((p) => p.color.toUpperCase()));
   const usedFruits = new Set(humans.map((p) => p.fruit));
   const freeColors = PLAYER_COLORS.filter((c) => !usedColors.has(c.toUpperCase()));
   const freeFruits: Fruit[] = [...FRUITS.filter((f) => !usedFruits.has(f)), ...FRUITS];
+  const usedPeople = new Set(humans.map((p) => p.look.c));
+  const freePeople = [...PERSON_IDS.filter((c) => !usedPeople.has(c)), ...PERSON_IDS];
   const cpus: RacerSetup[] = [];
   for (let i = 0; i < cpuCount(mode, humans.length); i++) {
     cpus.push({
@@ -98,6 +106,7 @@ export function buildRacers(
       name: cpuNames[i % cpuNames.length]!,
       color: freeColors[i % Math.max(1, freeColors.length)] ?? PLAYER_COLORS[i % PLAYER_COLORS.length]!,
       fruit: freeFruits[i % freeFruits.length]!,
+      look: { c: freePeople[i % freePeople.length]! },
     });
   }
   return [...cpus, ...humans];
@@ -467,7 +476,14 @@ export class BajajDriver {
     this.hud.raceView = this.view;
     this.hud.mode.value = this.mode;
     this.hud.cards.value = race.karts.map(
-      (k): KartCard => ({ idx: k.idx, name: k.name, fruit: k.fruit, color: k.color, human: k.human }),
+      (k): KartCard => ({
+        idx: k.idx,
+        name: k.name,
+        fruit: k.fruit,
+        look: k.look,
+        color: k.color,
+        human: k.human,
+      }),
     );
     this.hud.phase.value = 'intro';
     this.hud.results.value = null;
@@ -893,6 +909,7 @@ export class BajajDriver {
         id: p.id,
         name: p.name,
         fruit: p.fruit,
+        look: p.look,
         color: this.picks.get(p.id) ?? p.color,
         ready: this.readySet.has(p.id),
         host: this.isHost(p.id),

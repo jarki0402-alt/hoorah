@@ -1,5 +1,16 @@
 /** "Cara main" for Lari Terus (shared/tutorial). Imports only shared art helpers. */
-import { appear, arrow, box, fruit, hop, label, mark, scene, shake, slide } from '../../shared/tutorial/draw';
+import {
+  appear,
+  arrow,
+  box,
+  fruitHead,
+  hop,
+  label,
+  mark,
+  scene,
+  shake,
+  slide,
+} from '../../shared/tutorial/draw';
 import type { Tutorial } from '../../shared/tutorial/types';
 
 const SKY = '#FFE2B8';
@@ -34,7 +45,7 @@ export const TUTORIAL: Tutorial = {
       scene: () =>
         scene(
           SKY,
-          `${lanes()}${block(320, 220, 56, 52)}${arrow(300, 300, 170, 300, { bend: 30 })}${slide(fruit('semangka', 320, 300, 72), -170, 0, 2)}`,
+          `${lanes()}${block(320, 220, 56, 52)}${arrow(300, 300, 170, 300, { bend: 30 })}${slide(fruitHead('semangka', 320, 300, 72), -170, 0, 2)}`,
         ),
       phone: { kind: 'swipe', dir: 'left' },
     },
@@ -43,7 +54,7 @@ export const TUTORIAL: Tutorial = {
       scene: () =>
         scene(
           SKY,
-          `${roof()}${box(330, GROUND - 40, 36, 40, BAR, 6)}${box(318, GROUND - 46, 60, 12, '#FFF7F0', 4)}${arrow(170, GROUND - 70, 520, GROUND - 70, { bend: 110 })}${slide(hop(fruit('semangka', 150, GROUND - 30, 60), 110, 2.4), 340, 0, 2.4)}`,
+          `${roof()}${box(330, GROUND - 40, 36, 40, BAR, 6)}${box(318, GROUND - 46, 60, 12, '#FFF7F0', 4)}${arrow(170, GROUND - 70, 520, GROUND - 70, { bend: 110 })}${slide(hop(fruitHead('semangka', 150, GROUND - 30, 60), 110, 2.4), 340, 0, 2.4)}`,
         ),
       phone: { kind: 'swipe', dir: 'up' },
     },
@@ -52,7 +63,7 @@ export const TUTORIAL: Tutorial = {
       scene: () =>
         scene(
           SKY,
-          `${roof()}${box(320, 150, 10, GROUND - 150, '#FFF7F0', 3)}${box(410, 150, 10, GROUND - 150, '#FFF7F0', 3)}${box(310, 190, 120, 34, BAR, 6)}${arrow(140, 180, 140, 250)}${slide(fruit('semangka', 150, GROUND - 22, 44, 'effort'), 360, 0, 2.4)}`,
+          `${roof()}${box(320, 150, 10, GROUND - 150, '#FFF7F0', 3)}${box(410, 150, 10, GROUND - 150, '#FFF7F0', 3)}${box(310, 190, 120, 34, BAR, 6)}${arrow(140, 180, 140, 250)}${slide(fruitHead('semangka', 150, GROUND - 22, 44, 'effort'), 360, 0, 2.4)}`,
         ),
       phone: { kind: 'swipe', dir: 'down' },
     },
@@ -61,7 +72,7 @@ export const TUTORIAL: Tutorial = {
       scene: () =>
         scene(
           SKY,
-          `${lanes()}${hop(fruit('nanas', 300, 170, 44), 24, 0.6)}${hop(fruit('jeruk', 350, 180, 44), 24, 0.6, 0.3)}${block(420, 290, 64, 56)}${shake(fruit('semangka', 420, 320, 64, 'sad'), 420, 320, 0.4)}${mark(false, 480, 250, 20)}${appear(label('Tersandung!', 160, 80, { size: 28, color: STOP }), 0.2, 2.4)}`,
+          `${lanes()}${hop(fruitHead('nanas', 300, 170, 44), 24, 0.6)}${hop(fruitHead('jeruk', 350, 180, 44), 24, 0.6, 0.3)}${block(420, 290, 64, 56)}${shake(fruitHead('semangka', 420, 320, 64, 'sad'), 420, 320, 0.4)}${mark(false, 480, 250, 20)}${appear(label('Tersandung!', 160, 80, { size: 28, color: STOP }), 0.2, 2.4)}`,
         ),
       phone: { kind: 'look', text: 'Jangan sampai tertinggal' },
     },

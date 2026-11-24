@@ -126,7 +126,7 @@ export const CARD_TEXT: Record<CardId, CardText> = {
 };
 
 export const STR = {
-  noShell: 'Buka Juragan Nusantara dari layar utama Hoorah.',
+  noShell: 'Buka Juragan Nusantara dari layar utama Kacawbalaw.',
   /** Player names of the offline demo (`?demo=N`, layout and performance tests). */
   demoNames: ['Rina', 'Budi', 'Sari', 'Joko', 'Dewi', 'Agus', 'Wati', 'Yudi'],
   unknownPlayer: 'Pemain',

@@ -4,7 +4,7 @@
  * route picker, the intro card and the flag card between sections. Structure changes go through
  * signals a few times a second; name tags are moved by the box-world renderer every frame.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import { signal } from '@preact/signals';
 import { THUMBS } from '../../controller/thumbs/tali';
 import { svgUrl } from '../../shared/art/svg';
@@ -16,6 +16,7 @@ export interface ClimberChip {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -35,6 +36,7 @@ export interface Toast {
   key: number;
   text: string;
   fruit?: Fruit;
+  look?: Look;
   color?: string;
 }
 
@@ -98,7 +100,11 @@ export class HudStore {
   }
 
   toast(text: string, who?: ClimberChip): void {
-    const t: Toast = { key: ++this.key, text, ...(who ? { fruit: who.fruit, color: who.color } : {}) };
+    const t: Toast = {
+      key: ++this.key,
+      text,
+      ...(who ? { fruit: who.fruit, look: who.look, color: who.color } : {}),
+    };
     this.toasts.value = [...this.toasts.value.slice(-2), t];
     window.setTimeout(() => {
       this.toasts.value = this.toasts.value.filter((o) => o.key !== t.key);
@@ -200,7 +206,7 @@ export function Hud({ store }: { store: HudStore }) {
         <div class="tl-roster">
           {store.roster.value.map((r) => (
             <div key={r.id} class={`tl-row is-${r.state}`}>
-              <Avatar fruit={r.fruit} ring={r.color} size={30} dim={r.state === 'off'} />
+              <Avatar look={r.look} fruit={r.fruit} ring={r.color} size={30} dim={r.state === 'off'} />
               <span class="tl-name">{r.name}</span>
               {STATE_LABEL[r.state] && <span class="tl-pill">{STATE_LABEL[r.state]}</span>}
             </div>
@@ -234,7 +240,7 @@ export function Hud({ store }: { store: HudStore }) {
       <div class="tl-toasts">
         {store.toasts.value.map((x) => (
           <div key={x.key} class="tl-toast">
-            {x.fruit && x.color && <Avatar fruit={x.fruit} ring={x.color} size={28} />}
+            {x.fruit && x.color && <Avatar look={x.look} fruit={x.fruit} ring={x.color} size={28} />}
             <span>{x.text}</span>
           </div>
         ))}

@@ -104,6 +104,7 @@ export class ObbyScene {
   private loadedFor: unknown = null;
   private looks: PlayerLook[] = [];
   private sea: THREE.Mesh | null = null;
+  private splitLowered = false;
 
   constructor(host: HTMLElement, tagHost: HTMLElement, level: GfxTier, msaa: boolean, shadow: ShadowTier) {
     this.stage = new KotakStage(host, level, msaa, shadow, LOOK);
@@ -366,7 +367,38 @@ export class ObbyScene {
     if (this.sea) this.sea.position.x = m.camera.view.focus.x;
     this.fx.update(dt);
     m.setAspect(this.stage.aspect);
-    this.stage.applyView(m.camera.rig, m.camera.view);
-    this.stage.render();
+    const views = m.views;
+    // Name tags follow one camera; on a split screen each part already says whose it is.
+    this.tagHost.style.display = views.length > 1 ? 'none' : '';
+    if (views.length <= 1) {
+      this.stage.applyView(m.camera.rig, m.camera.view);
+      this.stage.render();
+      return;
+    }
+    if (!this.splitLowered) {
+      // Several pictures a frame: the cheapest shadows keep the frame rate (owner 2026-11-24).
+      this.splitLowered = true;
+      while (this.stage.tier > 1) this.stage.stepDown();
+    }
+    const { w, h } = this.stage.size;
+    const r = this.stage.renderer;
+    const cam = this.stage.camera;
+    r.setScissorTest(true);
+    for (const v of views) {
+      const x = Math.round(v.rect.x * w);
+      const y = Math.round(v.rect.y * h);
+      const vw = Math.round(v.rect.w * w);
+      const vh = Math.round(v.rect.h * h);
+      // WebGL counts viewport rows from the bottom.
+      r.setViewport(x, h - y - vh, vw, vh);
+      r.setScissor(x, h - y - vh, vw, vh);
+      cam.aspect = vw / Math.max(1, vh);
+      this.stage.applyView(v.cam.rig, v.cam.view);
+      this.stage.render();
+    }
+    r.setScissorTest(false);
+    r.setViewport(0, 0, w, h);
+    cam.aspect = w / Math.max(1, h);
+    cam.updateProjectionMatrix();
   }
 }

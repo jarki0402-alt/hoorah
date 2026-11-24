@@ -3,8 +3,9 @@
  * Bodies are JSON; the session is an httpOnly cookie; every request that changes something also
  * carries the `x-hoorah-admin: 1` header (a cross-site page cannot send it without CORS).
  */
+import type { AppConfig, ClientContext, ReportKind } from './access';
 import { LIMITS } from './constants';
-import { isPassCode, normalizePassCode } from './pass';
+import { isPassCode, normalizePassCode, type PassKind } from './pass';
 
 export const ADMIN_HEADER = 'x-hoorah-admin';
 export const ADMIN_USERNAME_MAX = 32;
@@ -16,6 +17,12 @@ export const PASS_MAX_DURATION_MS = 366 * 24 * 60 * 60_000;
 /** A pass opens at least one seat more than a free room. */
 export const PASS_MIN_PLAYERS = LIMITS.freePlayers + 1;
 export const PASS_MAX_ROOMS = 50;
+/** single/promo: longest run from first use, days. */
+export const PASS_MAX_DURATION_DAYS = 366;
+/** promo: most screens one code may serve. */
+export const PASS_MAX_USES = 100_000;
+/** single: most codes made at once. */
+export const PASS_MAX_BATCH = 500;
 
 export type PassStatus = 'active' | 'expired' | 'revoked';
 
@@ -23,6 +30,17 @@ export interface AdminPass {
   id: number;
   code: string;
   label: string;
+  kind: PassKind;
+  /** single and promo: how long the code runs from its first use on a screen. */
+  durationMs: number | null;
+  /** promo: how many main screens may use it; null = no limit. */
+  maxUses: number | null;
+  /** single and promo: main screens that have used it. */
+  uses: number;
+  /** single and promo: when a screen first started using it (single: when its 24 h etc. began). */
+  firstStartedAt: number | null;
+  /** single and promo: when the latest screen's run ends (single: exactly when it ends). */
+  lastRunsUntil: number | null;
   maxPlayers: number;
   /** Rooms that may use the pass at the same time; null = no limit. */
   maxRooms: number | null;
@@ -41,11 +59,69 @@ export interface AdminPass {
 
 export interface AdminPassCreate {
   label: string;
-  /** Omitted: the server generates one. */
+  /** Omitted: the server generates one. Must be omitted when `count` > 1. */
   code?: string;
+  /** shared: the code works until then. single/promo: the code can be first used until then. */
   expiresAt: number;
   maxPlayers: number;
   maxRooms: number | null;
+  /** Default `shared` (the trial-stage behaviour). */
+  kind?: PassKind;
+  /** single/promo: days the code runs from its first use (1–366). */
+  durationDays?: number;
+  /** promo: how many screens may use it; null = no limit. */
+  maxUses?: number | null;
+  /** single: how many codes to make at once (1–500), returned as `created`. Default 1. */
+  count?: number;
+}
+
+/** Answer to creating passes: every new pass (one, or a batch of single codes). */
+export interface AdminPassCreated {
+  created: AdminPass[];
+}
+
+/* ---------------- Settings, reports, errors (2026-11-23) ---------------- */
+
+/** `GET/PUT /api/admin/config`: the settings every screen follows (see AppConfig). */
+export type AdminConfig = AppConfig;
+
+export type ReportStatus = 'baru' | 'diproses' | 'selesai';
+
+export interface AdminReport {
+  id: number;
+  createdAt: number;
+  kind: ReportKind;
+  text: string;
+  contact: string | null;
+  status: ReportStatus;
+  context: ClientContext;
+}
+
+/** `GET /api/admin/reports?status=…`; `PATCH /api/admin/reports/:id` with `{ status }`. */
+export interface AdminReportList {
+  reports: AdminReport[];
+  /** Counts per status, for the tab badge. */
+  counts: Record<ReportStatus, number>;
+}
+
+/** One kind of device error, grouped by message (and game). */
+export interface AdminErrorGroup {
+  id: number;
+  message: string;
+  /** The latest stack seen. */
+  stack: string | null;
+  role: 'screen' | 'controller';
+  gameId: string | null;
+  count: number;
+  firstAt: number;
+  lastAt: number;
+  /** Context of the latest one (device, page, version). */
+  last: ClientContext;
+}
+
+/** `GET /api/admin/errors`; `DELETE /api/admin/errors/:id` clears one group, `DELETE /api/admin/errors` all. */
+export interface AdminErrorList {
+  groups: AdminErrorGroup[];
 }
 
 export interface AdminPassUpdate {
@@ -314,6 +390,24 @@ export function parseAdminPassCreate(v: unknown): AdminPassCreate | null {
     if (!isPassCode(code)) return null;
     out.code = code;
   }
+  const kind = v.kind ?? 'shared';
+  if (kind !== 'shared' && kind !== 'single' && kind !== 'promo') return null;
+  out.kind = kind;
+  if (kind === 'shared') return out;
+  // single and promo run a number of days from their first use on a screen.
+  if (!isInt(v.durationDays) || v.durationDays < 1 || v.durationDays > PASS_MAX_DURATION_DAYS) return null;
+  out.durationDays = v.durationDays;
+  if (kind === 'promo') {
+    const maxUses = v.maxUses ?? null;
+    if (maxUses !== null && !(isInt(maxUses) && maxUses >= 1 && maxUses <= PASS_MAX_USES)) return null;
+    out.maxUses = maxUses;
+    return out;
+  }
+  const count = v.count ?? 1;
+  if (!isInt(count) || count < 1 || count > PASS_MAX_BATCH) return null;
+  // A chosen code can only be made once.
+  if (count > 1 && out.code !== undefined) return null;
+  out.count = count;
   return out;
 }
 

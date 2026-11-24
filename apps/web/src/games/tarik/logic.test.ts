@@ -1,4 +1,5 @@
 import type { Fruit, PlayerInfo } from '@hoorah/protocol';
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { seeded } from '../../shared/art/svg';
 import { GameClock } from './clock';
@@ -26,6 +27,7 @@ function player(id: number, connected = true): PlayerInfo {
     id,
     name: NAMES[(id - 1) % NAMES.length]!,
     fruit: FRUITS[(id - 1) % FRUITS.length]!,
+    look: lookOfFruit(FRUITS[(id - 1) % FRUITS.length]!),
     color: '#F2453D',
     connected,
     isHost: id === 1,
@@ -240,6 +242,16 @@ describe('teams', () => {
     expect(run.m.member(3)).toBeUndefined();
     expect(run.m.roster('red').map((m) => m.id)).toEqual([1]);
     expect(run.events.some((e) => e.type === 'teams')).toBe(true);
+  });
+
+  it("keeps each player's look and follows a restyle", () => {
+    const m = new TarikMatch({ rounds: 3 });
+    m.setPlayers(players(2));
+    m.drainEvents();
+    expect(m.member(2)?.look).toEqual(lookOfFruit('alpukat'));
+    m.setPlayers([player(1), { ...player(2), look: { c: 'zara', hc: 2 } }]);
+    expect(m.member(2)?.look).toEqual({ c: 'zara', hc: 2 });
+    expect(m.drainEvents().some((e) => e.type === 'teams')).toBe(true);
   });
 });
 

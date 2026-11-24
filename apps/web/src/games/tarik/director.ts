@@ -445,14 +445,14 @@ export class Director {
 
   private syncRoster(): void {
     const entries = (team: Team): RosterEntry[] =>
-      this.match.roster(team).map((m) => ({ id: m.id, fruit: m.fruit, connected: this.shownConnected(m) }));
+      this.match.roster(team).map((m) => ({ id: m.id, look: m.look, connected: this.shownConnected(m) }));
     this.scene.setRoster(entries('red'), entries('blue'));
   }
 
   private teamHud(team: Team): TeamHud {
     const members: HudMember[] = this.match
       .roster(team)
-      .map((m) => ({ id: m.id, name: m.name, fruit: m.fruit, connected: this.shownConnected(m) }));
+      .map((m) => ({ id: m.id, name: m.name, look: m.look, connected: this.shownConnected(m) }));
     const rate = this.match.teamRate(team);
     return {
       team,
@@ -480,7 +480,7 @@ export class Director {
           players: m
             .allMembers()
             .filter((x) => x.connected)
-            .map((x) => ({ id: x.id, name: x.name, fruit: x.fruit, connected: true })),
+            .map((x) => ({ id: x.id, name: x.name, look: x.look, connected: true })),
         };
       case 'countdown':
         return { kind: 'count', value: m.countValue, round: STR.roundOf(m.round, m.totalRounds) };

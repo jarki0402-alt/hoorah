@@ -1,4 +1,5 @@
 import type { PlayerInfo } from '@hoorah/protocol';
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import {
   actDelay,
@@ -21,6 +22,7 @@ const human = (id: number): PlayerInfo => ({
   id,
   name: `P${id}`,
   fruit: 'mangga',
+  look: lookOfFruit('mangga'),
   color: '#F2453D',
   connected: true,
   isHost: id === 1,

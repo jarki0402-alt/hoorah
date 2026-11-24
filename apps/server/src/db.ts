@@ -1,7 +1,7 @@
 /**
  * The server's only durable store: one SQLite file (Node's built-in `node:sqlite`, no extra
- * service). Holds admin users and sessions, Hoorah Pass codes and where they were used, and the
- * dashboard's monitoring (system samples, egress, aggregated usage, security log). Rooms stay
+ * service). Holds admin users and sessions, Hoorah Pass codes and where they were used, the
+ * free trials, the owner's settings, reports and device errors, and the dashboard's monitoring (system samples, egress, aggregated usage, security log). Rooms stay
  * in memory (see rooms.ts). Back up by copying the file while the server is stopped.
  */
 import { mkdirSync, statSync } from 'node:fs';
@@ -120,6 +120,57 @@ const MIGRATIONS: readonly string[] = [
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
+  `,
+  // 3: Pass kinds, per-screen Pass use, the free trial, owner settings, reports and device errors
+  // (owner decisions 2026-11-23). Existing passes stay `shared`.
+  `
+  ALTER TABLE passes ADD COLUMN kind TEXT NOT NULL DEFAULT 'shared';
+  ALTER TABLE passes ADD COLUMN duration_ms INTEGER;
+  ALTER TABLE passes ADD COLUMN max_uses INTEGER;
+  CREATE TABLE entitlements (
+    id INTEGER PRIMARY KEY,
+    pass_id INTEGER NOT NULL REFERENCES passes(id) ON DELETE CASCADE,
+    screen_id TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    moved_at INTEGER,
+    UNIQUE (pass_id, screen_id)
+  );
+  CREATE INDEX entitlements_screen ON entitlements(screen_id);
+  CREATE TABLE trials (
+    screen_id TEXT PRIMARY KEY,
+    ip TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+  CREATE INDEX trials_ip ON trials(ip, started_at);
+  CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  CREATE TABLE reports (
+    id INTEGER PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    contact TEXT,
+    status TEXT NOT NULL DEFAULT 'baru',
+    context TEXT NOT NULL
+  );
+  CREATE INDEX reports_status ON reports(status, created_at);
+  CREATE TABLE error_groups (
+    id INTEGER PRIMARY KEY,
+    key TEXT NOT NULL UNIQUE,
+    message TEXT NOT NULL,
+    stack TEXT,
+    role TEXT NOT NULL,
+    game_id TEXT,
+    count INTEGER NOT NULL,
+    first_at INTEGER NOT NULL,
+    last_at INTEGER NOT NULL,
+    last_context TEXT NOT NULL
+  );
+  CREATE INDEX error_groups_last ON error_groups(last_at);
   `,
 ];
 

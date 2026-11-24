@@ -1,28 +1,62 @@
-import type { Fruit } from '@hoorah/protocol';
+import { type Fruit, type Look, lookOfFruit } from '@hoorah/protocol';
 import type { JSX } from 'preact';
-import { type Face, fruitMarkup } from './art/fruits';
+import { useMemo } from 'preact/hooks';
+import { iconMarkup, type WordmarkLayout, type WordmarkTone, wordmark } from './art/brand';
+import { type GameFace, type PersonFace, toPersonFace } from './art/people';
+import { BRAND_NAME } from './brandStrings';
+import { PersonBadge } from './person';
 
 /* ------------------------------------------------------------------ Logo */
 
+/** The app icon (two tilted ribbons; one ribbon below 24 px, where two would blur). */
 export function LogoMark({ size = 32 }: { size?: number }) {
+  const markup = useMemo(() => iconMarkup(size < 24 ? 'one' : 'two'), [size]);
   return (
-    <svg width={size} height={size} viewBox="0 0 120 120" role="img" aria-label="Hoorah">
-      <rect width="120" height="120" rx="30" fill="#FF5A1F" />
-      <rect x="28" y="24" width="18" height="72" rx="9" fill="#FFF7F0" />
-      <rect x="74" y="24" width="18" height="72" rx="9" fill="#FFF7F0" />
-      <path d="M37 56 Q60 80 83 56" fill="none" stroke="#FFF7F0" stroke-width="14" stroke-linecap="round" />
-      <circle cx="100" cy="20" r="7" fill="#FFC928" />
-    </svg>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 200 200"
+      role="img"
+      aria-label={BRAND_NAME}
+      // Trusted markup built from constants (no user input).
+      dangerouslySetInnerHTML={{ __html: markup }}
+    />
   );
 }
 
-export function Logo({ size = 30 }: { size?: number }) {
+/** The wordmark alone: stacked (two lines) or on one line, `height` px tall. */
+export function Wordmark({
+  layout = 'line',
+  tone = 'dark',
+  height,
+  class: cls,
+}: {
+  layout?: WordmarkLayout;
+  tone?: WordmarkTone;
+  height: number;
+  class?: string;
+}) {
+  const art = useMemo(() => wordmark(layout, tone), [layout, tone]);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.28 }}>
+    <svg
+      class={cls}
+      width={Math.round(height * art.aspect)}
+      height={height}
+      viewBox={art.viewBox}
+      role="img"
+      aria-label={BRAND_NAME}
+      // Trusted markup built from constants (no user input).
+      dangerouslySetInnerHTML={{ __html: art.markup }}
+    />
+  );
+}
+
+/** Icon and one-line wordmark, for top bars. */
+export function Logo({ size = 30, tone = 'dark' }: { size?: number; tone?: WordmarkTone }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: size * 0.32 }}>
       <LogoMark size={size} />
-      <span class="display" style={{ fontSize: size * 0.88, letterSpacing: '-0.03em' }}>
-        hoorah
-      </span>
+      <Wordmark height={Math.round(size * 0.62)} tone={tone} />
     </div>
   );
 }
@@ -30,32 +64,31 @@ export function Logo({ size = 30 }: { size?: number }) {
 /* ------------------------------------------------------------------ Avatar */
 
 interface AvatarProps {
-  fruit: Fruit;
+  /** The player's avatar. */
+  look?: Look;
+  /** Only when no look is known (computer players of old games): a character matching the fruit. */
+  fruit?: Fruit;
   ring: string;
   size: number;
-  face?: Face;
+  face?: GameFace | PersonFace;
   dim?: boolean;
   class?: string;
   style?: JSX.CSSProperties;
 }
 
-export function Avatar({ fruit, ring, size, face = 'happy', dim, class: cls, style }: AvatarProps) {
+/** A player in a round tile with their colour as the ring. */
+export function Avatar({ look, fruit, ring, size, face = 'happy', dim, class: cls, style }: AvatarProps) {
+  const who = look ?? lookOfFruit(fruit ?? 'semangka');
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      role="img"
-      aria-label={`Avatar ${fruit}`}
+    <PersonBadge
+      id={who}
+      face={toPersonFace(face)}
+      ring={ring}
+      size={size}
+      dim={dim}
       class={cls}
-      style={{ flex: 'none', opacity: dim ? 0.45 : 1, ...style }}
-    >
-      <circle cx="32" cy="32" r="30" fill="#2A2B30" stroke={ring} stroke-width="3.5" />
-      <g
-        transform="translate(6.4 6.4) scale(0.8)"
-        dangerouslySetInnerHTML={{ __html: fruitMarkup(fruit, face) }}
-      />
-    </svg>
+      style={style as Record<string, string | number> | undefined}
+    />
   );
 }
 
@@ -111,6 +144,10 @@ const ICONS = {
   box: 'M3 7.5 L12 3 L21 7.5 V16.5 L12 21 L3 16.5 Z M3 7.5 L12 12 L21 7.5 M12 12 V21',
   pause: 'M6.5 4 H10.5 V20 H6.5 Z M13.5 4 H17.5 V20 H13.5 Z',
   vibrate: 'M8.5 4 H15.5 V20 H8.5 Z M5 8.5 V15.5 M19 8.5 V15.5 M2 10.5 V13.5 M22 10.5 V13.5',
+  music: 'M9 18 V5 L20 3 V16 M9 18 a3 3 0 1 1 -6 0 a3 3 0 1 1 6 0 M20 16 a3 3 0 1 1 -6 0 a3 3 0 1 1 6 0',
+  flag: 'M5 21V4m0 0h11l-2 4 2 4H5',
+  ticket:
+    'M3 7 a1 1 0 0 1 1 -1 H20 a1 1 0 0 1 1 1 V10 a2 2 0 0 0 0 4 V17 a1 1 0 0 1 -1 1 H4 a1 1 0 0 1 -1 -1 V14 a2 2 0 0 0 0 -4 Z M14 6 V8 M14 11 V13 M14 16 V18',
   menu: 'M4 7 H20 M4 12 H20 M4 17 H20',
   home: 'M4 11 L12 4 L20 11 M6 9.5 V20 H18 V9.5',
   grid: 'M5 4 H10 a1 1 0 0 1 1 1 V10 a1 1 0 0 1 -1 1 H5 a1 1 0 0 1 -1 -1 V5 a1 1 0 0 1 1 -1 Z M14 4 H19 a1 1 0 0 1 1 1 V10 a1 1 0 0 1 -1 1 H14 a1 1 0 0 1 -1 -1 V5 a1 1 0 0 1 1 -1 Z M5 13 H10 a1 1 0 0 1 1 1 V19 a1 1 0 0 1 -1 1 H5 a1 1 0 0 1 -1 -1 V14 a1 1 0 0 1 1 -1 Z M14 13 H19 a1 1 0 0 1 1 1 V19 a1 1 0 0 1 -1 1 H14 a1 1 0 0 1 -1 -1 V14 a1 1 0 0 1 1 -1 Z',

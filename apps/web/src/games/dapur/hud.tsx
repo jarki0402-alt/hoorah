@@ -5,7 +5,7 @@
  * WAAPI so Preact never re-renders at 60 fps. Laid out in world coordinates (1280x720), shifted
  * by `origin` like the Phaser camera.
  */
-import type { Fruit } from '@hoorah/protocol';
+import type { Fruit, Look } from '@hoorah/protocol';
 import type { GameIcon } from '@hoorah/sdk';
 import { signal } from '@preact/signals';
 import { render } from 'preact';
@@ -18,6 +18,7 @@ export interface CookChip {
   id: number;
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
 }
 
@@ -77,11 +78,29 @@ export type Overlay =
   | { kind: 'go' }
   | { kind: 'warning' }
   | { kind: 'move' }
-  | { kind: 'timeUp' };
+  | { kind: 'timeUp' }
+  | { kind: 'guideGo' }
+  | { kind: 'guideDone' };
+
+/** The practice card and arrow (world px, like the rest of the HUD). */
+export interface GuideState {
+  eyebrow: string;
+  title: string;
+  sub: string;
+  /** The phone button to press, drawn like it ("Tekan AMBIL"). */
+  button: { verb: string; label: string; tone: 'yellow' | 'orange' | 'cream' } | null;
+  /** Arrow tip and direction, or null (the ticket arrow, or nothing to point at). */
+  arrow: { x: number; y: number; up: boolean } | null;
+  /** Point at the first order ticket instead. */
+  ticket: boolean;
+  /** Changes with every step so the card pops in again. */
+  key: string;
+}
 
 export interface AwardCard {
   name: string;
   fruit: Fruit;
+  look: Look;
   color: string;
   title: string;
   desc: string;
@@ -112,6 +131,7 @@ export interface HudState {
   overlay: Overlay;
   result: ResultState | null;
   hint: boolean;
+  guide: GuideState | null;
 }
 
 const FLOAT_POOL = 14;
@@ -137,6 +157,7 @@ export class Hud {
     overlay: { kind: 'none' },
     result: null,
     hint: false,
+    guide: null,
   });
   private root: HTMLDivElement | null = null;
   private readonly floats: HTMLDivElement[] = [];
@@ -214,8 +235,9 @@ function HudView({ hud }: { hud: Hud }) {
   return (
     <div class="dp-hud" ref={hud.refs.root}>
       {s.mode === 'setup' && s.setup && <SetupScreen s={s.setup} />}
-      {s.mode === 'play' && s.play && <PlayBar p={s.play} />}
-      {s.mode === 'play' && s.play && !s.hint && <SideLabels p={s.play} />}
+      {s.mode === 'play' && s.play && <PlayBar p={s.play} guideTicket={!!s.guide?.ticket} />}
+      {s.mode === 'play' && s.play && !s.hint && !s.guide && <SideLabels p={s.play} />}
+      {s.mode === 'play' && s.guide && <GuideView g={s.guide} />}
       {s.hint && s.mode === 'play' && <div class="dp-hint">{STR.hintStart}</div>}
       <div class="dp-floats" aria-hidden="true">
         {Array.from({ length: FLOAT_POOL }, (_, i) => (
@@ -256,7 +278,7 @@ function Star({ on, size }: { on: boolean; size: number }) {
   );
 }
 
-function PlayBar({ p }: { p: PlayState }) {
+function PlayBar({ p, guideTicket }: { p: PlayState; guideTicket: boolean }) {
   const slots = [0, 1, 2, 3];
   return (
     <div class="dp-bar">
@@ -273,7 +295,11 @@ function PlayBar({ p }: { p: PlayState }) {
           const k = p.tickets[i];
           if (!k) return <div key={`e${i}`} class="dp-ticket empty" />;
           return (
-            <div key={k.id} class={`dp-ticket${k.urgent ? ' urgent' : ''}`}>
+            <div
+              key={k.id}
+              class={`dp-ticket${k.urgent ? ' urgent' : ''}${guideTicket && i === 0 ? ' guided' : ''}`}
+            >
+              {guideTicket && i === 0 && <GuideArrow up />}
               <div class="dp-ticket-head">
                 <img src={icon(k.icon)} width={34} height={34} alt="" />
                 <div class="dp-ticket-title">{k.title}</div>
@@ -318,6 +344,50 @@ function PlayBar({ p }: { p: PlayState }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** A big bouncing arrow; the tip sits at the element's anchor (bottom centre, or top when `up`). */
+function GuideArrow({ up, style }: { up?: boolean; style?: Record<string, string> }) {
+  return (
+    <div class={`dp-guide-arrow${up ? ' up' : ''}`} style={style} aria-hidden="true">
+      <svg width="64" height="78" viewBox="0 0 64 78" aria-hidden="true">
+        <path
+          d="M20 4 h24 a4 4 0 0 1 4 4 v30 h10 a3 3 0 0 1 2.2 5 l-25.8 30 a3 3 0 0 1 -4.6 0 l-25.8 -30 a3 3 0 0 1 2.2 -5 h10 v-30 a4 4 0 0 1 4 -4 z"
+          fill="#FFC928"
+          stroke="#111214"
+          stroke-width="4"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function GuideView({ g }: { g: GuideState }) {
+  return (
+    <>
+      {g.arrow && (
+        <GuideArrow
+          up={g.arrow.up}
+          style={{ left: `${Math.round(g.arrow.x)}px`, top: `${Math.round(g.arrow.y)}px` }}
+        />
+      )}
+      <div class="dp-guide" key={g.key}>
+        <div class="dp-guide-text">
+          <span class="dp-guide-eyebrow">{g.eyebrow}</span>
+          <b class="dp-guide-title">{g.title}</b>
+          <span class="dp-guide-sub">{g.sub}</span>
+        </div>
+        {g.button && (
+          <div class="dp-guide-button">
+            <span>{g.button.verb}</span>
+            <i class={`tone-${g.button.tone}`}>{g.button.label}</i>
+          </div>
+        )}
+        <span class="dp-guide-skip">{STR.guide.skipNote}</span>
+      </div>
+    </>
   );
 }
 
@@ -378,6 +448,20 @@ function OverlayView({ o }: { o: Overlay }) {
       return (
         <div class="dp-center" key="up">
           <div class="dp-go display outline-text">{STR.timeUp}</div>
+        </div>
+      );
+    case 'guideGo':
+      return (
+        <div class="dp-center" key="guide-go">
+          <div class="dp-warn dp-guide-go display outline-text">{STR.guide.go}</div>
+          <div class="dp-count-label">{STR.guide.goSub}</div>
+        </div>
+      );
+    case 'guideDone':
+      return (
+        <div class="dp-center" key="guide-done">
+          <div class="dp-go display outline-text">{STR.guide.doneTitle}</div>
+          <div class="dp-count-label">{STR.guide.doneSub}</div>
         </div>
       );
   }
@@ -483,7 +567,7 @@ function SetupScreen({ s }: { s: SetupState }) {
 function CookPill({ c }: { c: CookChip }) {
   return (
     <div class="dp-cook">
-      <Avatar fruit={c.fruit} ring={c.color} size={30} />
+      <Avatar look={c.look} fruit={c.fruit} ring={c.color} size={30} />
       <span>{c.name}</span>
     </div>
   );
@@ -561,7 +645,7 @@ function ResultScreen({ r }: { r: ResultState }) {
             const look = AWARD_ICON[a.icon];
             return (
               <div key={`${a.title}${i}`} class="dp-award" style={{ animationDelay: `${0.4 + i * 0.12}s` }}>
-                <Avatar fruit={a.fruit} ring={a.color} size={52} />
+                <Avatar look={a.look} fruit={a.fruit} ring={a.color} size={52} />
                 <div class="dp-award-text">
                   <span class="dp-award-who">{a.name}</span>
                   <b class="display">{a.title}</b>

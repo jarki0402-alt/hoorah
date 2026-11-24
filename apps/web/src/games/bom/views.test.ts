@@ -1,3 +1,4 @@
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { THUMBS } from '../../controller/thumbs/bom';
 import { v3 } from '../../shared/kotak/math';
@@ -8,7 +9,7 @@ import { pickView, viewFor } from './views';
 const runners = (n: number) =>
   (['jeruk', 'semangka', 'alpukat'] as const)
     .slice(0, n)
-    .map((fruit, i) => ({ id: i + 1, name: `P${i + 1}`, fruit, color: '#2F8CFF' }));
+    .map((fruit, i) => ({ id: i + 1, name: `P${i + 1}`, fruit, look: lookOfFruit(fruit), color: '#2F8CFF' }));
 
 function playing(n: number): BomMatch {
   const m = new BomMatch({ runners: runners(n), arena: 'halaman', rounds: 5, seed: 3 });

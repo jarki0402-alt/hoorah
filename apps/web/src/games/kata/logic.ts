@@ -155,7 +155,39 @@ export function makeRng(seed: number): () => number {
 
 const LETTERS_ONLY = /^[a-z]+$/;
 
-export class KataMatch {
+/* ---------------------------------------------------------------- scene */
+
+export type SceneSeat = Pick<SeatState, 'id' | 'index' | 'lives' | 'words'>;
+export type SceneLink = Pick<ChainLink, 'word' | 'by' | 'join' | 'tail' | 'ms'>;
+export type SceneAttempt = Pick<Attempt, 'by' | 'word' | 'prefix' | 'ok' | 'reason' | 'ms' | 'out'>;
+
+/**
+ * Everything the main-screen page reads of a match. `KataMatch` is one; a far-away mirror screen
+ * builds another from the published state (see mirror.ts), so both draw through the same page.
+ * `deadline` is on the same clock as the times the page's frame bus emits.
+ */
+export interface KataScene {
+  readonly phase: Phase;
+  readonly round: number;
+  readonly lives: number;
+  readonly turnMs: number;
+  readonly turnNo: number;
+  readonly current: number;
+  readonly prefix: string;
+  readonly startKind: StartKind;
+  readonly stuckFrom: string | null;
+  readonly winner: number | null;
+  readonly deadline: number;
+  readonly chainLength: number;
+  readonly lastLink: SceneLink | undefined;
+  readonly attempt: SceneAttempt | null;
+  readonly next: NextTurn | null;
+  readonly seats: readonly SceneSeat[];
+  readonly currentSeat: SceneSeat | undefined;
+  seatOf(id: number): SceneSeat | undefined;
+}
+
+export class KataMatch implements KataScene {
   phase: Phase = 'intro';
   phaseStart: number;
   readonly lives: number;
@@ -221,6 +253,14 @@ export class KataMatch {
 
   get currentSeat(): SeatState | undefined {
     return this.seats[this.current];
+  }
+
+  get chainLength(): number {
+    return this.chain.length;
+  }
+
+  get lastLink(): ChainLink | undefined {
+    return this.chain[this.chain.length - 1];
   }
 
   seatOf(id: number): SeatState | undefined {

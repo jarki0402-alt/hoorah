@@ -2,7 +2,7 @@ import type { Fruit } from '@hoorah/protocol';
 import { GROUP_COLOR, TILES } from '../../games/juragan/board';
 import { ISLANDS, MAP_BOUNDS } from '../../games/juragan/scene/islands';
 import { HALF, tileRect } from '../../games/juragan/scene/layout';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { f1, seeded, svgDoc } from './svg';
 
 const INK = '#1E1F24';
@@ -109,7 +109,7 @@ function pawn(x: number, y: number, k: number, color: string, fruit: Fruit): str
     <path d="M-20 0 C-20 -6 -12 -9 -9 -14 C-6 -20 -6 -30 -7 -36 C-8 -40 -13 -41 -13 -45 C-13 -49 13 -49 13 -45 C13 -41 8 -40 7 -36 C6 -30 6 -20 9 -14 C12 -9 20 -6 20 0 Z" fill="${color}" stroke="${INK}" stroke-width="2.4" stroke-linejoin="round"/>
     <path d="M-12 -6 C-10 -10 -6 -12 -4 -16" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0.55"/>
     <rect x="-19" y="-5" width="38" height="3" rx="1.5" fill="#FFF8EC"/>
-    <g transform="translate(-21 -84) scale(0.66)">${fruitMarkup(fruit, 'happy')}</g>
+    <g transform="translate(-21 -84) scale(0.66)">${castHead(fruit, 'happy')}</g>
   </g>`;
 }
 

@@ -7,6 +7,7 @@
  * more people there are none, but the same brain steers a runner whose phone dropped.
  */
 import {
+  lookOfFruit,
   PAD_ACTION,
   PAD_DOWN,
   PAD_LEFT,
@@ -102,7 +103,7 @@ export class Driver {
 
   private syncLooks(): void {
     for (const p of [...this.game.allPlayers, ...this.cpus])
-      this.looks.set(p.id, { fruit: p.fruit, color: p.color });
+      this.looks.set(p.id, { look: p.look, color: p.color });
     this.scene.setLooks(this.looks);
   }
 
@@ -434,7 +435,7 @@ export class Driver {
       return {
         id: r.id,
         name: r.name,
-        fruit: look?.fruit ?? 'jeruk',
+        look: look?.look ?? lookOfFruit('jeruk'),
         color: look?.color ?? '#FFC928',
         dist: Math.max(0, r.best - 1),
         near: r.near,
@@ -500,7 +501,7 @@ export class Driver {
       return {
         id: r.id,
         name: r.name,
-        fruit: look?.fruit ?? 'jeruk',
+        look: look?.look ?? lookOfFruit('jeruk'),
         color: look?.color ?? '#FFC928',
         dist: Math.max(0, r.best - 1),
         state: r.state,
@@ -535,7 +536,13 @@ export class Driver {
       hostId: this.hostId(),
       name: (id: number) => this.info(id)?.name ?? '?',
       color: (id: number) => this.info(id)?.color ?? '#FFC928',
-      guests: this.cpus.map((c) => ({ id: c.id, name: c.name, fruit: c.fruit, color: c.color })),
+      guests: this.cpus.map((c) => ({
+        id: c.id,
+        name: c.name,
+        fruit: c.fruit,
+        look: c.look,
+        color: c.color,
+      })),
     };
     for (const p of this.game.players) {
       const view = viewFor(this.match, p.id, ctx);

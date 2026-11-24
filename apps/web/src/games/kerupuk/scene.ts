@@ -5,7 +5,7 @@
  * on each phone are the same function of synced time.
  * Hot paths (update) reuse objects and never allocate.
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Look, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
 import { HEAD, KERUPUK_R, KERUPUK_SKY } from '../../shared/art/kerupuk';
@@ -27,8 +27,9 @@ import {
   bodyKey,
   CHAR_PX,
   HEAD_PX,
-  headKey,
+  HeadBank,
   kerupukKey,
+  lookId,
   RENDER_SCALE,
   WING_ART,
   WING_KEY,
@@ -37,7 +38,7 @@ import {
 /** What the scene needs to know about a lane each frame (owned and updated by the driver). */
 export interface LaneModel {
   id: number;
-  fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
   bites: number;
@@ -63,7 +64,7 @@ const STRING_COLOR = 0xe8352e;
 interface Actor {
   id: number;
   x: number;
-  fruit: Fruit;
+  look: Look;
   color: string;
   shadow: Phaser.GameObjects.Image;
   body: Phaser.GameObjects.Image;
@@ -92,6 +93,7 @@ export class KerupukScene extends Phaser.Scene {
   private readonly images: Map<string, HTMLImageElement>;
   private driver: SceneDriver | null = null;
   private actors: Actor[] = [];
+  private heads!: HeadBank;
   private rosterKey = '';
   private layout: LaneLayout = laneLayout(2);
   private strings!: Phaser.GameObjects.Graphics;
@@ -121,6 +123,7 @@ export class KerupukScene extends Phaser.Scene {
     for (const [key, img] of this.images) {
       if (!this.textures.exists(key)) this.textures.addImage(key, img);
     }
+    this.heads = new HeadBank(this.textures, (look) => this.headsReady(look));
     this.makeTextures();
     this.cameras.main.setBackgroundColor(KERUPUK_SKY);
     this.setViewSize(this.viewW, this.viewH);
@@ -351,7 +354,7 @@ export class KerupukScene extends Phaser.Scene {
       }
       if (a.face !== face) {
         a.face = face;
-        a.head.setTexture(headKey(a.fruit, face));
+        a.head.setTexture(this.heads.key(a.look, face));
       }
       const alpha = l.connected ? 1 : 0.45;
       a.body.setPosition(a.x + bodyDx, FEET_Y + bodyDy).setAlpha(alpha);
@@ -363,6 +366,12 @@ export class KerupukScene extends Phaser.Scene {
     }
   }
 
+  /** A look's head textures finished rasterizing: swap them in for its contestants. */
+  private headsReady(look: Look): void {
+    for (const a of this.actors)
+      if (sameLook(a.look, look)) a.head.setTexture(this.heads.key(a.look, a.face));
+  }
+
   private actor(id: number): Actor | undefined {
     for (const a of this.actors) if (a.id === id) return a;
     return undefined;
@@ -371,7 +380,7 @@ export class KerupukScene extends Phaser.Scene {
   /** Rebuild the contestants when the lanes change (new round, new player). */
   private syncActors(lanes: readonly LaneModel[]): void {
     let key = `${lanes.length}`;
-    for (const l of lanes) key += `|${l.id}:${l.fruit}:${l.color}`;
+    for (const l of lanes) key += `|${l.id}:${lookId(l.look)}:${l.color}`;
     if (key === this.rosterKey) return;
     this.rosterKey = key;
     for (const a of this.actors) {
@@ -385,12 +394,12 @@ export class KerupukScene extends Phaser.Scene {
     this.actors = lanes.map((l, i) => {
       const x = xs[i]!;
       const anchorY = ropeWorldY(x);
-      const restY = kerupukRestY(l.fruit, u);
+      const restY = kerupukRestY(u);
       const color = this.textures.exists(bodyKey(l.color)) ? l.color : '#F2453D';
       return {
         id: l.id,
         x,
-        fruit: l.fruit,
+        look: l.look,
         color,
         shadow: this.add.image(x, FEET_Y, 'kp-shadow').setDepth(5),
         body: this.add
@@ -399,7 +408,7 @@ export class KerupukScene extends Phaser.Scene {
           .setScale(u / CHAR_PX)
           .setDepth(10),
         head: this.add
-          .image(x, headCenterY(u), headKey(l.fruit, 'happy'))
+          .image(x, headCenterY(u), this.heads.key(l.look, 'happy'))
           .setScale((u * HEAD.scale * 64) / HEAD_PX)
           .setDepth(11),
         ker: this.add
@@ -412,7 +421,7 @@ export class KerupukScene extends Phaser.Scene {
         anchorY,
         restY,
         len: restY - anchorY,
-        mouthDy: mouthY(l.fruit, u) - restY,
+        mouthDy: mouthY(u) - restY,
         biteAt: Number.NEGATIVE_INFINITY,
         missAt: Number.NEGATIVE_INFINITY,
         jolt: 0,

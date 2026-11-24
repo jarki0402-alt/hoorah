@@ -1,4 +1,5 @@
 import type { PlayerInfo } from '@hoorah/protocol';
+import { lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { seeded } from '../../shared/art/svg';
 import { type BeatGrid, fieldSkills, HopBrain } from './brain';
@@ -12,6 +13,7 @@ function player(id: number, i: number): PlayerInfo {
     id,
     name: NAMES[i] ?? `P${i}`,
     fruit: 'semangka',
+    look: lookOfFruit('semangka'),
     color: '#F2453D',
     connected: true,
     isHost: i === 0,

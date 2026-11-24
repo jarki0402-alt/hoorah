@@ -6,6 +6,7 @@
  * instanced meshes so it stays light on Smart TV browsers. The camera trails the group, sways a
  * little and leans in as the tempo climbs ("vertigo").
  */
+import { sameLook } from '@hoorah/protocol';
 import * as THREE from 'three';
 import { BlockAvatar } from '../../shared/kotak/render/avatar';
 import { KotakFx } from '../../shared/kotak/render/fx';
@@ -141,6 +142,7 @@ interface Look {
   color: string;
   name: string;
   fruit: string;
+  look: Walker['look'];
   lane: number;
   /** Step shown (eases towards the walker's real step). */
   shown: number;
@@ -194,7 +196,15 @@ export class LangkahScene {
 
   /* ------------------------------------------------------------------ lineup */
 
-  setPlayers(list: readonly { id: number; name: string; fruit: Walker['fruit']; color: string }[]): void {
+  setPlayers(
+    list: readonly {
+      id: number;
+      name: string;
+      fruit: Walker['fruit'];
+      look: Walker['look'];
+      color: string;
+    }[],
+  ): void {
     const keep = new Set(list.map((p) => p.id));
     for (const [id, l] of this.looks) {
       if (keep.has(id)) continue;
@@ -203,7 +213,7 @@ export class LangkahScene {
     }
     list.forEach((p, i) => {
       const l = this.looks.get(p.id);
-      if (l && l.fruit === p.fruit) {
+      if (l && l.fruit === p.fruit && sameLook(l.look, p.look)) {
         l.lane = i;
         if (l.color !== p.color) {
           l.avatar.setColor(p.color);
@@ -220,7 +230,7 @@ export class LangkahScene {
         this.dropLook(l);
         this.looks.delete(p.id);
       }
-      const avatar = new BlockAvatar(this.stage, p.fruit, p.color);
+      const avatar = new BlockAvatar(this.stage, p.look, p.color);
       for (const o of avatar.objects) this.world.add(o);
       const tag = document.createElement('div');
       tag.className = 'kt-tag lm-tag';
@@ -234,6 +244,7 @@ export class LangkahScene {
         color: p.color,
         name: p.name,
         fruit: p.fruit,
+        look: p.look,
         lane: i,
         shown: 0,
         hopT: 1,

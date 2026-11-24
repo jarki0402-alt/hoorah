@@ -1,9 +1,9 @@
-import type { Fruit } from '@hoorah/protocol';
+import { type Fruit, lookOfFruit } from '@hoorah/protocol';
 import { describe, expect, it } from 'vitest';
 import { rng } from '../../shared/kotak/math';
 import { RunnerBrain } from './brain';
 import { buildCourse } from './course';
-import { ObbyMatch, PLACE_POINTS, type RacerInfo, TIMING } from './logic';
+import { ObbyMatch, PLACE_POINTS, type RacerInfo, splitRects, stickToCourse, TIMING } from './logic';
 
 const FRUITS: Fruit[] = ['jeruk', 'semangka', 'durian', 'nanas', 'mangga', 'stroberi', 'alpukat', 'rambutan'];
 
@@ -12,6 +12,7 @@ function racers(n: number, cpu = false): RacerInfo[] {
     id: i + 1,
     name: `P${i + 1}`,
     fruit: FRUITS[i]!,
+    look: lookOfFruit(FRUITS[i]!),
     color: '#FF8A3D',
     cpu,
   }));
@@ -73,8 +74,10 @@ describe('obby race', () => {
     expect(m.drainEvents().some((e) => e.k === 'fall')).toBe(true);
   });
 
-  it('brings a straggler off screen for 2 s to the save pad near the pack, frozen 1 s', () => {
-    const m = new ObbyMatch({ racers: racers(2), tracks: 1, seed: 5 });
+  it('brings a straggler off the shared screen for 2 s to the save pad near the pack, frozen 1 s', () => {
+    // Five people share one pack camera; fewer each have a camera of their own (never pulled).
+    const m = new ObbyMatch({ racers: racers(5), tracks: 1, seed: 5 });
+    expect(m.shared).toBe(true);
     runUntil(m, () => m.phase === 'race', 10);
     const leadPad = m.course.saves[3]!;
     // The leader stands on save pad 3; the straggler waits at the start.
@@ -131,6 +134,66 @@ describe('obby race', () => {
     for (const t of times) {
       expect(t).toBeGreaterThan(20);
       expect(t).toBeLessThan(TIMING.raceMax);
+    }
+  });
+});
+
+describe('obby cameras (split screen, looking forward)', () => {
+  it('gives each of up to four people a part of the screen, with the pack in the fourth part for three', () => {
+    expect(new ObbyMatch({ racers: racers(1), tracks: 1, seed: 1 }).views.map((v) => v.id)).toEqual([1]);
+    expect(new ObbyMatch({ racers: racers(2), tracks: 1, seed: 1 }).views.map((v) => v.id)).toEqual([1, 2]);
+    expect(new ObbyMatch({ racers: racers(3), tracks: 1, seed: 1 }).views.map((v) => v.id)).toEqual([
+      1,
+      2,
+      3,
+      null,
+    ]);
+    expect(new ObbyMatch({ racers: racers(4), tracks: 1, seed: 1 }).views).toHaveLength(4);
+    expect(new ObbyMatch({ racers: racers(6), tracks: 1, seed: 1 }).views.map((v) => v.id)).toEqual([null]);
+    // Computer opponents never get a part: one person playing alone fills the screen.
+    const solo = new ObbyMatch({ racers: [...racers(1), ...racers(3, true).slice(1)], tracks: 1, seed: 1 });
+    expect(solo.views.map((v) => v.id)).toEqual([1]);
+  });
+
+  it('splits the screen into halves and quarters that cover it exactly once', () => {
+    for (const n of [1, 2, 4]) {
+      const area = splitRects(n).reduce((a, r) => a + r.w * r.h, 0);
+      expect(area).toBeCloseTo(1, 6);
+    }
+    expect(splitRects(2).map((r) => r.x)).toEqual([0, 0.5]);
+  });
+
+  it('re-lays the screen out when someone joins or leaves', () => {
+    const m = new ObbyMatch({ racers: racers(2), tracks: 1, seed: 1 });
+    m.addRacer(racers(3)[2]!);
+    expect(m.views.map((v) => v.id)).toEqual([1, 2, 3, null]);
+    m.removeRacer(3);
+    expect(m.views.map((v) => v.id)).toEqual([1, 2]);
+  });
+
+  it('steers seen from behind: stick up runs forward along the course, right goes right', () => {
+    expect(stickToCourse(0, -1)).toEqual({ x: 1, z: 0 });
+    expect(stickToCourse(1, 0)).toEqual({ x: -0, z: 1 });
+    const m = new ObbyMatch({ racers: racers(1), tracks: 1, seed: 2 });
+    runUntil(m, () => m.phase === 'race', 10);
+    const x0 = m.sim.body(1)!.pos.x;
+    for (let i = 0; i < 30; i++) {
+      m.steer(1, 0, -1);
+      m.tick(DT);
+    }
+    expect(m.sim.body(1)!.pos.x).toBeGreaterThan(x0 + 0.5);
+  });
+});
+
+describe('obby follow camera', () => {
+  it('keeps its own runner whole in the picture, feet to head', () => {
+    const m = new ObbyMatch({ racers: racers(2), tracks: 1, seed: 4 });
+    runUntil(m, () => m.phase === 'race', 10);
+    for (let i = 0; i < 60; i++) m.tick(DT);
+    for (const v of m.views) {
+      const b = m.sim.body(v.id!)!;
+      expect(v.cam.visible(b.pos)).toBe(true);
+      expect(v.cam.visible({ x: b.pos.x, y: b.pos.y + 1.6, z: b.pos.z })).toBe(true);
     }
   });
 });

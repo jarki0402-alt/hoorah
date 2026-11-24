@@ -1,5 +1,5 @@
 import type { Fruit } from '@hoorah/protocol';
-import { fruitMarkup } from './fruits';
+import { castHead } from './people';
 import { svgDoc } from './svg';
 
 /**
@@ -42,7 +42,7 @@ export function kompakSvg(): string {
     ['semangka', 516, 'effort'],
   ];
   const heads = fruits
-    .map(([f, x, face]) => `<g transform="translate(${x - 36} 196) scale(1.125)">${fruitMarkup(f, face)}</g>`)
+    .map(([f, x, face]) => `<g transform="translate(${x - 36} 196) scale(1.125)">${castHead(f, face)}</g>`)
     .join('');
 
   let planks = '';

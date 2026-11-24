@@ -3,8 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
-import { LIMITS, parseClientMsg, type ServerMsg } from '@hoorah/protocol';
-import { registerAdminApi } from './admin/api';
+import { DEFAULT_CONFIG, generateMirrorKey, LIMITS, parseClientMsg, type ServerMsg } from '@hoorah/protocol';
+import { BAD_JSON, readJson, registerAdminApi, TOO_LARGE } from './admin/api';
 import { AdminAuth } from './admin/auth';
 import { runAdminCli } from './admin/cli';
 import { AdminService } from './admin/service';
@@ -19,8 +19,11 @@ import { SecurityLog } from './metrics/security';
 import { ByteMeter, CloudflareWatch, wsFrameBytes } from './metrics/traffic';
 import { UsageStore } from './metrics/usage';
 import { PassRepository } from './passes';
+import { ErrorRepository, FeedbackIntake, type IntakeStatus, ReportRepository } from './reports';
 import { type Conn, type RoomEvents, RoomManager, type RoomSnapshot } from './rooms';
+import { SettingsRepository } from './settings';
 import { startStun } from './stun';
+import { TrialRepository } from './trials';
 
 // uWebSockets.js v20.71 ships a broken ESM wrapper (it imports a missing index.js); the CJS entry works.
 const uWS = createRequire(import.meta.url)('uWebSockets.js') as typeof UWS;
@@ -102,6 +105,10 @@ if (config.adminUsername && config.adminPassword && auth.count() === 0) {
 }
 
 const passes = new PassRepository(db);
+const settings = new SettingsRepository(db, { ...DEFAULT_CONFIG, openAll: config.openAllDefault });
+const reports = new ReportRepository(db);
+const deviceErrors = new ErrorRepository(db);
+const intake = new FeedbackIntake(reports, deviceErrors);
 const usage = new UsageStore(db);
 const security = new SecurityLog(db);
 const cloudflare = new CloudflareWatch(loadCloudflareSeen(db));
@@ -117,10 +124,14 @@ const manager = new RoomManager({
   now: () => Date.now(),
   random: Math.random,
   token: () => randomBytes(18).toString('base64url'),
+  // The far-away main screen link is a secret: crypto, not Math.random.
+  mirrorKey: () => generateMirrorKey(() => randomBytes(4).readUInt32BE(0) / 2 ** 32),
   maxPlayers: config.maxPlayers,
   roomsPerIpPerMinute: config.roomsPerIpPerMinute,
   log,
   passes,
+  trials: new TrialRepository(db),
+  config: settings.config(),
   events: roomEvents,
 });
 const monitor = new Monitor({
@@ -149,6 +160,9 @@ const adminService = new AdminService({
   monitor,
   usage,
   security,
+  settings,
+  reports,
+  errors: deviceErrors,
 });
 
 async function loadSnapshot(): Promise<void> {
@@ -172,6 +186,61 @@ async function saveSnapshot(): Promise<void> {
 const decoder = new TextDecoder();
 /** Phones ask for nearby screens every few seconds while on the code page. */
 const nearbyLimiter = new IpLimiter(1);
+/** Reports and device errors are small JSON bodies. */
+const INTAKE_BODY_MAX = 8 * 1024;
+const INTAKE_STATUS: Record<IntakeStatus | 413 | 415, string> = {
+  204: '204 No Content',
+  400: '400 Bad Request',
+  413: '413 Payload Too Large',
+  415: '415 Unsupported Media Type',
+  429: '429 Too Many Requests',
+};
+
+/**
+ * Public `POST` that devices use to send a report or an error: JSON only, size capped, rate limited
+ * per address inside FeedbackIntake. Answers with an empty body.
+ */
+function intakeRoute(
+  app: UWS.TemplatedApp,
+  path: string,
+  handle: (ip: string, body: unknown, now: number) => IntakeStatus,
+): void {
+  app.post(path, (res, req) => {
+    let aborted = false;
+    res.onAborted(() => {
+      aborted = true;
+    });
+    cloudflare.note(req.getHeader('cf-ray') || req.getHeader('cf-connecting-ip'), Date.now());
+    const forwarded = req.getHeader('x-forwarded-for').split(',')[0]?.trim();
+    const ip = forwarded || decoder.decode(res.getRemoteAddressAsText());
+    const json = req.getHeader('content-type').toLowerCase().startsWith('application/json');
+    const reply = (status: keyof typeof INTAKE_STATUS) => {
+      if (aborted) return;
+      res.cork(() => {
+        res.writeStatus(INTAKE_STATUS[status]);
+        res.writeHeader('cache-control', 'no-store');
+        res.end();
+      });
+    };
+    if (!json) {
+      reply(415);
+      return;
+    }
+    // Attached before this handler returns, as uWS requires.
+    void readJson(res, INTAKE_BODY_MAX).then((body) => {
+      if (body === TOO_LARGE) reply(413);
+      else if (body === BAD_JSON) reply(400);
+      else {
+        try {
+          reply(handle(ip, body, Date.now()));
+        } catch (err) {
+          log.error('intake_failed', { path, err: String(err) });
+          reply(400);
+        }
+      }
+    });
+  });
+}
 
 /**
  * Runs a client message now, or after RELAY_DELAY_MS when testing how the games feel behind a
@@ -248,6 +317,9 @@ const app = uWS
     res.writeHeader('content-type', 'application/json');
     res.end(JSON.stringify({ ok: true, rooms: manager.roomCount, sockets: manager.connectionCount }));
   });
+
+intakeRoute(app, '/api/report', (ip, body, now) => intake.report(ip, body, now));
+intakeRoute(app, '/api/errors', (ip, body, now) => intake.error(ip, body, now));
 
 registerAdminApi(app, { auth, service: adminService, now: () => Date.now(), log, security, cloudflare });
 

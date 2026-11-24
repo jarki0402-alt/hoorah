@@ -17,7 +17,7 @@ export function directionWord(dx: number, dz: number): string {
 
 export const STR = {
   gameTitle: 'BOM OPER',
-  noShell: 'Bom Oper harus dibuka dari aplikasi Hoorah.',
+  noShell: 'Bom Oper harus dibuka dari aplikasi Kacawbalaw.',
   loadFailed: 'Gagal memuat Bom Oper. Periksa koneksi lalu buka lagi.',
 
   arenas: {

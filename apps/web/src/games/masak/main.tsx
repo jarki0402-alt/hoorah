@@ -8,7 +8,7 @@
  * and `&adapt=0` keeps its starting quality (no automatic steps).
  * `window.__masakGfx()` returns the level, the current rung and every quality step taken.
  */
-import { FRUITS, PLAYER_COLORS } from '@hoorah/protocol';
+import { lookAt, PLAYER_COLORS } from '@hoorah/protocol';
 import { connect, type HoorahGame } from '@hoorah/sdk';
 import { render } from 'preact';
 import { ensureGfxProfile, type GfxProfile, type GfxReason, type GfxTier, isGfxTier } from '../common/gfx';
@@ -179,7 +179,7 @@ async function poster(root: HTMLElement, params: URLSearchParams): Promise<void>
       stations: stations.map((s, i) => ({
         id: s.id,
         name: ['Rina', 'Budi', 'Sari', 'Dewi', 'Agus', 'Tono', 'Lala', 'Joko'][i]!,
-        fruit: FRUITS[i % FRUITS.length]!,
+        look: lookAt(i),
         color: PLAYER_COLORS[i % PLAYER_COLORS.length]!,
         connected: true,
         score: 420 - i * 40,

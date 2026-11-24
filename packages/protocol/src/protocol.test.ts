@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseAdminPassCreate, parseAdminPassUpdate, parseHistoryHours, parseUsageDays } from './admin';
 import { ClockSync } from './clock';
-import { ROOM_CODE_LENGTH } from './constants';
+import { MIRROR_KEY_LENGTH, ROOM_CODE_LENGTH } from './constants';
 import {
   decodeRelayedInput,
   encodeInput,
@@ -13,6 +13,7 @@ import {
   u16Delta,
   unpackStick,
 } from './input';
+import { freeFruit, parseLook } from './look';
 import {
   CHESS_BOARD,
   CHESS_MOVE,
@@ -30,11 +31,15 @@ import {
 } from './messages';
 import { generatePassCode, isPassCode, normalizePassCode } from './pass';
 import {
+  formatMirrorLink,
   formatRoomCode,
+  generateMirrorKey,
   generateRoomCode,
+  isMirrorKey,
   isRoomCode,
   normalizeRoomCode,
   parseClientMsg,
+  parseMirrorLink,
   sanitizeName,
 } from './validate';
 
@@ -253,7 +258,7 @@ describe('Hoorah Pass codes and admin bodies', () => {
 
   it('validates pass create and update bodies', () => {
     const ok = { label: '  Main\nbareng  ', expiresAt: 2_000_000_000_000, maxPlayers: 16, maxRooms: null };
-    expect(parseAdminPassCreate(ok)).toEqual({ ...ok, label: 'Main bareng' });
+    expect(parseAdminPassCreate(ok)).toEqual({ ...ok, label: 'Main bareng', kind: 'shared' });
     expect(parseAdminPassCreate({ ...ok, code: 'sabtu 16' })).toMatchObject({ code: 'SABTU16' });
     expect(parseAdminPassCreate({ ...ok, maxPlayers: 2 })).toBeNull();
     expect(parseAdminPassCreate({ ...ok, maxPlayers: 17 })).toBeNull();
@@ -366,5 +371,120 @@ describe('reliable arrow presses', () => {
   it('rejects anything but one direction bit and a u16 counter', () => {
     for (const bad of [undefined, 3, '', '3:1', '16:1', '4:65536', '4:-1', '4:1:2', 'a:b', ' 4:1'])
       expect(parseArrowPress(bad)).toBeNull();
+  });
+});
+
+describe('avatar look', () => {
+  it('keeps a valid look, drops unknown keys and the hair of the same character', () => {
+    expect(parseLook({ c: 'mia', s: 3, h: 'bram', hc: 7, oc: 0, x: 1 })).toEqual({
+      c: 'mia',
+      s: 3,
+      h: 'bram',
+      hc: 7,
+      oc: 0,
+    });
+    expect(parseLook({ c: 'mia', h: 'mia' })).toEqual({ c: 'mia' });
+  });
+
+  it('rejects unknown characters and out-of-range colours', () => {
+    for (const bad of [
+      null,
+      'mia',
+      { c: 'zz' },
+      { c: 'mia', s: 0 },
+      { c: 'mia', s: 6 },
+      { c: 'mia', hc: 8 },
+      { c: 'mia', oc: -1 },
+      { c: 'mia', hc: 1.5 },
+      { c: 'mia', h: 'zz' },
+    ])
+      expect(parseLook(bad)).toBeNull();
+  });
+
+  it('accepts a hello with a look and no fruit, and the profile message', () => {
+    const hello = {
+      t: 'hello',
+      role: 'controller',
+      v: 1,
+      code: '482917',
+      name: 'Rina',
+      look: { c: 'kiki', oc: 2 },
+    };
+    expect(parseClientMsg(JSON.stringify(hello))).toEqual(hello);
+    expect(parseClientMsg(JSON.stringify({ ...hello, look: { c: 'nope' } }))).toBeNull();
+    expect(parseClientMsg(JSON.stringify({ t: 'profile', name: ' Rina ', look: { c: 'leo' } }))).toEqual({
+      t: 'profile',
+      name: 'Rina',
+      look: { c: 'leo' },
+    });
+    expect(parseClientMsg(JSON.stringify({ t: 'profile', name: 'Rina', look: {} }))).toBeNull();
+    expect(
+      parseClientMsg(JSON.stringify({ t: 'profile', name: 'Rina', look: { c: 'leo' }, picking: true })),
+    ).toEqual({
+      t: 'profile',
+      name: 'Rina',
+      look: { c: 'leo' },
+      picking: true,
+    });
+    expect(
+      parseClientMsg(JSON.stringify({ t: 'profile', name: 'Rina', look: { c: 'leo' }, picking: 'yes' })),
+    ).toBeNull();
+  });
+
+  it('hands out free fruits first', () => {
+    expect(freeFruit([])).toBe('semangka');
+    expect(freeFruit(['semangka', 'alpukat'])).toBe('durian');
+  });
+});
+
+describe('long-distance play (mirror screens)', () => {
+  it('generates link secrets from the unambiguous alphabet only', () => {
+    for (let i = 0; i < 50; i++) {
+      const key = generateMirrorKey();
+      expect(key).toHaveLength(MIRROR_KEY_LENGTH);
+      expect(isMirrorKey(key)).toBe(true);
+      expect(key).not.toMatch(/[01ILO]/);
+    }
+    expect(isMirrorKey('ABCDEFG')).toBe(false);
+    expect(isMirrorKey('ABCDEFGO')).toBe(false);
+    expect(isMirrorKey('abcdefgh')).toBe(false);
+    expect(isMirrorKey(12345678)).toBe(false);
+  });
+
+  it('reads the link part in any letter case and refuses anything else', () => {
+    expect(parseMirrorLink('482917-k7m2q9xa')).toEqual({ code: '482917', key: 'K7M2Q9XA' });
+    expect(parseMirrorLink('482917-K7M2Q9XA')).toEqual({ code: '482917', key: 'K7M2Q9XA' });
+    expect(formatMirrorLink({ code: '482917', key: 'K7M2Q9XA' })).toBe('482917-K7M2Q9XA');
+    expect(parseMirrorLink('48291-K7M2Q9XA')).toBeNull();
+    expect(parseMirrorLink('482917-K7M2Q9X')).toBeNull();
+    expect(parseMirrorLink('482917-K7M2Q9X0')).toBeNull();
+    expect(parseMirrorLink('482917K7M2Q9XA')).toBeNull();
+    expect(parseMirrorLink(null)).toBeNull();
+    expect(parseMirrorLink('x'.repeat(100))).toBeNull();
+  });
+
+  it('accepts a mirror hello only with a room code and a valid secret', () => {
+    expect(parseClientMsg('{"t":"hello","role":"mirror","v":1,"code":"482917","key":"K7M2Q9XA"}')).toEqual({
+      t: 'hello',
+      role: 'mirror',
+      v: 1,
+      code: '482917',
+      key: 'K7M2Q9XA',
+    });
+    expect(parseClientMsg('{"t":"hello","role":"mirror","v":1,"code":"482917"}')).toBeNull();
+    expect(parseClientMsg('{"t":"hello","role":"mirror","v":1,"code":"482917","key":"k7m2q9xa"}')).toBeNull();
+    expect(parseClientMsg('{"t":"hello","role":"mirror","v":1,"code":"4829","key":"K7M2Q9XA"}')).toBeNull();
+    expect(parseClientMsg('{"t":"hello","role":"mirror","code":"482917","key":"K7M2Q9XA"}')).toBeNull();
+  });
+
+  it('accepts relays to the mirror screens and the stop command', () => {
+    expect(parseClientMsg('{"t":"relay","ch":"p","to":"mirror","data":{"k":"x"}}')).toEqual({
+      t: 'relay',
+      ch: 'p',
+      to: 'mirror',
+      data: { k: 'x' },
+    });
+    expect(parseClientMsg('{"t":"relay","ch":"p","to":"mirrors","data":1}')).toBeNull();
+    expect(parseClientMsg('{"t":"mirrorsOff"}')).toEqual({ t: 'mirrorsOff' });
   });
 });

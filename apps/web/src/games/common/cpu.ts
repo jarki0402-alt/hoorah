@@ -4,7 +4,7 @@
  * Rules decided by the owner:
  *  - Playing alone: the game adds its opponents by itself (no button, no setting).
  *  - Two or more humans: no computer players at all.
- *  - Opponents look like normal players (name + fruit), never labelled "BOT".
+ *  - Opponents look like normal players (name + avatar), never labelled "BOT".
  *  - Difficulty adapts silently: the screen remembers a skill level per game, nudged down after the
  *    human loses and up after they win.
  *  - The same brains take over a seat whose phone dropped mid-game, until it reconnects.
@@ -12,7 +12,7 @@
  * Opponents get negative ids so they can never collide with server ids (always > 0). Their logic
  * runs on the main screen inside the game; the server never sees them.
  */
-import { FRUITS, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
+import { FRUITS, PERSON_IDS, PLAYER_COLORS, type PlayerInfo } from '@hoorah/protocol';
 import { CPU_NAMES } from './cpu-strings';
 import { loadJson, saveJson } from './store';
 
@@ -35,6 +35,12 @@ export function makeCpuPlayers(
     rnd,
   );
   const colors = PLAYER_COLORS.filter((c) => !usedColors.has(c.toUpperCase()));
+  // Opponents are cast characters nobody in the room picked.
+  const usedPeople = new Set(humans.map((p) => p.look.c));
+  const people = shuffle(
+    PERSON_IDS.filter((c) => !usedPeople.has(c)),
+    rnd,
+  );
   const names = shuffle(
     CPU_NAMES.filter((n) => !usedNames.has(n.toLowerCase())),
     rnd,
@@ -45,6 +51,7 @@ export function makeCpuPlayers(
       id: -(i + 1),
       name: names[i % Math.max(1, names.length)] ?? CPU_NAMES[i % CPU_NAMES.length]!,
       fruit: fruits[i % Math.max(1, fruits.length)] ?? FRUITS[i % FRUITS.length]!,
+      look: { c: people[i % Math.max(1, people.length)] ?? PERSON_IDS[i % PERSON_IDS.length]! },
       color: colors[i % Math.max(1, colors.length)] ?? PLAYER_COLORS[i % PLAYER_COLORS.length]!,
       connected: true,
       isHost: false,

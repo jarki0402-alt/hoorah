@@ -20,7 +20,7 @@ export const STR = {
 
   /* Joystick */
   stickHelp:
-    'Sama seperti di game: taruh jempol di mana saja di separuh kiri kotak bawah, lalu geser. Buah di atas bergerak mengikuti. Tombol kanan bisa ditekan sambil menggeser.',
+    'Sama seperti di game: taruh jempol di mana saja di separuh kiri kotak bawah, lalu geser. Tokoh di atas bergerak mengikuti. Tombol kanan bisa ditekan sambil menggeser.',
   stickRestHelp: 'Sentuh separuh kiri',
   stickBase: 'Alas joystick',
   stickBaseFixed: 'Tetap di titik sentuh',

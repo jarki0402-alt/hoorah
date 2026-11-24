@@ -4,13 +4,22 @@
  * events and writes `beatPhase` every frame so idle racers bounce on the beat.
  * Hot paths (update, racer poses) never allocate.
  */
-import type { Fruit } from '@hoorah/protocol';
+import { type Look, sameLook } from '@hoorah/protocol';
 import * as Phaser from 'phaser';
 import type { Face } from '../../shared/art/fruits';
 import { BACKDROP_H, BACKDROP_W, KARUNG, RACER_BOX, RACER_HEAD } from '../../shared/art/karung';
 import type { HopKind } from './logic';
 import { STR } from './strings';
-import { BACKDROP_KEY, HEAD_SIZE, headKey, RACER_PX, RENDER_SCALE, SACK_KEY, SHIRT_KEY } from './textures';
+import {
+  BACKDROP_KEY,
+  HEAD_SIZE,
+  HeadBank,
+  lookId,
+  RACER_PX,
+  RENDER_SCALE,
+  SACK_KEY,
+  SHIRT_KEY,
+} from './textures';
 
 export const WORLD_W = 1280;
 export const WORLD_H = 720;
@@ -32,7 +41,7 @@ const HEAD_Y = RACER_HEAD.y + HEAD_SIZE / 2;
 
 export interface RosterEntry {
   id: number;
-  fruit: Fruit;
+  look: Look;
   color: string;
   connected: boolean;
   /** Distance already covered (metres), e.g. after a reconnect or a roster change. */
@@ -53,7 +62,7 @@ interface Hop {
 interface Racer {
   id: number;
   lane: number;
-  fruit: Fruit;
+  look: Look;
   connected: boolean;
   scale: number;
   ground: number;
@@ -90,6 +99,7 @@ export class KarungScene extends Phaser.Scene {
   private resolveReady!: () => void;
   private readonly images: Map<string, HTMLImageElement>;
   private racers: Racer[] = [];
+  private heads!: HeadBank;
   private readonly byId = new Map<number, Racer>();
   private rosterKey = '';
   private layout: LaneLayout = { centers: [], spacing: MAX_SPACING };
@@ -114,6 +124,7 @@ export class KarungScene extends Phaser.Scene {
     for (const [key, img] of this.images) {
       if (!this.textures.exists(key)) this.textures.addImage(key, img);
     }
+    this.heads = new HeadBank(this.textures, (look) => this.headsReady(look));
     this.makeTextures();
     this.cameras.main.setBackgroundColor(KARUNG.sky);
     this.setViewSize(this.viewW, this.viewH);
@@ -319,7 +330,7 @@ export class KarungScene extends Phaser.Scene {
 
   /** Racers in lane order (top lane first). Rebuilds sprites only when the field changes. */
   setRoster(entries: readonly RosterEntry[]): void {
-    const key = entries.map((e) => `${e.id}:${e.fruit}:${e.color}:${e.connected ? 1 : 0}`).join(',');
+    const key = entries.map((e) => `${e.id}:${lookId(e.look)}:${e.color}:${e.connected ? 1 : 0}`).join(',');
     if (key === this.rosterKey) return;
     const sameField =
       this.racers.length === entries.length && entries.every((e, i) => this.racers[i]?.id === e.id);
@@ -328,6 +339,11 @@ export class KarungScene extends Phaser.Scene {
       entries.forEach((e, i) => {
         const r = this.racers[i]!;
         r.connected = e.connected;
+        if (!sameLook(r.look, e.look)) {
+          r.look = e.look;
+          this.showHead(r);
+        }
+        r.shirt.setTint(Phaser.Display.Color.HexStringToColor(e.color).color);
         r.root.setAlpha(e.connected ? 1 : 0.45);
         r.shadow.setAlpha(e.connected ? 1 : 0.4);
       });
@@ -360,7 +376,7 @@ export class KarungScene extends Phaser.Scene {
       .setTint(Phaser.Display.Color.HexStringToColor(e.color).color);
     const sack = this.add.image(0, BODY_MID, SACK_KEY).setOrigin(ox, oy).setScale(unit);
     const head = this.add
-      .image(0, BODY_MID + HEAD_Y, headKey(e.fruit, 'happy'))
+      .image(0, BODY_MID + HEAD_Y, this.heads.key(e.look, 'happy'))
       .setDisplaySize(HEAD_SIZE, HEAD_SIZE);
     const x = this.xAt(e.dist, scale);
     const root = this.add
@@ -376,7 +392,7 @@ export class KarungScene extends Phaser.Scene {
     return {
       id: e.id,
       lane,
-      fruit: e.fruit,
+      look: e.look,
       connected: e.connected,
       scale,
       ground,
@@ -410,7 +426,16 @@ export class KarungScene extends Phaser.Scene {
   private setFace(r: Racer, face: Face): void {
     if (r.face === face) return;
     r.face = face;
-    r.head.setTexture(headKey(r.fruit, face)).setDisplaySize(HEAD_SIZE, HEAD_SIZE);
+    this.showHead(r);
+  }
+
+  private showHead(r: Racer): void {
+    r.head.setTexture(this.heads.key(r.look, r.face)).setDisplaySize(HEAD_SIZE, HEAD_SIZE);
+  }
+
+  /** A look's head textures finished rasterizing: swap them in for its racers. */
+  private headsReady(look: Look): void {
+    for (const r of this.racers) if (sameLook(r.look, look)) this.showHead(r);
   }
 
   /** New race: everyone walks back behind the start line. */

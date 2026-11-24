@@ -196,7 +196,7 @@ function TurnCard({ store, m }: { store: LudoStore; m: HudModel }) {
           key={`${t.seat}-${t.player.id}-${t.bonus}`}
           style={{ ['--tc' as string]: SWATCH[t.color].main }}
         >
-          <Avatar fruit={t.player.fruit} ring={t.player.color} size={58} face={t.bonus ? 'wow' : 'effort'} />
+          <Avatar look={t.player.look} ring={t.player.color} size={58} face={t.bonus ? 'wow' : 'effort'} />
           <div class="ld-who-text">
             <div class={`ld-eyebrow${t.bonus ? ' is-bonus' : ''}`}>{t.bonus ? STR.bonusTurn : STR.turn}</div>
             <div class="ld-name">{t.player.name}</div>
@@ -313,7 +313,7 @@ function SeatsPanel({ m, tall }: { m: HudModel; tall: boolean }) {
           >
             <div class="ld-seat-top">
               <Avatar
-                fruit={t.player.fruit}
+                look={t.player.look}
                 ring={sw.main}
                 size={dense === ' is-crowd' ? 30 : dense ? 34 : 42}
                 dim={!t.player.connected}
@@ -356,7 +356,7 @@ function BannerView({ b }: { b: Banner }) {
     <div class="ld-banner ld-finale" key={b.key} style={{ ['--tc' as string]: SWATCH[b.color].main }}>
       <div class="ld-finale-avatars">
         {b.winners.map((p) => (
-          <Avatar key={p.id} fruit={p.fruit} ring={SWATCH[b.color].main} size={104} face="wow" />
+          <Avatar key={p.id} look={p.look} ring={SWATCH[b.color].main} size={104} face="wow" />
         ))}
       </div>
       <div class="display outline-text ld-banner-title">{b.title}</div>

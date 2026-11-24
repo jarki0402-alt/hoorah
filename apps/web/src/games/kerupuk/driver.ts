@@ -3,7 +3,7 @@
  * owns the game clock (frozen while paused), turns logic events into sounds, floating words,
  * commentary and phone views.
  */
-import type { ControllerToGame, ControllerView, PlayerInfo } from '@hoorah/protocol';
+import { type ControllerToGame, type ControllerView, lookOfFruit, type PlayerInfo } from '@hoorah/protocol';
 import type { GameResult, HoorahGame } from '@hoorah/sdk';
 import type { Sfx } from '../../shared/audio';
 import { celebrate } from '../../shared/confetti';
@@ -454,14 +454,13 @@ export class KerupukDriver implements SceneDriver {
     const i = L.lanes.findIndex((l) => l.id === id);
     if (i < 0) return;
     const lay = laneLayout(L.lanes.length);
-    const fruit = this.card(id).fruit;
     const x = this.origin.x + lay.xs[i]!;
     // A second word for the same lane while the first is still rising goes above it.
     const now = this.clock.now();
     const last = this.popAt.get(id);
     const stack = last && now - last.at < POP_STACK_MS ? last.n + 1 : 0;
     this.popAt.set(id, { at: now, n: stack % 3 });
-    const y = this.origin.y + kerupukRestY(fruit, lay.unit) - (46 + (stack % 3) * 30) * lay.unit;
+    const y = this.origin.y + kerupukRestY(lay.unit) - (46 + (stack % 3) * 30) * lay.unit;
     this.hud.pop(x, y, text, kind);
   }
 
@@ -485,7 +484,7 @@ export class KerupukDriver implements SceneDriver {
     return {
       id,
       name: p?.name ?? STR.unknownPlayer,
-      fruit: p?.fruit ?? 'semangka',
+      look: p?.look ?? lookOfFruit('semangka'),
       color: p?.color ?? '#C4C7CC',
     };
   }
@@ -519,7 +518,7 @@ export class KerupukDriver implements SceneDriver {
               : 'sad';
       return {
         id: l.id,
-        fruit: c.fruit,
+        look: c.look,
         color: c.color,
         connected: this.player(l.id)?.connected ?? false,
         bites: l.bites,

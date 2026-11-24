@@ -4,10 +4,10 @@ import { useState } from 'preact/hooks';
 import { api, errorCode } from './api';
 import { CodeButton, CopyButton } from './copy-button';
 import { formatDateTime, formatDuration, formatRelative } from './format';
-import { effectiveStatus } from './logic';
+import { durationDays, effectiveStatus } from './logic';
 import { ExtendSheet, passMessage } from './pass-forms';
 import { showToast } from './state';
-import { ERRORS, STATUS, STR } from './strings';
+import { ERRORS, PASS_KINDS, STATUS, STR } from './strings';
 import { AdminIcon, type AdminIconName, ConfirmDialog } from './ui';
 
 type Dialog = 'extend' | 'revoke' | 'delete' | null;
@@ -29,6 +29,12 @@ function Fact({ icon, text, live = false }: { icon: AdminIconName; text: string;
 }
 
 function timeLine(p: AdminPass, status: PassStatus, now: number): { main: string; sub: string | null } {
+  const days = durationDays(p.durationMs);
+  if (p.kind !== 'shared' && days !== null && status !== 'revoked') {
+    // Single and promo codes run from their first use; the end time is the last day to start.
+    const date = formatDateTime(p.expiresAt, { now });
+    return { main: status === 'expired' ? STR.usedBefore(date) : STR.useBy(date), sub: STR.runsDays(days) };
+  }
   if (status === 'revoked') {
     return {
       main: STR.revokedAt(formatDateTime(p.revokedAt ?? now, { now })),
@@ -105,7 +111,10 @@ export function PassCard({ pass, now, onChange, onRemove }: PassCardProps) {
         <CodeButton code={pass.code} />
         <span class={`ad-badge ad-badge--${status}`}>{STATUS[status]}</span>
       </div>
-      <p class="ad-pass-label">{pass.label}</p>
+      <p class="ad-pass-label">
+        <span class={`ad-tag ad-kind is-${pass.kind}`}>{PASS_KINDS[pass.kind] ?? pass.kind}</span>
+        <span>{pass.label}</span>
+      </p>
 
       <p class={`ad-pass-time${soon ? ' is-soon' : ''}`}>
         <strong>{time.main}</strong>
@@ -114,6 +123,18 @@ export function PassCard({ pass, now, onChange, onRemove }: PassCardProps) {
 
       <ul class="ad-facts">
         <Fact icon="users" text={STR.upToPlayers(pass.maxPlayers)} />
+        {pass.kind === 'promo' && <Fact icon="ticket" text={STR.usesPromo(pass.uses, pass.maxUses)} />}
+        {pass.kind === 'single' && <Fact icon="ticket" text={STR.usesSingle(pass.uses)} />}
+        {/* A buyer asks "when does mine end?": the exact start and end of the run. */}
+        {pass.kind === 'single' && pass.firstStartedAt !== null && pass.lastRunsUntil !== null && (
+          <Fact
+            icon="clock"
+            text={STR.runWindow(formatDateTime(pass.firstStartedAt), formatDateTime(pass.lastRunsUntil))}
+          />
+        )}
+        {pass.kind === 'promo' && pass.firstStartedAt !== null && (
+          <Fact icon="clock" text={STR.firstRun(formatDateTime(pass.firstStartedAt))} />
+        )}
         {(status === 'active' || pass.liveRooms > 0) && (
           <Fact icon="tv" text={STR.liveRooms(pass.liveRooms, pass.maxRooms)} live={pass.liveRooms > 0} />
         )}
